@@ -16,6 +16,8 @@ Reviewed `docs/formulation_spec.md`, SHA-256 `bce98772729e2c9e799f3317fffb71716a
 
 Two minor points do not block anything. Line 24 says BDF2 and BDF3 "start with lower orders" without mentioning the exact-history option. Line 5 still says "Every variant ... with three switches", although the Galerkin baseline is not a switch setting (A14). B06 and B07 are wording only; they change no equation and nothing in Phase 1.
 
+**Follow-up:** in the spec revision with SHA-256 `5629e68cbd26a3984023eff16f09f70a50f508e0557bedf511f128dca324b339`, B06, B07, the line-24 time-scheme row and the line-5 Galerkin-baseline sentence all match the suggestions above, and no other text changed, so every item now agrees.
+
 ---
 
 **Addendum pass — 21 October 2026**
