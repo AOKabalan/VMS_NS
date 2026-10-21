@@ -96,3 +96,48 @@ Open questions:
 1. Defaults not fixed by the plan: ν = 0.01 for `manufactured_temporal` (V2 gives no ν; the solution has Δu = 0, so ν only enters τ) and the default cells listed above. Please confirm or change.
 2. Firedrake 2026.10.0 makes `topological_dimension` and `geometric_dimension` properties, not methods, so plan §3's `mesh.geometric_dimension()` must be read as `mesh.geometric_dimension`.
 3. Noise: when pytest is called with flags such as `-q` or `-x`, PETSc reports them as unused options at exit. This is harmless; a `tests/conftest.py` that initialises petsc4py with no arguments would remove it, if you want that file added.
+
+## Phase 3: Quadrature and time schemes (2026-10-21)
+Done: Before this phase, commit "Phase 2 follow-ups" made three changes. Plan §3 now uses the property `mesh.geometric_dimension`. `tests/conftest.py` sets `FIREDRAKE_DISABLE_OPTIONS_LEFT=1`, Firedrake's own switch, so PETSc no longer reports pytest's flags as unused options. `tests/data/square_named.geo` was added and regenerates the committed `.msh` byte for byte.
+- `discretization/quadrature.py`:
+  - `quadrature_degree(k) = 3k`.
+  - `volume_measure(mesh, q)` returns `dx(degree=q, scheme="default")` after `check_positive_weights`; `boundary_measure(mesh, q)` returns the matching `ds`.
+  - `quadrature_element(cell, q)` returns a scalar `Quadrature` element with the same scheme.
+  - `reference_rule(cell, q)` gives the reference points and weights. They come from the same `finat.quadrature.make_quadrature(cell, q, scheme)` that TSFC uses for `dx` and FInAT uses for the Quadrature element, so the check inspects the rule actually used.
+  - The default rules have positive weights for q = 3, 6, 9 on triangles and tetrahedra; the smallest are 8.3e-2, 2.0e-2 and 1.3e-2 on triangles, and 2.0e-2, 1.2e-3 and 7.2e-4 on tetrahedra.
+- `discretization/time_schemes.py` is pure Python; importing it loads neither Firedrake nor petsc4py.
+  - `scheme_at_step(scheme, startup, step)` gives the startup sequence: lower-order is BDF1 → BDF2 → BDF3; Crank–Nicolson takes one BDF1 first step in both modes; exact-history runs BDF2 and BDF3 at full order from step 1.
+  - `step_coefficients(...)` returns a frozen `StepCoefficients` with the scheme used, α₀, the history weights of gⁿ, gⁿ⁻¹, gⁿ⁻², the solve level (1 or ½), the data weights and the extrapolation weights.
+
+  | Scheme | α₀ | History weights | Solve level | Data weights (new, old) | Extrapolation (solve, old) |
+  | --- | --- | --- | --- | --- | --- |
+  | BDF1 | 1 | (1) | 1 | (1, 0) | (1, 0) |
+  | BDF2 | 3/2 | (2, −½) | 1 | (1, 0) | (1, 0) |
+  | BDF3 | 11/6 | (3, −3/2, 1/3) | 1 | (1, 0) | (1, 0) |
+  | Crank–Nicolson | 2 | (2) | ½ | (½, ½), the endpoint average | (2, −1) |
+
+  With exact-history startup, the number of history weights at step 1 is the number of velocity levels to fill: t⁰, t⁻¹ and t⁻² for BDF3.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean.
+- `pytest tests/unit`: 107 passed in 3.6 s (39 new).
+- U1:
+  - BDFk is exact for polynomials of degree ≤ k at t^(n+1), and inexact at degree k+1.
+  - Crank–Nicolson is exact for quadratics at t^(n+½) when the half-level state is the endpoint average, and inexact for cubics.
+  - The extrapolation of midpoint values reproduces linear functions, and not quadratics.
+  - Both startup sequences are checked for all four schemes; exact-history needs back to t⁻² for BDF3.
+  - The Crank–Nicolson data weights are (½, ½), consistent with the extrapolation. Every step has history weights summing to α₀ (D_t of a constant is zero), and BDF steps have identity data and extrapolation weights.
+  - Step 0 is rejected.
+- U2:
+  - On the reference triangle and tetrahedron, for q = 3 and 6, all weights are positive and every monomial of degree ≤ q integrates exactly (relative 1e-13).
+  - A non-polynomial function interpolated into the Quadrature space and integrated with `dx` equals the direct `dx` integral to relative 1e-14, in 2D and 3D. A rule of another degree differs by more than 1e-9, so this agreement is meaningful.
+- Extra checks:
+  - Both measures carry the explicit degree and scheme in their metadata, and `ds` of degree 6 is exact for x⁶.
+  - q = 3k.
+  - A rule with a negative weight is rejected. The test uses the degree-3 Strang–Fix rule, the counterexample from VERIFICATION.md R-D2.
+
+Deviations from spec or plan:
+1. Plan §3 asks for one-line docstrings, so `StepCoefficients` explains itself through field names (`history_weights`, `data_weight_new`, `extrapolation_weight_solve`, …) rather than a longer docstring.
+2. The positivity check covers volume rules only. The spec requires positive weights for the τ-weighted volume mass matrices; the facet rule only needs an explicit degree.
+
+Open questions: None.
