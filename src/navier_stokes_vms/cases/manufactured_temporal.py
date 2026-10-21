@@ -1,4 +1,4 @@
-"""Velocity g(t)(y, x) lies in every FE space, so only the temporal error remains (plan test V2)."""
+"""Rotation g(t)(y, −x) lies in every FE space, so only the temporal error remains (plan V2)."""
 
 import ufl
 from ufl.core.expr import Expr
@@ -18,8 +18,8 @@ DEFAULT_PARAMETERS = {"viscosity": 0.01}
 
 
 def velocity(x: Expr, t: Expr) -> Expr:
-    """u = g(t)(y, x) with g(t) = cos t."""
-    return ufl.cos(t) * ufl.as_vector((x[1], x[0]))
+    """u = g(t)(y, −x) with g(t) = cos t: nonzero vorticity, so the pressure cannot absorb it."""
+    return ufl.cos(t) * ufl.as_vector((x[1], -x[0]))
 
 
 def pressure(_x: Expr, _t: Expr) -> Expr:

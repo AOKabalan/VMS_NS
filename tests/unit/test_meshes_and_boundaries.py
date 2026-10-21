@@ -165,7 +165,7 @@ def test_derived_forcing_vanishes_for_exact_navier_stokes_solutions(case: str) -
 def test_derived_forcing_matches_a_hand_derivation() -> None:
     problem = build_problem(Config(case="manufactured_temporal", run_name="test"))
     x, t = fd.SpatialCoordinate(problem.mesh), fd.Constant(0.7)
-    by_hand = -ufl.sin(t) * ufl.as_vector((x[1], x[0])) + ufl.cos(t) ** 2 * ufl.as_vector(x)
+    by_hand = -ufl.sin(t) * ufl.as_vector((x[1], -x[0])) - ufl.cos(t) ** 2 * ufl.as_vector(x)
     assert l2_norm(problem.forcing(x, t) - by_hand, problem.mesh) < 1e-14
 
 
