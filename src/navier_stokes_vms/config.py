@@ -186,6 +186,12 @@ def validate_config(config: Config) -> None:
                 "starting with a letter, digit or '_'"
             )
     _check_bounds(config)
+    steps = config.time.t_end / config.time.dt
+    if abs(steps - round(steps)) > 1e-9 * steps:
+        raise ValueError(
+            f"time.t_end = {config.time.t_end}, time.dt = {config.time.dt}: "
+            "t_end must be a whole number of uniform steps"
+        )
     _check_mesh(config.mesh)
     _check_stabilization(config)
     solver = config.solver

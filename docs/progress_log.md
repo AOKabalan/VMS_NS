@@ -141,3 +141,65 @@ Deviations from spec or plan:
 2. The positivity check covers volume rules only. The spec requires positive weights for the τ-weighted volume mass matrices; the facet rule only needs an explicit degree.
 
 Open questions: None.
+
+## Phase 4a: Galerkin solver, time stepper and outputs (2026-10-21)
+Done:
+- `discretization/function_spaces.py` builds the Taylor–Hood mixed space and the constant-pressure null space.
+- `formulation/convective_forms.py` has `convection_form(a, u_h, u, v, dx, outflow_ds)` = ½(a·∇u, v) − ½(a·∇v, u) + ½⟨(u_h·n)u, v⟩ on Γ_N.
+- `formulation/galerkin.py` has `galerkin_residual` (the master equation with every stabilization term removed), `time_derivative` D_t g = (α₀g − g_hist)/δt, and `SolveLevel`.
+- `solver/nonlinear_solver.py` has `InnerSolver`:
+  - Newton is SNES `newtonls` with the `basic` line search (full steps, u += δ). A petsc4py monitor records the residual, update norm and KSP iterations.
+  - Picard uses the same residual builder with `a` a frozen Function, solved with `ksponly`; `picard_iterations_before_newton` Picard steps can precede Newton.
+  - The Picard residual_norm is the full nonlinear residual assembled after each linear solve, with the Dirichlet rows zeroed. The test suite confirms that SNES reports the same norm for Newton.
+  - One tolerance max(inner_atol, inner_rtol·r₀) applies to every method, where r₀ is the explicit residual at the guess after the BCs are applied. Newton uses a petsc4py convergence test for it.
+- `solver/time_stepper.py` has `TimeStepper`, which takes everything time-related from `time_schemes.py`:
+  - It fills the exact history at t⁻¹, t⁻² by interpolation, combines the history, sets α₀, and puts both the forcing and the Dirichlet values at the solve level with the data weights (the endpoint average for Crank–Nicolson).
+  - Crank–Nicolson solves at the half level and extrapolates; its pressure is reported at t^(n+½).
+  - It writes the plan §9 logs and VTK. On non-convergence it writes the last state to `fields/`, logs the iteration history and raises `ConvergenceError`.
+- `postprocessing/diagnostics.py` holds the registry `kinetic_energy`, `divergence_l2`, `velocity_error_l2`, `velocity_gradient_error_l2` and `pressure_error_l2`.
+  - The error norms use degree 2q; everything else uses the common rule.
+  - The pressure error removes the mean in two passes when the null space is active, and is evaluated at the solve-level time.
+  - `check_diagnostics_supported` rejects error norms for a case without an exact solution.
+- `postprocessing/output.py` has `CsvWriter` (rank 0, flushed per row), `FieldWriter` (fields/velocity.pvd and fields/pressure.pvd, each with its own time) and `open_diagnostics_csv`. `postprocessing/run_logging.py` has the three iteration and time-step CSVs with the plan §9 columns.
+- `problem/boundary_conditions.py` adds `named_boundary_measure` (ds by name, keeping the degree).
+- `scripts/run_simulation.py` checks rule 6 against the registry and builds the problem (rule 3) before creating the folder, then runs end to end. It exits 1 on non-convergence.
+- `config.py` now requires `t_end` to be a whole number of steps. The README run section was updated.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean.
+- `pytest tests/unit`: 124 passed in 18.8 s.
+- U3 (`test_convective_form.py`): c(a; w, w) = 0 to 1e-12 relative for random a and w on periodic meshes in 2D and 3D, P1 and P2, computed through the assembled matrix so that nothing cancels symbolically. With outflow on two sides, c(u; u, u) equals ½∫(u·n)|u|² to 1e-12 relative.
+- `test_time_stepper.py` (new): short runs of all four cases.
+  - The runs cover BDF1 with Newton; Crank–Nicolson with exact history and Picard; BDF2 with 2 Picard steps then Newton; BDF3 with exact history.
+  - Every plan §9 file is written. The scheme sequence follows `scheme_at_step`. Inner iteration 0 has relative residual 1 and no update; the last iterate meets the tolerance; the method columns are as configured; there is one outer row per step; the diagnostics columns are right; VTK times are correct.
+  - The Crank–Nicolson pressure is written at t^(n+½) (0.375, 0.625) and the velocity at the endpoints.
+  - A run with one Picard iteration exits 1, writes the last state to `fields/` with `vtk_every = 0`, logs the iteration history, and records `converged = False` and `exit_status = 1`.
+  - Newton, Picard and 3 Picard + Newton reach the same steady Kovasznay solution (≤ 1e-8 relative). The logged final residual equals `InnerSolver.residual_norm()`. Newton logs update norms and KSP iterations.
+- `test_config.py`: the run-script tests now run one step and check all files. They also cover rejection before writing for rule 5, rule 6 and an unknown case, and the new whole-steps check.
+- Manual checks:
+  - On 2 MPI ranks, the Kovasznay run gives the same diagnostics as 1 rank to about 1e-15, CSVs from rank 0 only and parallel VTK (`.pvtu`).
+  - Taylor–Green, P2/P1, BDF2, dt = 0.1, T = 0.3: velocity error 2.4e-1, 4.8e-2 and 4.9e-3 on meshes 8, 16 and 32 (tending to O(h³)). The kinetic energy on mesh 32 matches π²e^(−4νT) to 1e-4.
+  - MUMPS LU with the null space needs no null-pivot option here.
+
+Deviations from spec or plan:
+1. `outer_iterations.csv` is written now, with one row per time step, because phase 4a must write every file of plan §9 and the Galerkin step is a single pass. The row records the velocity and pressure changes from the guess, the final residual and `converged`. The subscale, ξ and ζ changes are empty. Phase 7 adds further outer iterations.
+2. VTK: velocity and pressure are separate series with their own times, so the Crank–Nicolson pressure can carry t^(n+½). Frames are written at multiples of `vtk_every` and at the last step, but not at step 0, where the pressure is only the initial guess.
+3. `diagnostics.csv` has rows for steps 1 to N, not step 0.
+4. Times are rounded to 15 significant digits (step·δt), so they print as 0.3 rather than 0.30000000000000004.
+5. Not in the plan: the whole-steps check in `config.py`, the README update, and the new test file `tests/unit/test_time_stepper.py`.
+
+Open questions:
+1. V2 cannot measure Galerkin temporal orders with the specified `manufactured_temporal`. Its velocity g(t)(y, x) = g(t)∇(xy) is a gradient, so the temporal truncation error ε(t)(y, x) is a gradient too. The pressure absorbs it, and the velocity comes out exact to round-off for every scheme. A scratch probe (4×4, P2/P1, T = 1, N = 20, 40, 80) gave:
+
+   | Field | Scheme | ‖u − u_ex‖ at N = 20, 40, 80 | Velocity rates | Pressure rates |
+   | --- | --- | --- | --- | --- |
+   | g(t)(y, x), as specified | BDF1 | 1.4e-16, 2.7e-15, 2.2e-12 | meaningless | 1.02, 1.01 |
+   | g(t)(y, x), as specified | BDF2 | 7.3e-15, 1.9e-14, 1.0e-12 | meaningless | 1.98, 1.99 |
+   | g(t)(y, x), as specified | BDF3, exact history | 5.5e-16, 2.5e-13, 7.1e-13 | meaningless | 3.06, 3.03 |
+   | g(t)(y, x), as specified | Crank–Nicolson | 1.6e-15, 8.5e-14, 6.0e-13 | meaningless | 1.98, 1.99 |
+   | g(t)(y, −x), rotation | BDF1 | 3.2e-3, 1.6e-3, 8.2e-4 | 0.99, 0.99 | 1.01, 1.01 |
+   | g(t)(y, −x), rotation | BDF2 | 1.1e-4, 2.7e-5, 6.6e-6 | 2.03, 2.01 | 1.98, 1.99 |
+   | g(t)(y, −x), rotation | BDF3, exact history | 4.3e-6, 5.2e-7, 6.5e-8 | 3.02, 3.01 | 3.06, 3.03 |
+   | g(t)(y, −x), rotation | Crank–Nicolson | 6.5e-5, 1.6e-5, 4.1e-6 | 2.00, 2.00 | 1.99, 2.00 |
+
+   Recommendation: change `manufactured_temporal` to u = g(t)(y, −x), p = 0. It is still linear, divergence-free and in every FE space, and its rotational truncation error cannot be absorbed by the pressure. This changes the plan's Phase 2 case definition and the meaning of V2, so it needs your decision before phase 4b. The alternative is to keep the field and measure the pressure error in V2.

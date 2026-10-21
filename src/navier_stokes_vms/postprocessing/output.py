@@ -1,18 +1,75 @@
-"""Results folder, resolved configuration and run information (plan §9)."""
+"""Results folder, resolved configuration, run information, VTK fields and CSV files (plan §9)."""
 
+import csv
 import json
 import platform
 import socket
 import subprocess
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from importlib import metadata
 from pathlib import Path
 
+import firedrake as fd
 from mpi4py import MPI
 from petsc4py import PETSc
 
 from navier_stokes_vms.config import Config, config_to_toml
+
+
+class CsvWriter:
+    """One CSV file with fixed columns, written and flushed row by row on rank 0 only."""
+
+    def __init__(self, comm: MPI.Comm, path: Path, columns: Sequence[str]) -> None:
+        self._columns = tuple(columns)
+        self._stream = path.open("w", newline="", encoding="utf-8") if comm.rank == 0 else None
+        self._write(self._columns)
+
+    def write(self, **values: object) -> None:
+        """Append one row; every column must be given, None is written as an empty field."""
+        if set(values) != set(self._columns):
+            raise ValueError(f"CSV row has keys {sorted(values)}, expected {list(self._columns)}")
+        self._write(["" if values[name] is None else values[name] for name in self._columns])
+
+    def close(self) -> None:
+        """Close the file."""
+        if self._stream is not None:
+            self._stream.close()
+
+    def _write(self, row: Sequence[object]) -> None:
+        if self._stream is not None:
+            csv.writer(self._stream).writerow(row)
+            self._stream.flush()
+
+
+class FieldWriter:
+    """VTK series fields/velocity.pvd and fields/pressure.pvd, each with its own time."""
+
+    def __init__(self, folder: Path) -> None:
+        self._folder = folder / "fields"
+        self._files: tuple[fd.VTKFile, fd.VTKFile] | None = None
+
+    def write(
+        self,
+        velocity: fd.Function,
+        pressure: fd.Function,
+        velocity_time: float,
+        pressure_time: float,
+    ) -> None:
+        """Append the velocity at velocity_time and the pressure at pressure_time."""
+        if self._files is None:
+            self._files = (
+                fd.VTKFile(str(self._folder / "velocity.pvd")),
+                fd.VTKFile(str(self._folder / "pressure.pvd")),
+            )
+        self._files[0].write(velocity, time=velocity_time)
+        self._files[1].write(pressure, time=pressure_time)
+
+
+def open_diagnostics_csv(comm: MPI.Comm, folder: Path, names: Sequence[str]) -> CsvWriter:
+    """diagnostics.csv with one row per time step and one column per configured diagnostic."""
+    return CsvWriter(comm, folder / "diagnostics.csv", ("step", "time", *names))
 
 
 @dataclass(frozen=True)

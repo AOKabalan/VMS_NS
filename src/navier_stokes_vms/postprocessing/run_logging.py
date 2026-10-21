@@ -1,17 +1,76 @@
-"""Console and run.log logging on MPI rank 0 (plan §9)."""
+"""Console and run.log logging and the iteration and time-step CSV files, on rank 0 (plan §9)."""
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 from mpi4py import MPI
 
 from navier_stokes_vms.config import Config, config_as_dict
-from navier_stokes_vms.postprocessing.output import RunInfo
+from navier_stokes_vms.postprocessing.output import CsvWriter, RunInfo
 
 LOGGER_NAME = "navier_stokes_vms"
 
+INNER_COLUMNS = (
+    "step",
+    "time",
+    "outer_iteration",
+    "inner_iteration",
+    "method",
+    "residual_norm",
+    "relative_residual",
+    "update_norm",
+    "linear_iterations",
+)
+OUTER_COLUMNS = (
+    "step",
+    "time",
+    "outer_iteration",
+    "inner_iterations",
+    "velocity_change",
+    "pressure_change",
+    "subscale_change",
+    "xi_change",
+    "zeta_change",
+    "fe_residual_norm",
+    "converged",
+)
+TIME_STEP_COLUMNS = (
+    "step",
+    "time",
+    "scheme_used",
+    "dt",
+    "outer_iterations",
+    "inner_iterations_total",
+    "converged",
+    "wall_time",
+)
+
 _FORMAT = "%(asctime)s %(levelname)-7s %(message)s"
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+@dataclass(frozen=True)
+class IterationLogs:
+    """inner_iterations.csv, outer_iterations.csv and time_steps.csv of one run."""
+
+    inner: CsvWriter
+    outer: CsvWriter
+    time_steps: CsvWriter
+
+    def close(self) -> None:
+        """Close the three files."""
+        for writer in (self.inner, self.outer, self.time_steps):
+            writer.close()
+
+
+def open_iteration_logs(comm: MPI.Comm, folder: Path) -> IterationLogs:
+    """Create the three files with their plan §9 columns."""
+    return IterationLogs(
+        inner=CsvWriter(comm, folder / "inner_iterations.csv", INNER_COLUMNS),
+        outer=CsvWriter(comm, folder / "outer_iterations.csv", OUTER_COLUMNS),
+        time_steps=CsvWriter(comm, folder / "time_steps.csv", TIME_STEP_COLUMNS),
+    )
 
 
 def configure_logging(

@@ -29,8 +29,16 @@ mpiexec -n 4 python scripts/run_simulation.py configs/<file>.toml
 A run is described by one TOML file (plan §7). Every field has a default except `case`, and
 `run_name` defaults to the file name without extension. The run writes to
 `results/<case>/<run_name>/`, relative to the working directory, and refuses to overwrite an
-existing folder. It writes `config_resolved.toml`, `run_info.json` and `run.log` (plan §9). An
-invalid configuration stops the run with a message naming the offending fields.
+existing folder. It writes the files of plan §9: `config_resolved.toml`, `run_info.json`,
+`run.log`, `inner_iterations.csv`, `outer_iterations.csv`, `time_steps.csv`, `diagnostics.csv`
+and, when `vtk_every > 0`, `fields/velocity.pvd` and `fields/pressure.pvd`. The Crank–Nicolson
+pressure is written at t^(n+½). An invalid configuration stops the run before anything is
+written, with a message naming the offending fields. If a nonlinear solve does not converge, the
+run writes the last state to `fields/`, logs the iteration history and exits with status 1.
+
+Available diagnostics: `kinetic_energy`, `divergence_l2`, and, for cases with an exact solution,
+`velocity_error_l2`, `velocity_gradient_error_l2` and `pressure_error_l2`. Error norms use a
+quadrature rule of twice the common degree.
 
 ## Test and lint
 

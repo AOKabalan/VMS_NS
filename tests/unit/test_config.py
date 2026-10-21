@@ -76,6 +76,11 @@ diagnostics = ["kinetic_energy"]
 console_level = "DEBUG"
 """
 
+SHORT_RUN = (
+    GALERKIN
+    + "\n[mesh]\ncells = [2, 2]\n\n[time]\ndt = 0.1\nt_end = 0.1\n\n[output]\nvtk_every = 0\n"
+)
+
 VMS_CASES = [
     ("asgs", "static", "linear", "Sta-Lin-ASGS", 5),
     ("asgs", "dynamic", "linear", "Dyn-Lin-ASGS", 6),
@@ -228,6 +233,7 @@ def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
         (GALERKIN + "\n[time]\ndt = 0.0\n", "time.dt = 0.0: must be > 0"),
         (GALERKIN + "\n[time]\nt_end = inf\n", "time.t_end = inf: must be > 0"),
         (GALERKIN + "\n[output]\nvtk_every = -1\n", "output.vtk_every = -1: must be >= 0"),
+        (GALERKIN + "\n[time]\ndt = 0.3\nt_end = 1.0\n", "whole number of uniform steps"),
         (GALERKIN + "\n[mesh]\nsource = 'builtin'\nfile = 'a.msh'\n", "mesh.file: only used when"),
         (
             GALERKIN + "\n[mesh]\nsource = 'gmsh'\ncells = [8, 8]\n",
@@ -252,6 +258,7 @@ def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
         "zero-dt",
         "infinite-t_end",
         "negative-vtk_every",
+        "t_end-not-whole-steps",
         "builtin-with-file",
         "gmsh-with-cells",
         "cells-and-file",
@@ -272,14 +279,18 @@ def test_invalid_input_is_rejected_naming_the_field(
 
 
 def test_run_script_writes_resolved_config_run_info_and_log(tmp_path: Path) -> None:
-    config_path = write_config(tmp_path, GALERKIN, name="galerkin_p2p1.toml")
+    config_path = write_config(tmp_path, SHORT_RUN, name="galerkin_p2p1.toml")
     result = run_script(config_path, cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     folder = tmp_path / "results" / "manufactured_spatial" / "galerkin_p2p1"
     assert sorted(path.name for path in folder.iterdir()) == [
         "config_resolved.toml",
+        "diagnostics.csv",
+        "inner_iterations.csv",
+        "outer_iterations.csv",
         "run.log",
         "run_info.json",
+        "time_steps.csv",
     ]
     assert load_config(folder / "config_resolved.toml") == load_config(config_path)
     info = json.loads((folder / "run_info.json").read_text(encoding="utf-8"))
@@ -292,20 +303,33 @@ def test_run_script_writes_resolved_config_run_info_and_log(tmp_path: Path) -> N
     log = (folder / "run.log").read_text(encoding="utf-8")
     assert "Case manufactured_spatial, run galerkin_p2p1" in log
     assert "[stabilization] method = none" in log
-    assert "No solver is implemented yet; stopping after setup." in log
+    assert "step 1, t = 0.1, bdf1" in log
 
 
 def test_run_script_refuses_an_existing_results_folder(tmp_path: Path) -> None:
-    config_path = write_config(tmp_path, GALERKIN)
+    config_path = write_config(tmp_path, SHORT_RUN)
     assert run_script(config_path, cwd=tmp_path).returncode == 0
     second = run_script(config_path, cwd=tmp_path)
     assert second.returncode == 1
     assert "already exists" in second.stderr
 
 
-def test_run_script_rejects_an_invalid_config_before_writing(tmp_path: Path) -> None:
-    config_path = write_config(tmp_path, 'case = "kovasznay"\n')
-    result = run_script(config_path, cwd=tmp_path)
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ('case = "kovasznay"\n', "Dyn-Nl-OSS is not implemented yet; phase 8 adds it"),
+        (
+            SHORT_RUN.replace("vtk_every = 0", "vtk_every = 0\ndiagnostics = ['vorticity']"),
+            "output.diagnostics: unknown vorticity; available: divergence_l2",
+        ),
+        (SHORT_RUN.replace("manufactured_spatial", "cavity"), "case = 'cavity': unknown"),
+    ],
+    ids=["rule-5", "rule-6", "unknown-case"],
+)
+def test_run_script_rejects_an_invalid_setup_before_writing(
+    tmp_path: Path, text: str, message: str
+) -> None:
+    result = run_script(write_config(tmp_path, text), cwd=tmp_path)
     assert result.returncode == 1
-    assert "Dyn-Nl-OSS is not implemented yet; phase 8 adds it" in result.stderr
+    assert message in result.stderr
     assert not (tmp_path / "results").exists()
