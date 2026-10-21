@@ -12,3 +12,8 @@ def stabilization_parameters(a: Expr, nu: float, k: int, c1: float, c2: float) -
     tau_m = 1 / (c1 * k**4 * nu / h**2 + c2 * k * speed / h)
     tau_c = h**2 / (c1 * k**4 * tau_m)
     return tau_m, tau_c
+
+
+def dynamic_parameter(tau_m: Expr, alpha0: Expr, dt: Expr) -> Expr:
+    """τ_t = (α₀/δt + 1/τ_m)⁻¹ (spec: Operators and parameters)."""
+    return 1 / (alpha0 / dt + 1 / tau_m)

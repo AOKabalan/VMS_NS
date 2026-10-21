@@ -14,6 +14,7 @@ from navier_stokes_vms.config import (
     check_startup_supported,
     config_to_toml,
     load_config,
+    method_name,
 )
 
 RUN_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "run_simulation.py"
@@ -82,7 +83,6 @@ SHORT_RUN = (
 )
 
 VMS_CASES = [
-    ("asgs", "dynamic", "linear", "Dyn-Lin-ASGS", 6),
     ("asgs", "static", "nonlinear", "Sta-Nl-ASGS", 7),
     ("asgs", "dynamic", "nonlinear", "Dyn-Nl-ASGS", 7),
     ("oss", "static", "linear", "Sta-Lin-OSS", 8),
@@ -230,15 +230,17 @@ def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("degree", [1, 2])
 @pytest.mark.parametrize("pressure_subscale", ["true", "false"])
-def test_rule5_accepts_static_linear_asgs(
-    tmp_path: Path, degree: int, pressure_subscale: str
+@pytest.mark.parametrize(("dynamics", "name"), [("static", "Sta"), ("dynamic", "Dyn")])
+def test_rule5_accepts_linear_asgs(
+    tmp_path: Path, degree: int, pressure_subscale: str, dynamics: str, name: str
 ) -> None:
     text = (
-        STATIC_ASGS + f"pressure_subscale = {pressure_subscale}\n[discretization]\n"
+        STATIC_ASGS.replace('"static"', f'"{dynamics}"')
+        + f"pressure_subscale = {pressure_subscale}\n[discretization]\n"
         f"velocity_degree = {degree}\npressure_degree = {degree}\n"
     )
     config = load_text(tmp_path, text)
-    assert config.stabilization.subscale_space == "asgs"
+    assert method_name(config.stabilization) == f"{name}-Lin-ASGS"
     assert config.discretization.velocity_degree == degree
 
 

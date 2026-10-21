@@ -85,13 +85,13 @@ def test_galerkin_steady_error_drops_from_mesh_16_to_32(tmp_path: Path) -> None:
         assert errors[1][name] < errors[0][name], name
 
 
-def static_asgs(cells: tuple[int, int], degree: int, linearization: str) -> Config:
+def linear_asgs(cells: tuple[int, int], degree: int, dynamics: str, linearization: str) -> Config:
     config = replace(
         galerkin(cells, linearization),
-        run_name=f"asgs_p{degree}_{linearization}_{cells[0]}x{cells[1]}",
+        run_name=f"asgs_p{degree}_{dynamics}_{linearization}_{cells[0]}x{cells[1]}",
         discretization=DiscretizationOptions(velocity_degree=degree, pressure_degree=degree),
         stabilization=StabilizationOptions(
-            subscale_space="asgs", subscale_dynamics="static", scale_splitting="linear"
+            subscale_space="asgs", subscale_dynamics=dynamics, scale_splitting="linear"
         ),
     )
     validate_config(config)
@@ -99,25 +99,42 @@ def static_asgs(cells: tuple[int, int], degree: int, linearization: str) -> Conf
 
 
 @pytest.mark.parametrize("degree", [1, 2])
-def test_static_asgs_newton_equals_picard_and_steady_error_drops(
+def test_linear_asgs_steady_state_is_independent_of_dynamics_and_linearization(
     tmp_path: Path, degree: int
 ) -> None:
-    errors = []
+    errors: dict[str, list[dict[str, float]]] = {"static": [], "dynamic": []}
     for cells in (MESH_16, MESH_32):
-        config = static_asgs(cells, degree, "newton")
-        problem = build_problem(config)
-        folder = tmp_path / config.run_name
-        newton = march(config, problem, folder)
-        errors.append(final_diagnostics(folder))
-        picard_config = static_asgs(cells, degree, "picard")
-        picard = march(picard_config, problem, tmp_path / picard_config.run_name)
-        difference = relative_change(
-            newton.velocity, picard.velocity, volume_measure(problem.mesh, 3 * degree)
+        problem = build_problem(linear_asgs(cells, degree, "static", "newton"))
+        dx = volume_measure(problem.mesh, 3 * degree)
+        velocities = {}
+        for dynamics in ("static", "dynamic"):
+            for linearization in ("newton", "picard"):
+                config = linear_asgs(cells, degree, dynamics, linearization)
+                folder = tmp_path / config.run_name
+                velocities[dynamics, linearization] = march(config, problem, folder).velocity
+                if linearization == "newton":
+                    errors[dynamics].append(final_diagnostics(folder))
+        reference = velocities["static", "newton"]
+        for (dynamics, linearization), velocity in velocities.items():
+            difference = relative_change(velocity, reference, dx)
+            LOGGER.info(
+                "V3 linear ASGS P%d/P%d %s: %s %s vs static newton %.3e",
+                degree,
+                degree,
+                cells,
+                dynamics,
+                linearization,
+                difference,
+            )
+            assert difference <= 1e-8, (dynamics, linearization)
+        newton_picard = relative_change(
+            velocities["dynamic", "picard"], velocities["dynamic", "newton"], dx
         )
         LOGGER.info(
-            "V3 Sta-Lin-ASGS P%d/P%d, %s: Newton/Picard %.3e", degree, degree, cells, difference
+            "V3 Dyn-Lin-ASGS P%d/P%d %s: Newton/Picard %.3e", degree, degree, cells, newton_picard
         )
-        assert difference <= 1e-8
-    LOGGER.info("V3 Sta-Lin-ASGS P%d/P%d steady errors: %s", degree, degree, errors)
-    for name in ("velocity_error_l2", "pressure_error_l2"):
-        assert errors[1][name] < errors[0][name], name
+        assert newton_picard <= 1e-8
+    for dynamics, pair in errors.items():
+        LOGGER.info("V3 %s linear ASGS P%d/P%d steady errors: %s", dynamics, degree, degree, pair)
+        for name in ("velocity_error_l2", "pressure_error_l2"):
+            assert pair[1][name] < pair[0][name], (dynamics, name)

@@ -9,10 +9,11 @@ import ufl
 from firedrake.exceptions import ConvergenceError
 from ufl.core.expr import Expr
 
-from navier_stokes_vms.config import Config
+from navier_stokes_vms.config import Config, method_name
 from navier_stokes_vms.discretization.function_spaces import (
     constant_pressure_null_space,
     mixed_space,
+    subscale_space,
 )
 from navier_stokes_vms.discretization.quadrature import (
     boundary_measure,
@@ -21,8 +22,11 @@ from navier_stokes_vms.discretization.quadrature import (
 )
 from navier_stokes_vms.discretization.time_schemes import StepCoefficients, step_coefficients
 from navier_stokes_vms.formulation.galerkin import SolveLevel, galerkin_residual
-from navier_stokes_vms.formulation.stabilization_parameters import stabilization_parameters
-from navier_stokes_vms.formulation.vms import vms_terms
+from navier_stokes_vms.formulation.stabilization_parameters import (
+    dynamic_parameter,
+    stabilization_parameters,
+)
+from navier_stokes_vms.formulation.vms import velocity_subscale, vms_terms
 from navier_stokes_vms.postprocessing.diagnostics import DiagnosticState, evaluate_diagnostics
 from navier_stokes_vms.postprocessing.output import CsvWriter, FieldWriter, open_diagnostics_csv
 from navier_stokes_vms.postprocessing.run_logging import IterationLogs, open_iteration_logs
@@ -42,6 +46,7 @@ from navier_stokes_vms.solver.nonlinear_solver import (
     InnerSolveResult,
     relative_change,
 )
+from navier_stokes_vms.solver.subscale_storage import SubscaleStorage
 
 
 class TimeStepper:
@@ -97,6 +102,8 @@ class TimeStepper:
         frozen = self._frozen
         picard = galerkin_residual(u, p, v, q, frozen, frozen, nu, level, self._dx, outflow_ds)
         jacobian = None
+        self._subscales: SubscaleStorage | None = None
+        self._u_sub: Expr | None = None
         stabilization = config.stabilization
         if stabilization.method == "vms":
             k = config.discretization.velocity_degree
@@ -106,14 +113,23 @@ class TimeStepper:
             )
             if not stabilization.pressure_subscale:
                 tau_c = tau_c_hat = ufl.zero()
+            tau_t, tau_t_hat, u_sub_history = tau_m, tau_m_hat, None
+            if stabilization.subscale_dynamics == "dynamic":
+                self._subscales = SubscaleStorage(subscale_space(mesh, degree), len(self._history))
+                u_sub_history = self._subscales.history
+                tau_t = dynamic_parameter(tau_m, level.alpha0, level.dt)
+                tau_t_hat = dynamic_parameter(tau_m_hat, level.alpha0, level.dt)
+                self._u_sub = velocity_subscale(u, p, u, nu, level, tau_t, u_sub_history)
             if config.solver.linearization == "newton" and config.solver.newton_tau == "frozen":
                 frozen_tau = newton + vms_terms(
-                    u, p, v, q, u, nu, level, tau_m_hat, tau_c_hat, self._dx
+                    u, p, v, q, u, nu, level, tau_t_hat, tau_c_hat, self._dx, u_sub_history
                 )
                 # replace expands the derivative before restoring the current advector in τ.
                 jacobian = ufl.replace(fd.derivative(frozen_tau, self._solution), {frozen: u})
-            newton += vms_terms(u, p, v, q, u, nu, level, tau_m, tau_c, self._dx)
-            picard += vms_terms(u, p, v, q, frozen, nu, level, tau_m_hat, tau_c_hat, self._dx)
+            newton += vms_terms(u, p, v, q, u, nu, level, tau_t, tau_c, self._dx, u_sub_history)
+            picard += vms_terms(
+                u, p, v, q, frozen, nu, level, tau_t_hat, tau_c_hat, self._dx, u_sub_history
+            )
         bcs = [
             dirichlet_bc(
                 space.sub(0), name, self._at_solve_level(bc.value, x), problem.boundary_tags
@@ -142,7 +158,7 @@ class TimeStepper:
         self._logger.info(
             "%s P%d/P%d: %d unknowns, quadrature degree %d, pressure null space %s, "
             "%s Dirichlet and %s outflow boundaries",
-            "Galerkin" if stabilization.method == "none" else "Sta-Lin-ASGS",
+            method_name(stabilization),
             config.discretization.velocity_degree,
             config.discretization.pressure_degree,
             space.dim(),
@@ -270,8 +286,12 @@ class TimeStepper:
         self._weight_old.assign(coefficients.data_weight_old)
         weighted = zip(coefficients.history_weights, self._history, strict=False)
         self._velocity_history.assign(sum(weight * velocity for weight, velocity in weighted))
+        if self._subscales is not None:
+            self._subscales.form_history(coefficients)
 
     def _advance(self, coefficients: StepCoefficients) -> None:
+        if self._subscales is not None:
+            self._subscales.store(self._u_sub, coefficients)
         self._endpoint.assign(
             coefficients.extrapolation_weight_solve * self._velocity
             + coefficients.extrapolation_weight_old * self._history[0]

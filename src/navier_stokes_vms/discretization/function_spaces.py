@@ -4,6 +4,8 @@ import firedrake as fd
 from firedrake.functionspaceimpl import WithGeometry
 from firedrake.mesh import MeshGeometry
 
+from navier_stokes_vms.discretization.quadrature import quadrature_element
+
 
 def mixed_space(mesh: MeshGeometry, velocity_degree: int, pressure_degree: int) -> WithGeometry:
     """W = V × Q with continuous Lagrange velocity and pressure of the configured degrees."""
@@ -16,3 +18,8 @@ def constant_pressure_null_space(space: WithGeometry) -> fd.MixedVectorSpaceBasi
     """Null space of W spanned by the constant pressure (plan §8, §11)."""
     constant = fd.VectorSpaceBasis(constant=True, comm=space.comm)
     return fd.MixedVectorSpaceBasis(space, [space.sub(0), constant])
+
+
+def subscale_space(mesh: MeshGeometry, degree: int) -> WithGeometry:
+    """Vector space of values at the points of the dx rule of the given degree."""
+    return fd.VectorFunctionSpace(mesh, quadrature_element(mesh.ufl_cell(), degree))

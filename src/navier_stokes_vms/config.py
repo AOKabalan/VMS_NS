@@ -143,7 +143,7 @@ _PHASE_ADDING = {
     ("oss", "dynamic", "nonlinear"): 8,
 }
 
-_IMPLEMENTED_VMS_CASES = frozenset({("asgs", "static", "linear")})
+_IMPLEMENTED_VMS_CASES = frozenset({("asgs", "static", "linear"), ("asgs", "dynamic", "linear")})
 
 
 def load_config(path: Path) -> Config:
@@ -243,8 +243,16 @@ def config_to_toml(config: Config) -> str:
     return tomli_w.dumps(config_as_dict(config))
 
 
+def method_name(stabilization: StabilizationOptions) -> str:
+    """Galerkin, or the spec name of the VMS case such as Dyn-Nl-OSS."""
+    if stabilization.method == "none":
+        return "Galerkin"
+    return _vms_case_name(
+        stabilization.subscale_space, stabilization.subscale_dynamics, stabilization.scale_splitting
+    )
+
+
 def _vms_case_name(space: str, dynamics: str, splitting: str) -> str:
-    """Spec name of a VMS case, e.g. Dyn-Nl-OSS."""
     return "-".join(
         (
             {"static": "Sta", "dynamic": "Dyn"}[dynamics],

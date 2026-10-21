@@ -340,3 +340,66 @@ Deviations from spec or plan:
 5. V1 for ASGS uses the Galerkin V1 settings; V3 for ASGS uses the Galerkin V3 settings (`inner_max_iterations = 100`).
 
 Open questions: None. For later phases: the stability condition depends on cell shape, and U5 checks it only on the structured test meshes. The phase 10 gmsh cylinder mesh should be checked the same way before P2/P2 runs on it.
+
+## Phase 6: Dynamic subscales (2026-10-22)
+Done: Before this phase, commit "Plan: U5 check on the cylinder mesh" added to plan §13 Phase 10 the U5 eigenvalue check on a coarse version of the gmsh cylinder mesh.
+- `discretization/function_spaces.py` has `subscale_space(mesh, q)`, a vector space on `quadrature.quadrature_element`, so its values sit at the points of the dx rule.
+- `solver/subscale_storage.py` has `SubscaleStorage`:
+  - It keeps as many levels as the velocity: 1 for BDF1, 2 for BDF2, 3 for BDF3, 1 for Crank–Nicolson. All start at zero, which gives ũ⁰ = 0 and zero exact-history levels at negative times. Every step shifts them from step 1, including the lower-order startup steps.
+  - `form_history(coefficients)` sets ũ_hist = Σ_j history_weights[j] ũ^(n−j) from the step's own `StepCoefficients`.
+  - `store(u_sub, coefficients)` runs after convergence. It interpolates the subscale expression at the converged state (the half-level value for Crank–Nicolson), extrapolates it with the step's weights (ũ^(n+1) = 2ũ^(n+½) − ũⁿ for Crank–Nicolson, identity for BDF) and shifts.
+- `formulation/stabilization_parameters.py` has `dynamic_parameter` τ_t = (α₀/δt + 1/τ_m)⁻¹, with α₀ the `SolveLevel` Constant that is reset every step.
+- `formulation/vms.py` has `velocity_subscale`, ũ = τ_t(R_u + χ_D ũ_hist/δt). `vms_terms` adds χ_D (D_t ũ, v) = (α₀ũ − ũ_hist, v)/δt with ũ substituted. Static subscales pass no history, so τ_t = τ_m and the Phase 5 forms are unchanged.
+- `solver/time_stepper.py`: for dynamic subscales the residual uses τ_t(u), and Picard uses τ_t(â).
+  - The frozen-τ Newton Jacobian builds τ_t on the frozen advector and then replaces it with u, so it has τ_t(u) without τ_t′. The exact option differentiates τ_t.
+  - ũ_hist is formed in `_set_level` before each solve, and ũ^(n+1) is stored in `_advance` after convergence only.
+  - The run log names the case from the switches through the new public `config.method_name` ("Galerkin", "Sta-Lin-ASGS", "Dyn-Lin-ASGS", …).
+- `config.py`: rule 5 accepts Sta-Lin-ASGS and Dyn-Lin-ASGS.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean (47 files).
+- `pytest tests/unit`: 174 passed in 25 s.
+- `pytest tests/verification -m slow`: 23 passed in 476 s.
+- `test_subscale_storage.py` (new, the bookkeeping test): all four schemes, both startups, six steps, on the known expression g(t)(sin x, y) with g = t + t² (zero for t ≤ 0).
+  - At each step the formed ũ_hist equals Σ_j w_j ũ(t^(n−j)), to 1e-14.
+  - The stored solve-level value is the endpoint-average data for Crank–Nicolson and the endpoint value for BDF steps.
+  - This checks the shifting, the startup sequence, zero exact-history levels and the Crank–Nicolson extrapolation.
+  - Mutation check in scratch: skipping the extrapolation fails Crank–Nicolson, and skipping the shift fails BDF2 and BDF3.
+- `test_asgs_solver.py`: the finite-difference Jacobian check now also covers dynamic subscales with a random non-zero ũ_hist, for frozen and exact τ_t, P1 and P2.
+- `test_config.py`: rule 5 accepts Dyn-Lin-ASGS (P1/P1, P2/P2, τ_c on and off), and `method_name` gives the spec names.
+
+V2, Dyn-Lin-ASGS (manufactured_temporal, 4×4, T = 1, N = 20 / 40 / 80 / 160). Velocity at T; pressure at the solve level, zero mean. Rates for each refinement; thresholds as for Galerkin:
+
+| Pair | Scheme | ‖u − u_ex‖ | Rates | ‖p − p_ex‖ | Rates |
+| --- | --- | --- | --- | --- | --- |
+| P1/P1 | BDF1 | 1.593e-3 / 7.986e-4 / 3.998e-4 / 2.001e-4 | 1.00, 1.00, **1.00** | 2.751e-3 / 1.359e-3 / 6.752e-4 / 3.366e-4 | 1.02, 1.01, **1.00** |
+| P1/P1 | BDF2 | 2.743e-5 / 7.123e-6 / 1.819e-6 / 4.599e-7 | 1.95, 1.97, **1.98** | 1.339e-4 / 3.391e-5 / 8.530e-6 / 2.139e-6 | 1.98, 1.99, **2.00** |
+| P1/P1 | BDF3, exact history | 2.086e-6 / 2.556e-7 / 3.162e-8 / 3.932e-9 | 3.03, 3.02, **3.01** | 3.656e-6 / 4.384e-7 / 5.362e-8 / 6.628e-9 | 3.06, 3.03, **3.02** |
+| P1/P1 | Crank–Nicolson | 1.357e-5 / 3.365e-6 / 8.398e-7 / 2.098e-7 | 2.01, 2.00, **2.00** | 1.014e-4 / 2.563e-5 / 6.442e-6 / 1.615e-6 | 1.98, 1.99, **2.00** |
+| P1/P1 | BDF3, lower order (logged) | 2.330e-5 / 5.965e-6 / 1.508e-6 / 3.791e-7 | 1.97, 1.98, **1.99** (≥ 1.8) | 1.200e-5 / 2.973e-6 / 7.467e-7 / 1.875e-7 | 2.01, 1.99, **1.99** (≥ 1.8) |
+| P2/P2 | BDF1 | 2.890e-3 / 1.457e-3 / 7.320e-4 / 3.669e-4 | 0.99, 0.99, **1.00** | 2.985e-3 / 1.478e-3 / 7.353e-4 / 3.668e-4 | 1.01, 1.01, **1.00** |
+| P2/P2 | BDF2 | 9.363e-5 / 2.315e-5 / 5.770e-6 / 1.442e-6 | 2.02, 2.00, **2.00** | 1.332e-4 / 3.365e-5 / 8.461e-6 / 2.122e-6 | 1.98, 1.99, **2.00** |
+| P2/P2 | BDF3, exact history | 3.823e-6 / 4.690e-7 / 5.805e-8 / 7.220e-9 | 3.03, 3.01, **3.01** | 3.965e-6 / 4.768e-7 / 5.839e-8 / 7.223e-9 | 3.06, 3.03, **3.02** |
+| P2/P2 | Crank–Nicolson | 5.064e-5 / 1.259e-5 / 3.143e-6 / 7.855e-7 | 2.01, 2.00, **2.00** | 1.060e-4 / 2.665e-5 / 6.684e-6 / 1.674e-6 | 1.99, 2.00, **2.00** |
+| P2/P2 | BDF3, lower order (logged) | 6.749e-5 / 1.671e-5 / 4.174e-6 / 1.044e-6 | 2.01, 2.00, **2.00** (≥ 1.8) | 2.683e-5 / 6.796e-6 / 1.716e-6 / 4.314e-7 | 1.98, 1.99, **1.99** (≥ 1.8) |
+
+V2 Galerkin is unchanged.
+
+V3, linear ASGS on steady Kovasznay (Re = 40, BDF1 dt = 5 to T = 100, meshes 16 = 24×32 and 32 = 48×64; final relative step change < 1e-10 in every run). The differences are ‖u − u_static,Newton‖/‖u_static,Newton‖ in L² with the common rule:
+
+| Pair | Mesh | Static Picard | Dynamic Newton | Dynamic Picard | Dynamic Newton/Picard |
+| --- | --- | --- | --- | --- | --- |
+| P1/P1 | 16 | 6.0e-13 | 3.0e-13 | 4.6e-13 | 3.9e-13 |
+| P1/P1 | 32 | 7.5e-13 | 3.0e-12 | 3.0e-12 | 5.0e-13 |
+| P2/P2 | 16 | 1.0e-12 | 3.7e-12 | 3.6e-12 | 7.9e-13 |
+| P2/P2 | 32 | 4.4e-12 | 4.4e-12 | 4.4e-12 | 1.6e-12 |
+
+All are ≤ 1e-8. Static and dynamic steady errors agree to about 10 digits (P1/P1 velocity 3.0560e-2 → 9.0922e-3; P2/P2 velocity 4.1082e-4 → 5.1174e-5). Both drop from mesh 16 to 32.
+
+Deviations from spec or plan:
+1. `config.method_name` was made public so the run log can name the case. The internal `_vms_case_name` is kept for the rule 5 message.
+2. `vms_terms` takes τ_t (τ_m for static subscales) and an optional `u_sub_history`; None means static (χ_D = 0).
+3. New unit test file `tests/unit/test_subscale_storage.py` (the bookkeeping test the acceptance asked for); `test_asgs_solver.py` was extended to dynamic subscales.
+4. V2 and V3 tests were restructured to run over variants. V2 runs Galerkin, Dyn-Lin-ASGS P1/P1 and P2/P2 (P2/P2 is cheap on the 4×4 mesh). V3 runs a single ASGS test per degree covering static and dynamic, Newton and Picard, on both meshes. The test names changed accordingly.
+
+Open questions: None.

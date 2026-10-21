@@ -23,14 +23,17 @@ from navier_stokes_vms.config import (
 )
 from navier_stokes_vms.discretization.time_schemes import step_coefficients
 from navier_stokes_vms.formulation.galerkin import SolveLevel, galerkin_residual
-from navier_stokes_vms.formulation.stabilization_parameters import stabilization_parameters
+from navier_stokes_vms.formulation.stabilization_parameters import (
+    dynamic_parameter,
+    stabilization_parameters,
+)
 from navier_stokes_vms.formulation.vms import vms_terms
 from navier_stokes_vms.solver.time_stepper import TimeStepper
 
 LOGGER = logging.getLogger(__name__)
 
 
-def asgs_config(degree: int, options: SolverOptions) -> Config:
+def asgs_config(degree: int, options: SolverOptions, dynamics: str = "static") -> Config:
     return Config(
         case="manufactured_spatial",
         run_name="asgs",
@@ -38,19 +41,20 @@ def asgs_config(degree: int, options: SolverOptions) -> Config:
         discretization=DiscretizationOptions(velocity_degree=degree, pressure_degree=degree),
         time=TimeOptions(scheme="bdf1", dt=0.05, t_end=0.05),
         stabilization=StabilizationOptions(
-            subscale_space="asgs", subscale_dynamics="static", scale_splitting="linear"
+            subscale_space="asgs", subscale_dynamics=dynamics, scale_splitting="linear"
         ),
         solver=options,
         output=OutputOptions(vtk_every=0),
     )
 
 
+@pytest.mark.parametrize("dynamics", ["static", "dynamic"])
 @pytest.mark.parametrize("degree", [1, 2])
 @pytest.mark.parametrize("newton_tau", ["frozen", "exact"])
 def test_newton_jacobian_matches_finite_differences(
-    tmp_path: Path, degree: int, newton_tau: str
+    tmp_path: Path, degree: int, newton_tau: str, dynamics: str
 ) -> None:
-    config = asgs_config(degree, replace(SolverOptions(), newton_tau=newton_tau))
+    config = asgs_config(degree, replace(SolverOptions(), newton_tau=newton_tau), dynamics)
     problem = build_problem(config)
     stepper = TimeStepper(config, problem, tmp_path, LOGGER)
     stepper._initialise()
@@ -74,8 +78,15 @@ def test_newton_jacobian_matches_finite_differences(
     tau_m, tau_c = stabilization_parameters(
         frozen if newton_tau == "frozen" else u, problem.viscosity, degree, 4.0, 2.0
     )
+    u_sub_history = None
+    if dynamics == "dynamic":
+        u_sub_history = stepper._subscales.history
+        u_sub_history.dat.data[:] = rng.uniform(-1.0, 1.0, u_sub_history.dat.data.shape)
+        tau_m = dynamic_parameter(tau_m, level.alpha0, level.dt)
     form = galerkin_residual(u, p, v, q, u, u, problem.viscosity, level, stepper._dx, None)
-    form += vms_terms(u, p, v, q, u, problem.viscosity, level, tau_m, tau_c, stepper._dx)
+    form += vms_terms(
+        u, p, v, q, u, problem.viscosity, level, tau_m, tau_c, stepper._dx, u_sub_history
+    )
     jacobian = stepper._inner._newton._problem.J
     action = fd.assemble(ufl.action(jacobian, direction))
     epsilon = 1e-6
