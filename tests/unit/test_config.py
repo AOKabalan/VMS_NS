@@ -82,7 +82,6 @@ SHORT_RUN = (
 )
 
 VMS_CASES = [
-    ("asgs", "static", "linear", "Sta-Lin-ASGS", 5),
     ("asgs", "dynamic", "linear", "Dyn-Lin-ASGS", 6),
     ("asgs", "static", "nonlinear", "Sta-Nl-ASGS", 7),
     ("asgs", "dynamic", "nonlinear", "Dyn-Nl-ASGS", 7),
@@ -91,6 +90,14 @@ VMS_CASES = [
     ("oss", "static", "nonlinear", "Sta-Nl-OSS", 8),
     ("oss", "dynamic", "nonlinear", "Dyn-Nl-OSS", 8),
 ]
+
+STATIC_ASGS = """case = "kovasznay"
+[stabilization]
+method = "vms"
+subscale_space = "asgs"
+subscale_dynamics = "static"
+scale_splitting = "linear"
+"""
 
 
 def write_config(folder: Path, text: str, name: str = "run.toml") -> Path:
@@ -162,7 +169,7 @@ def test_mesh_fields_override_the_case_default_independently(
     assert load_text(tmp_path, GALERKIN + f"\n[mesh]\n{table}\n").mesh == expected
 
 
-@pytest.mark.parametrize("text", [GALERKIN, FULL], ids=["minimal", "full"])
+@pytest.mark.parametrize("text", [GALERKIN, FULL, STATIC_ASGS], ids=["minimal", "full", "asgs"])
 def test_resolved_dump_reloads_to_the_same_config(tmp_path: Path, text: str) -> None:
     config = load_text(tmp_path, text)
     dumped = write_config(tmp_path, config_to_toml(config), name="other_name.toml")
@@ -219,6 +226,20 @@ def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="output.diagnostics: unknown divergence_l2"):
         check_diagnostics_known(config, available={"kinetic_energy"})
     check_diagnostics_known(config, available={"kinetic_energy", "divergence_l2"})
+
+
+@pytest.mark.parametrize("degree", [1, 2])
+@pytest.mark.parametrize("pressure_subscale", ["true", "false"])
+def test_rule5_accepts_static_linear_asgs(
+    tmp_path: Path, degree: int, pressure_subscale: str
+) -> None:
+    text = (
+        STATIC_ASGS + f"pressure_subscale = {pressure_subscale}\n[discretization]\n"
+        f"velocity_degree = {degree}\npressure_degree = {degree}\n"
+    )
+    config = load_text(tmp_path, text)
+    assert config.stabilization.subscale_space == "asgs"
+    assert config.discretization.velocity_degree == degree
 
 
 @pytest.mark.parametrize(

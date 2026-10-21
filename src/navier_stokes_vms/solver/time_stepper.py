@@ -1,4 +1,4 @@
-"""The time loop: steps of spec Time-step algorithm for the Galerkin baseline, logs and output."""
+"""The time loop: steps of spec Time-step algorithm, logs and output."""
 
 import logging
 import time
@@ -21,6 +21,8 @@ from navier_stokes_vms.discretization.quadrature import (
 )
 from navier_stokes_vms.discretization.time_schemes import StepCoefficients, step_coefficients
 from navier_stokes_vms.formulation.galerkin import SolveLevel, galerkin_residual
+from navier_stokes_vms.formulation.stabilization_parameters import stabilization_parameters
+from navier_stokes_vms.formulation.vms import vms_terms
 from navier_stokes_vms.postprocessing.diagnostics import DiagnosticState, evaluate_diagnostics
 from navier_stokes_vms.postprocessing.output import CsvWriter, FieldWriter, open_diagnostics_csv
 from navier_stokes_vms.postprocessing.run_logging import IterationLogs, open_iteration_logs
@@ -43,7 +45,7 @@ from navier_stokes_vms.solver.nonlinear_solver import (
 
 
 class TimeStepper:
-    """Galerkin integration of one problem: startup, histories, solves, logs and field output."""
+    """Integration of one problem: startup, histories, solves, logs and field output."""
 
     def __init__(
         self, config: Config, problem: Problem, folder: Path, logger: logging.Logger
@@ -94,6 +96,24 @@ class TimeStepper:
         newton = galerkin_residual(u, p, v, q, u, u, nu, level, self._dx, outflow_ds)
         frozen = self._frozen
         picard = galerkin_residual(u, p, v, q, frozen, frozen, nu, level, self._dx, outflow_ds)
+        jacobian = None
+        stabilization = config.stabilization
+        if stabilization.method == "vms":
+            k = config.discretization.velocity_degree
+            tau_m, tau_c = stabilization_parameters(u, nu, k, stabilization.c1, stabilization.c2)
+            tau_m_hat, tau_c_hat = stabilization_parameters(
+                frozen, nu, k, stabilization.c1, stabilization.c2
+            )
+            if not stabilization.pressure_subscale:
+                tau_c = tau_c_hat = ufl.zero()
+            if config.solver.linearization == "newton" and config.solver.newton_tau == "frozen":
+                frozen_tau = newton + vms_terms(
+                    u, p, v, q, u, nu, level, tau_m_hat, tau_c_hat, self._dx
+                )
+                # replace expands the derivative before restoring the current advector in τ.
+                jacobian = ufl.replace(fd.derivative(frozen_tau, self._solution), {frozen: u})
+            newton += vms_terms(u, p, v, q, u, nu, level, tau_m, tau_c, self._dx)
+            picard += vms_terms(u, p, v, q, frozen, nu, level, tau_m_hat, tau_c_hat, self._dx)
         bcs = [
             dirichlet_bc(
                 space.sub(0), name, self._at_solve_level(bc.value, x), problem.boundary_tags
@@ -105,7 +125,7 @@ class TimeStepper:
             constant_pressure_null_space(space) if uses_pressure_null_space(problem) else None
         )
         self._inner = InnerSolver(
-            self._solution, newton, picard, frozen, bcs, null_space, config.solver
+            self._solution, newton, picard, frozen, bcs, null_space, config.solver, jacobian
         )
         self._diagnostic_state = DiagnosticState(
             problem=problem,
@@ -120,8 +140,9 @@ class TimeStepper:
         self._fields = FieldWriter(folder)
         self._folder = folder
         self._logger.info(
-            "Galerkin P%d/P%d: %d unknowns, quadrature degree %d, pressure null space %s, "
+            "%s P%d/P%d: %d unknowns, quadrature degree %d, pressure null space %s, "
             "%s Dirichlet and %s outflow boundaries",
+            "Galerkin" if stabilization.method == "none" else "Sta-Lin-ASGS",
             config.discretization.velocity_degree,
             config.discretization.pressure_degree,
             space.dim(),
@@ -273,9 +294,10 @@ class TimeStepper:
                 row.relative_residual,
                 "-" if row.update_norm is None else f"{row.update_norm:.3e}",
             )
+        detail = f"; {result.failure_reason}" if result.failure_reason else ""
         raise ConvergenceError(
             f"inner solve did not converge at step {step}; last state written to "
-            f"{self._folder / 'fields'} at t = {solve_time:g}"
+            f"{self._folder / 'fields'} at t = {solve_time:g}{detail}"
         )
 
     def _time(self, steps: float) -> float:

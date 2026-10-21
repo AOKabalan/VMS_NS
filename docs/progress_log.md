@@ -260,3 +260,83 @@ Deviations from spec or plan:
 3. V2's pressure assertion follows the instruction given with the V2 decision. The plan's V2 text was updated with it in the "Plan: rotational manufactured_temporal" commit.
 
 Open questions: None.
+
+## Phase 5: Static linear ASGS (2026-10-22)
+Done:
+- `formulation/operators.py` has `elementwise_laplacian` (Δ_h = div grad inside cell integrals), `momentum_operator` L_a(u, p) = a·∇u − νΔ_h u + ∇p, `adjoint_operator` L*_a(v, q) = −a·∇v − νΔ_h v − ∇q, and `momentum_residual` R_u = f − D_t u − L_a(u, p).
+- `formulation/stabilization_parameters.py` evaluates τ_m = (c1·k⁴·ν/h² + c2·k·|a|/h)⁻¹ and τ_c = h²/(c1·k⁴·τ_m) pointwise, with |a| = √(a·a), h = `ufl.MinCellEdgeLength` (the shortest cell edge) and no 1/δt.
+- `formulation/vms.py` has `vms_terms` = Σ_K (ũ, L*_a(v, q))_K + Σ_K (τ_c ∇·u, ∇·v)_K with ũ = τ_m R_u, the master formulation for Sta-Lin-ASGS (a = u_h, ζ = 0). `pressure_subscale = false` sets τ_c to zero. Expanded, this is +τ_m(D_t u + L_a u − f, a·∇v + νΔ_h v + ∇q), the corrected sign of the spec's Errata row 1.
+- `config.py`: rule 5 now accepts exactly (asgs, static, linear).
+- `solver/time_stepper.py` adds `vms_terms` to both residuals. Newton evaluates a and τ at the current iterate; Picard evaluates them at the frozen advector. The equal-order spaces Pk/Pk come from the existing `mixed_space`.
+- Newton τ options (`solver/nonlinear_solver.py`, `time_stepper.py`):
+  - The residual, and therefore every logged residual, always uses τ at the current iterate.
+  - `newton_tau = "frozen"`: the Jacobian is `derivative` of the residual with τ built on the frozen Function, then `ufl.replace(frozen → u)`. UFL's `replace` expands the derivative first, so the Jacobian has τ(u) but no τ′ (inexact Newton).
+  - `newton_tau = "exact"`: Firedrake's derivative of the full form, including τ′.
+  - With `exact`, a post-Jacobian callback checks that the Jacobian is finite. A non-finite residual or Jacobian produces a failure reason naming `solver.newton_tau = 'exact'` ("differentiates |a|, which is undefined at a = 0").
+- PETSc error-wrapping fix: petsc4py turns an exception raised inside the Jacobian callback into a `PETSc.Error`. `InnerSolver` records the failure reason before raising. It catches `PETSc.Error` and reports non-convergence only when a reason was recorded, and re-raises otherwise. The named message thus reaches the normal failure path: last state written to `fields/`, iteration history logged, the reason appended to the run's `ConvergenceError`, exit status 1. `InnerSolveResult` gained `failure_reason` for this.
+
+First stop and decision:
+- With h = cell diameter, random-sample U5 passed, but a targeted P2 field broke dissipation. The field was on a 4×4 mesh with zero boundary values, p = 0, f = 0, no time terms, ν = 1 and pressure subscales on. Its viscous term was 7.50114e-8, and viscous + stabilization was −1.34586e-8.
+- With the cell diameter, V1 P2/P2 lost convergence on mesh 32:
+
+  | Mesh | ‖u − u_ex‖ | ‖∇(u − u_ex)‖ | ‖p − p_ex‖ |
+  | --- | --- | --- | --- |
+  | 8 | 1.251e-2 | 7.307e-1 | 1.058e-2 |
+  | 16 | 1.596e-3 | 1.865e-1 | 6.391e-4 |
+  | 32 | 1.941e-3 | 3.443e-1 | 2.020e-3 |
+  | Rate 16 → 32 | −0.28 | −0.88 | −1.66 |
+
+- V3 P2/P2 Picard needed more than 100 iterations on mesh 32. Work stopped there.
+- Decision (spec owner): for k ≥ 2, the adjoint term contributes −Σ_K τ_m ν² ‖Δ_h u‖²_K. Stability needs c1·k⁴ (64 for P2) to exceed the inverse constant C_inv with ‖Δ_h v‖²_K ≤ C_inv h⁻² ‖∇v‖²_K. On right isosceles triangles C_inv = 48 with h the shortest edge, but 96 with h the cell diameter.
+- So h = shortest cell edge (Colomés §7.1.2, minimum element length). c1 = 4 and c2 = 2 are unchanged.
+- The spec now has the paragraph "Stability condition for k ≥ 2" and the changed τ-evaluation row. Plan §11 says `ufl.MinCellEdgeLength`, and plan §10 U5 describes the eigenvalue test. `ufl.MinCellEdgeLength` works directly in Firedrake 2026.10.0 in 2D and 3D.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean (45 files).
+- `pytest tests/unit`: 159 passed in 27 s.
+- `pytest tests/verification -m slow`: 13 passed in 186 s.
+- U4 (`test_asgs_equals_supg.py`): Galerkin + `vms_terms` equals a classical form written in the test, Galerkin + Σ τ_m(D_t u + a·∇u − νΔ_h u + ∇p − f, a·∇v + νΔ_h v + ∇q) + Σ τ_c(∇·u, ∇·v), with an independent τ, to relative 1e-12. The fields u, p, history and f are random, with α₀ = 1.5 and δt = 0.07 so that D_t contributes. It covers P1/P1 and P2/P2, 2D and 3D, τ_c on and off. For P2 it checks that ‖Δ_h u‖ is non-trivial.
+- U5 (`test_dissipation_sign.py`), eigenvalue test:
+  - E(u, p; v, q) = ν(∇u, ∇v) + Σ_K (−τ_m L_a(u, p), L*_a(v, q))_K + Σ_K (τ_c ∇·u, ∇·v)_K, with a frozen random advector (components in [0.5, 1.5]) and f = 0, no time terms.
+  - The symmetric part is restricted to the dofs free of the homogeneous velocity Dirichlet conditions.
+  - It covers P1/P1 and P2/P2 on 4×4 squares with diagonals `left` and `crossed` and on a 2×2×2 box, at ν = 10 (viscous regime) and ν = 1e-4 (convective regime).
+  - In all 12 cases λ_min is at round-off, |λ_min| ≤ 1.5e-15 (the constant-pressure mode). λ_max ranges from 0.26 to 174, so λ_min ≥ −1e-12 λ_max holds.
+- U5 regression: with the cell diameter, the at-rest P2 energy matrix has a negative eigenvalue. Its eigenvector, scaled by 1e-4, gives energy −1.34586e-8 with the diameter τ and +3.39009e-8 with the shortest-edge τ. The test detects the original failure.
+- `test_asgs_solver.py` (new):
+  - Newton Jacobians for frozen and exact τ, P1 and P2, match central finite differences of the corresponding residual to 1e-8 relative.
+  - For Newton (frozen and exact), Picard, and 2 Picard + Newton, every logged residual equals the assembled ASGS residual with τ at the current iterate (1e-7), and the last meets the tolerance.
+  - Started from rest, frozen τ converges. Exact τ fails with a `ConvergenceError` naming `solver.newton_tau = 'exact'`, writes `fields/` and records `converged = False`.
+- `test_config.py`: rule 5 accepts static linear ASGS at P1/P1 and P2/P2 with the pressure subscale on and off. The other seven cases are still rejected with their phase. The ASGS config round-trips.
+
+V1, Sta-Lin-ASGS (manufactured_spatial, BDF1, two steps of dt = 0.05; rate on 16 → 32, threshold expected − 0.2):
+
+| Pair | Mesh | ‖u − u_ex‖ | Rate | ‖∇(u − u_ex)‖ | Rate | ‖p − p_ex‖ | Rate |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P1/P1 | 8 | 2.556e-1 | | 4.927e+0 | | 6.262e-1 | |
+| P1/P1 | 16 | 5.988e-2 | 2.09 | 2.467e+0 | 1.00 | 1.562e-1 | 2.00 |
+| P1/P1 | 32 | 1.327e-2 | **2.17** (≥ 1.8) | 1.230e+0 | **1.00** (≥ 0.8) | 3.014e-2 | **2.37** (≥ 0.8) |
+| P2/P2 | 8 | 1.197e-2 | | 7.291e-1 | | 9.943e-3 | |
+| P2/P2 | 16 | 1.519e-3 | 2.98 | 1.843e-1 | 1.98 | 9.236e-4 | 3.43 |
+| P2/P2 | 32 | 1.882e-4 | **3.01** (≥ 2.8) | 4.512e-2 | **2.03** (≥ 1.8) | 1.654e-4 | **2.48** (≥ 1.8) |
+
+V1 Galerkin P2/P1 is unchanged: 3.17, 2.19, 2.10.
+
+V3, Sta-Lin-ASGS on steady Kovasznay (Re = 40, BDF1 dt = 5 to T = 100, mesh 16 = 24×32 and mesh 32 = 48×64; final relative step change < 1e-10 in every run). The Newton/Picard difference is ‖u_N − u_P‖/‖u_N‖ in L² with the common rule:
+
+| Pair | Mesh | Newton/Picard | Newton inner (max per step, total) | Picard inner (max per step, total) | ‖u − u_ex‖ | ‖p − p_ex‖ |
+| --- | --- | --- | --- | --- | --- | --- |
+| P1/P1 | 16 | 6.0e-13 | 6, 27 | 17, 76 | 3.056e-2 | 2.586e-2 |
+| P1/P1 | 32 | 7.5e-13 | 4, 16 | 16, 68 | 9.092e-3 | 8.210e-3 |
+| P2/P2 | 16 | 1.0e-12 | 2, 8 | 14, 41 | 4.108e-4 | 1.133e-4 |
+| P2/P2 | 32 | 4.4e-12 | 2, 5 | 11, 26 | 5.117e-5 | 2.501e-5 |
+
+All Newton/Picard differences are ≤ 1e-8, and both errors drop from mesh 16 to 32 for both pairs. V3 Galerkin is unchanged (Newton/Picard 4.4e-13).
+
+Deviations from spec or plan:
+1. h = shortest cell edge instead of the cell diameter, and the U5 eigenvalue test instead of random sampling. These were decided by the spec owner after the first stop and recorded in the spec and plan, which are committed with this phase.
+2. New test file `tests/unit/test_asgs_solver.py` (Jacobian finite differences, residual logging, exact-τ failure). It is white-box: it reads private `TimeStepper` and `InnerSolver` members and wraps `InnerSolver._append`.
+3. `InnerSolveResult.failure_reason` and the post-Jacobian finiteness callback, needed to name `newton_tau = 'exact'` in the error, and the `PETSc.Error` handling described above.
+4. The run log names the case "Sta-Lin-ASGS" for `method = "vms"`, which is correct while it is the only accepted VMS case. Later phases name the case from the switches.
+5. V1 for ASGS uses the Galerkin V1 settings; V3 for ASGS uses the Galerkin V3 settings (`inner_max_iterations = 100`).
+
+Open questions: None. For later phases: the stability condition depends on cell shape, and U5 checks it only on the structured test meshes. The phase 10 gmsh cylinder mesh should be checked the same way before P2/P2 runs on it.

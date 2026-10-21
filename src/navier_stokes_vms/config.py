@@ -143,7 +143,7 @@ _PHASE_ADDING = {
     ("oss", "dynamic", "nonlinear"): 8,
 }
 
-_IMPLEMENTED_VMS_CASES: frozenset[tuple[str, str, str]] = frozenset()
+_IMPLEMENTED_VMS_CASES = frozenset({("asgs", "static", "linear")})
 
 
 def load_config(path: Path) -> Config:

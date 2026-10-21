@@ -35,6 +35,7 @@ class InnerSolveResult:
 
     converged: bool
     iterations: tuple[InnerIteration, ...]
+    failure_reason: str | None = None
 
 
 class InnerSolver:
@@ -49,6 +50,7 @@ class InnerSolver:
         bcs: Sequence[fd.DirichletBC],
         null_space: fd.MixedVectorSpaceBasis | None,
         options: SolverOptions,
+        newton_jacobian: Form | None = None,
     ) -> None:
         self._solution = solution
         self._newton_residual = newton_residual
@@ -60,6 +62,7 @@ class InnerSolver:
         self._initial_norm = 0.0
         self._tolerance = 0.0
         self._newton_max_iterations = 0
+        self._failure_reason: str | None = None
         self._picard_iterations = (
             options.inner_max_iterations
             if options.linearization == "picard"
@@ -70,7 +73,9 @@ class InnerSolver:
             self._picard = self._variational_solver(picard_residual, null_space, "ksponly")
         self._newton = None
         if options.linearization == "newton":
-            self._newton = self._variational_solver(newton_residual, null_space, "newtonls")
+            self._newton = self._variational_solver(
+                newton_residual, null_space, "newtonls", newton_jacobian
+            )
             self._newton.snes.setMonitor(self._record_newton_iteration)
             self._newton.snes.setConvergenceTest(self._newton_convergence)
 
@@ -79,12 +84,15 @@ class InnerSolver:
         for bc in self._bcs:
             bc.apply(self._solution)
         self._rows = []
+        self._failure_reason = None
         self._initial_norm = self.residual_norm()
         self._tolerance = max(
             self._options.inner_atol, self._options.inner_rtol * self._initial_norm
         )
         first_method = "picard" if self._picard is not None else "newton"
         self._append(first_method, self._initial_norm, None, None)
+        if not math.isfinite(self._initial_norm):
+            return InnerSolveResult(False, tuple(self._rows), self._nonfinite_message("residual"))
         converged = self._initial_norm <= self._tolerance
         if self._picard is not None:
             while not converged and self._iteration() < self._picard_iterations:
@@ -92,7 +100,7 @@ class InnerSolver:
         remaining = self._options.inner_max_iterations - self._iteration()
         if not converged and self._newton is not None and remaining > 0:
             converged = self._newton_iterations(self._newton, remaining)
-        return InnerSolveResult(converged, tuple(self._rows))
+        return InnerSolveResult(converged, tuple(self._rows), self._failure_reason)
 
     def residual_norm(self) -> float:
         """ℓ² norm of the full nonlinear residual vector with the Dirichlet rows excluded."""
@@ -107,7 +115,8 @@ class InnerSolver:
         self._previous.assign(self._solution)
         try:
             solver.solve()
-        except ConvergenceError:
+        except ConvergenceError as error:
+            self._failure_reason = str(error)
             return False
         residual = self.residual_norm()
         with self._solution.dat.vec_ro as new, self._previous.dat.vec as update:
@@ -121,7 +130,14 @@ class InnerSolver:
         self._newton_max_iterations = limit
         try:
             solver.solve()
-        except ConvergenceError:
+        except PETSc.Error:
+            # petsc4py wraps exceptions raised by the Jacobian callback.
+            if self._failure_reason is None:
+                raise
+            return False
+        except ConvergenceError as error:
+            if self._failure_reason is None:
+                self._failure_reason = str(error)
             return False
         return solver.snes.getConvergedReason() > 0
 
@@ -137,6 +153,7 @@ class InnerSolver:
     ) -> int:
         norm = norms[2]
         if not math.isfinite(norm):
+            self._failure_reason = self._nonfinite_message("residual")
             return _REASON.DIVERGED_FNORM_NAN
         if norm <= self._tolerance:
             return _REASON.CONVERGED_FNORM_ABS
@@ -145,20 +162,42 @@ class InnerSolver:
         return _REASON.CONVERGED_ITERATING
 
     def _variational_solver(
-        self, residual: Form, null_space: fd.MixedVectorSpaceBasis | None, snes_type: str
+        self,
+        residual: Form,
+        null_space: fd.MixedVectorSpaceBasis | None,
+        snes_type: str,
+        jacobian: Form | None = None,
     ) -> fd.NonlinearVariationalSolver:
         parameters = {
             **self._options.petsc,
             "snes_type": snes_type,
             "snes_linesearch_type": "basic",
         }
-        problem = fd.NonlinearVariationalProblem(residual, self._solution, self._bcs)
+        problem = fd.NonlinearVariationalProblem(residual, self._solution, self._bcs, J=jacobian)
         return fd.NonlinearVariationalSolver(
             problem,
             nullspace=null_space,
             transpose_nullspace=null_space,
             solver_parameters=parameters,
+            post_jacobian_callback=(
+                self._check_jacobian
+                if snes_type == "newtonls" and self._options.newton_tau == "exact"
+                else None
+            ),
         )
+
+    def _check_jacobian(self, _state: PETSc.Vec, matrix: PETSc.Mat) -> None:
+        if not math.isfinite(matrix.norm(PETSc.NormType.FROBENIUS)):
+            self._failure_reason = self._nonfinite_message("Jacobian")
+            raise ConvergenceError(self._failure_reason)
+
+    def _nonfinite_message(self, quantity: str) -> str:
+        message = f"non-finite {quantity} (NaN or infinity)"
+        if self._options.newton_tau == "exact":
+            message += (
+                "; solver.newton_tau = 'exact' differentiates |a|, which is undefined at a = 0"
+            )
+        return message
 
     def _append(self, method: str, norm: float, update: float | None, linear: int | None) -> None:
         relative = norm / self._initial_norm if self._initial_norm > 0 else 0.0

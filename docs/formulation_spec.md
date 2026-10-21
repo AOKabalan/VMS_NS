@@ -20,7 +20,7 @@ Every modelling decision is fixed once; "Ours" marks a choice that goes beyond w
 | Adjoint approximation | (ũ, (∇·a) v\_h) and element-boundary terms neglected | Colomés, text after eq. 14 |
 | Pressure subscale | Quasi-static, p̃ = τ\_c P(R\_p) | Colomés eq. 16; Principe et al. eq. 11. Differs from Codina et al. 2007 eq. 12 (extra τ ∂t r\_p term) and eq. 17 (p̃ = 0) |
 | τ formulas and constants | c1 = 4, c2 = 2 for k = 1; τ\_c kept (laminar) | Principe et al. 2010 eq. 12 |
-| τ evaluation | Pointwise \|a\| at quadrature points, h = cell diameter, no 1/δt inside τ\_m | Pointwise and h: ours (VMS chapter eq. 60 and Codina 2008 use the element maximum speed). No δt: Colomés §9 |
+| τ evaluation | Pointwise \|a\| at quadrature points, h = shortest edge of the cell, no 1/δt inside τ\_m | Pointwise: ours (VMS chapter eq. 60 and Codina 2008 use the element maximum speed). h: Colomés §7.1.2 (minimum element length); the cell diameter violates the stability condition for k ≥ 2 in Operators and parameters. No δt: Colomés §9 |
 | Time scheme | BDF1, BDF2, BDF3 or Crank–Nicolson on a uniform δt, the same scheme for u\_h and ũ; BDF2 and BDF3 start with lower orders, or from exact histories when the case has an exact solution; Crank–Nicolson always starts with one BDF1 step | Same-scheme principle: Codina et al. 2007 §3.1. Crank–Nicolson: 2007 eqs. 22–23 with θ = ½. BDF2 and BDF3 for both scales and the startup: ours |
 | Quadrature | One rule of degree q = 3k, k the velocity degree, with all weights positive, for every volume integral, projection and stored subscale | Ours; makes orthogonality exact in the inner product actually computed |
 | OSS projection | τ-weighted (τ\_t when dynamic), onto unconstrained spaces, consistent mass | Weights: Colomés eqs. 33, 53. Unconstrained spaces: Codina 2008 eq. 18 and Remark 1 |
@@ -50,6 +50,8 @@ Stabilization parameters, evaluated pointwise at quadrature points:
 ```
 
 With c1 = 4 and c2 = 2 for linear elements. For degree k, replace c1 by c1·k⁴ and c2 by c2·k in both parameters, so τ\_c = h²/(c1·k⁴·τ\_m) (Colomés §2.2; consistent with Castillo & Codina eq. 23). Under nonlinear splitting |a| = |u\_h + ũ|, so τ\_m and τ\_c depend on the subscale.
+
+Stability condition for k ≥ 2. The viscous part of the adjoint term contributes −Σ\_K τ\_m ν² ‖Δ\_h u\_h‖²\_K to the energy, which the Galerkin viscous term must dominate on every element (Principe et al. 2010 §4: "provided c1 is big enough"). Since τ\_m ≤ h²/(c1·k⁴·ν), this holds when c1·k⁴ exceeds the inverse-estimate constant C\_inv of the mesh, defined by ‖Δ\_h v‖²\_K ≤ C\_inv h⁻² ‖∇v‖²\_K for all v in Pk on every cell. For P2 on right isosceles triangles, C\_inv = 48 with h the shortest edge, below c1·k⁴ = 64; with h the cell diameter, C\_inv = 96 and the condition fails, which makes the energy indefinite on fine meshes. Badly shaped cells can still violate the condition, so test U5 checks it on the meshes used. For P1, Δ\_h vanishes and no condition arises.
 
 Time discretization, one formula for both scales on a uniform time step (coefficients for all four schemes in Time schemes):
 
