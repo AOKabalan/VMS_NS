@@ -9,6 +9,7 @@ import pytest
 
 from navier_stokes_vms.config import (
     Config,
+    MeshOptions,
     check_diagnostics_known,
     check_startup_supported,
     config_to_toml,
@@ -112,8 +113,7 @@ def test_minimal_config_takes_defaults(tmp_path: Path) -> None:
     assert config.case == "manufactured_spatial"
     assert config.run_name == "run"
     assert dict(config.case_parameters) == {}
-    assert config.mesh.source == "builtin"
-    assert config.mesh.cells == (32, 32)
+    assert config.mesh == MeshOptions(source=None, cells=None, file=None)
     assert config.time.scheme == "bdf2"
     assert config.time.startup == "lower_order"
     assert config.solver.newton_tau == "frozen"
@@ -139,6 +139,22 @@ def test_full_config_loads_every_field(tmp_path: Path) -> None:
     assert dict(config.solver.petsc) == {"ksp_type": "gmres", "ksp_rtol": 1e-8, "ksp_monitor": True}
     assert config.output.diagnostics == ("kinetic_energy",)
     assert config.output.console_level == "DEBUG"
+
+
+@pytest.mark.parametrize(
+    ("table", "expected"),
+    [
+        ("source = 'gmsh'", MeshOptions(source="gmsh")),
+        ("file = 'a.msh'", MeshOptions(file="a.msh")),
+        ("cells = [8, 8, 8]", MeshOptions(cells=(8, 8, 8))),
+        ("source = 'builtin'\ncells = [4, 6]", MeshOptions(source="builtin", cells=(4, 6))),
+    ],
+    ids=["source-only", "file-only", "cells-only", "builtin-cells"],
+)
+def test_mesh_fields_override_the_case_default_independently(
+    tmp_path: Path, table: str, expected: MeshOptions
+) -> None:
+    assert load_text(tmp_path, GALERKIN + f"\n[mesh]\n{table}\n").mesh == expected
 
 
 @pytest.mark.parametrize("text", [GALERKIN, FULL], ids=["minimal", "full"])
@@ -212,14 +228,15 @@ def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
         (GALERKIN + "\n[time]\ndt = 0.0\n", "time.dt = 0.0: must be > 0"),
         (GALERKIN + "\n[time]\nt_end = inf\n", "time.t_end = inf: must be > 0"),
         (GALERKIN + "\n[output]\nvtk_every = -1\n", "output.vtk_every = -1: must be >= 0"),
-        (GALERKIN + "\n[mesh]\nsource = 'gmsh'\n", "mesh.file: required"),
-        (GALERKIN + "\n[mesh]\nfile = 'a.msh'\n", "mesh.file: only used when"),
+        (GALERKIN + "\n[mesh]\nsource = 'builtin'\nfile = 'a.msh'\n", "mesh.file: only used when"),
         (
-            GALERKIN + "\n[mesh]\nsource = 'gmsh'\nfile = 'a.msh'\ncells = [8, 8]\n",
+            GALERKIN + "\n[mesh]\nsource = 'gmsh'\ncells = [8, 8]\n",
             "mesh.cells: only used when mesh.source = 'builtin'",
         ),
-        (GALERKIN + "\n[mesh]\nshape = 'box'\n", "'box' needs 3 entries"),
-        (GALERKIN + "\n[mesh]\ncells = [0, 4]\n", "cells must be >= 1"),
+        (GALERKIN + "\n[mesh]\ncells = [8, 8]\nfile = 'a.msh'\n", "mesh.cells and mesh.file"),
+        (GALERKIN + "\n[mesh]\ncells = [8]\n", r"mesh.cells = \[8\]: needs 2 or 3 entries"),
+        (GALERKIN + "\n[mesh]\ncells = [0, 4]\n", "each >= 1"),
+        (GALERKIN + "\n[mesh]\nlengths = [1.0, 1.0]\n", r"unknown keys in \[mesh\]: lengths"),
         (GALERKIN + "\n[solver]\npetsc = { a = [1, 2] }\n", "solver.petsc: a must be"),
         (GALERKIN.replace("manufactured_spatial", "../elsewhere"), "case = '../elsewhere'"),
         ('run_name = ".hidden"\n' + GALERKIN, "run_name = '.hidden'"),
@@ -235,11 +252,12 @@ def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
         "zero-dt",
         "infinite-t_end",
         "negative-vtk_every",
-        "gmsh-without-file",
         "builtin-with-file",
-        "gmsh-with-builtin-field",
-        "shape-dimension",
+        "gmsh-with-cells",
+        "cells-and-file",
+        "cells-entries",
         "zero-cells",
+        "geometry-not-in-config",
         "petsc-array",
         "unsafe-case",
         "unsafe-run_name",

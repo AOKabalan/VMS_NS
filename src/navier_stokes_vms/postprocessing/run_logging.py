@@ -46,7 +46,7 @@ def log_setup_summary(logger: logging.Logger, config: Config, folder: Path, info
     for section, values in config_as_dict(config).items():
         if isinstance(values, dict):
             settings = ", ".join(f"{key} = {value}" for key, value in values.items())
-            logger.info("[%s] %s", section, settings or "(none)")
+            logger.info("[%s] %s", section, settings or "(case defaults)")
     state = "unknown" if info.git_dirty is None else ("dirty" if info.git_dirty else "clean")
     logger.info(
         "Git %s (%s), Firedrake %s, PETSc %s, Python %s, %d MPI rank(s) on %s",

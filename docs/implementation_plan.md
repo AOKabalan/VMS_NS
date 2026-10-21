@@ -158,11 +158,10 @@ run_name = "bdf2_dyn_nl_oss"           # results/<case>/<run_name>/
 [case_parameters]                      # free-form, read only by the case
 reynolds = 100
 
-[mesh]
-source = "gmsh"                        # builtin | gmsh
-file = "meshes/cylinder_dfg_2d.msh"    # gmsh only
-# builtin only: shape = "rectangle" | "periodic_rectangle" | "box" | "periodic_box",
-#               cells = [32, 32], lengths = [1.0, 1.0]
+[mesh]                                 # every field optional; omitted means "use the case's default"
+source = "gmsh"                        # "builtin" | "gmsh"; the case may support one or both
+file = "meshes/cylinder_dfg_2d.msh"    # "<path>.msh"; gmsh only
+# cells = [nx, ny(, nz)]               # builtin only
 
 [discretization]
 velocity_degree = 1
@@ -237,6 +236,7 @@ A case module exposes one function, `build(config) -> Problem`. `Problem` holds 
 - Boundary names for built-in meshes are `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max`. `mesh_loading.py` holds the name → tag table for each built-in constructor; test U7 confirms it against the installed Firedrake.
 - For `.msh` files, names come from the `$PhysicalNames` section. The case refers only to names; a missing name raises an error listing the available ones.
 - Periodic directions have no boundary names.
+- The case owns the geometry (shape, origin, lengths, periodicity) and its default mesh; the config only overrides resolution or file. A case raises a clear error for a mesh source it does not support.
 - The pressure null space (constant pressure) is used exactly when no `Outflow` boundary exists.
 
 ## 9. Outputs and logs

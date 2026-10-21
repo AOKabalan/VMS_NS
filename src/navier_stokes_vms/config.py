@@ -12,7 +12,6 @@ from typing import Any, Literal, get_args, get_origin, get_type_hints
 import tomli_w
 
 MeshSource = Literal["builtin", "gmsh"]
-MeshShape = Literal["rectangle", "periodic_rectangle", "box", "periodic_box"]
 TimeScheme = Literal["bdf1", "bdf2", "bdf3", "crank_nicolson"]
 Startup = Literal["lower_order", "exact_history"]
 Method = Literal["none", "vms"]
@@ -29,13 +28,11 @@ PetscValue = str | int | float | bool
 
 @dataclass(frozen=True)
 class MeshOptions:
-    """Mesh source: a built-in Firedrake constructor or a gmsh file."""
+    """Overrides of the case's default mesh; None keeps the case's choice (plan §8)."""
 
-    source: MeshSource = "builtin"
+    source: MeshSource | None = None
+    cells: tuple[int, ...] | None = None
     file: str | None = None
-    shape: MeshShape = "rectangle"
-    cells: tuple[int, ...] = (32, 32)
-    lengths: tuple[float, ...] = (1.0, 1.0)
 
 
 @dataclass(frozen=True)
@@ -134,8 +131,6 @@ _SECTIONS: dict[str, type] = {
 }
 
 _NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
-
-_SHAPE_DIMENSION = {"rectangle": 2, "periodic_rectangle": 2, "box": 3, "periodic_box": 3}
 
 _PHASE_ADDING = {
     ("asgs", "static", "linear"): 5,
@@ -330,27 +325,14 @@ def _check_bounds(config: Config) -> None:
 
 
 def _check_mesh(mesh: MeshOptions) -> None:
-    if mesh.source == "gmsh":
-        if mesh.file is None:
-            raise ValueError("mesh.file: required when mesh.source = 'gmsh'")
-        builtin_only = [
-            f"mesh.{name}"
-            for name in ("shape", "cells", "lengths")
-            if getattr(mesh, name) != getattr(MeshOptions(), name)
-        ]
-        if builtin_only:
-            raise ValueError(f"{', '.join(builtin_only)}: only used when mesh.source = 'builtin'")
-        return
-    if mesh.file is not None:
+    if mesh.cells is not None and mesh.file is not None:
+        raise ValueError("mesh.cells and mesh.file: cells is for builtin meshes, file for gmsh")
+    if mesh.source == "gmsh" and mesh.cells is not None:
+        raise ValueError("mesh.cells: only used when mesh.source = 'builtin'")
+    if mesh.source == "builtin" and mesh.file is not None:
         raise ValueError("mesh.file: only used when mesh.source = 'gmsh'")
-    dimension = _SHAPE_DIMENSION[mesh.shape]
-    if len(mesh.cells) != dimension or len(mesh.lengths) != dimension:
-        raise ValueError(
-            f"mesh.cells and mesh.lengths: mesh.shape = {mesh.shape!r} "
-            f"needs {dimension} entries each"
-        )
-    if min(mesh.cells) < 1 or not all(math.isfinite(x) and x > 0 for x in mesh.lengths):
-        raise ValueError("mesh.cells and mesh.lengths: cells must be >= 1 and lengths > 0")
+    if mesh.cells is not None and (len(mesh.cells) not in (2, 3) or min(mesh.cells) < 1):
+        raise ValueError(f"mesh.cells = {list(mesh.cells)}: needs 2 or 3 entries, each >= 1")
 
 
 def _check_stabilization(config: Config) -> None:
