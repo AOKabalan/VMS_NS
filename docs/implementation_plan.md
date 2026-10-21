@@ -37,7 +37,7 @@ Out of scope for this plan: convective forms other than skew-symmetric type 1 an
 - No `print`. Use the `logging` module (section 9). Only MPI rank 0 writes logs and CSV files.
 - Global quantities (norms, energies, forces) are computed with `assemble`, never with NumPy reductions over local arrays, so everything stays correct in parallel.
 - Configuration is passed explicitly. No global mutable state.
-- Dimension independence: use `mesh.geometric_dimension()`; no hard-coded components, cross products or 2D formulas outside dimension-aware diagnostics.
+- Dimension independence: use `mesh.geometric_dimension` (a property in the installed Firedrake); no hard-coded components, cross products or 2D formulas outside dimension-aware diagnostics.
 
 ## 4. Repository layout
 
