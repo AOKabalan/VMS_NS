@@ -2,7 +2,7 @@
 
 Oct 21, 2026 · @Ali Kabalan
 
-Every variant is one master system at time t^(n+1) with three switches: subscale space (ASGS or OSS), subscale dynamics (static or dynamic) and scale splitting (linear or nonlinear). A fourth switch selects the inner linearization (Newton or Picard); it changes the iterations, not the converged solution. All eight cases follow from these switches with no further choices. Revised after an independent re-derivation (VERIFICATION.md, 21 October 2026); split OSS was removed because the thesis does not use it.
+Every variant is one master system at the solve level with three switches: subscale space (ASGS or OSS), subscale dynamics (static or dynamic) and scale splitting (linear or nonlinear). A fourth switch selects the inner linearization (Newton or Picard); it changes the iterations, not the converged solution. All eight cases follow from these switches with no further choices. Revised after an independent re-derivation (VERIFICATION.md, 21 October 2026); split OSS was removed because the thesis does not use it.
 
 ## Fixed choices
 
@@ -21,7 +21,7 @@ Every modelling decision is fixed once; "Ours" marks a choice that goes beyond w
 | Pressure subscale | Quasi-static, p̃ = τ\_c P(R\_p) | Colomés eq. 16; Principe et al. eq. 11. Differs from Codina et al. 2007 eq. 12 (extra τ ∂t r\_p term) and eq. 17 (p̃ = 0) |
 | τ formulas and constants | c1 = 4, c2 = 2 for k = 1; τ\_c kept (laminar) | Principe et al. 2010 eq. 12 |
 | τ evaluation | Pointwise \|a\| at quadrature points, h = cell diameter, no 1/δt inside τ\_m | Pointwise and h: ours (VMS chapter eq. 60 and Codina 2008 use the element maximum speed). No δt: Colomés §9 |
-| Time scheme | BDF1, BDF2, BDF3 or Crank–Nicolson on a uniform δt, the same scheme for u\_h and ũ; BDF2 and BDF3 start with lower orders | Same-scheme principle: Codina et al. 2007 §3.1. Crank–Nicolson: 2007 eqs. 22–23 with θ = ½. BDF2 and BDF3 for both scales and the startup: ours |
+| Time scheme | BDF1, BDF2, BDF3 or Crank–Nicolson on a uniform δt, the same scheme for u\_h and ũ; BDF2, BDF3 and Crank–Nicolson start with lower orders | Same-scheme principle: Codina et al. 2007 §3.1. Crank–Nicolson: 2007 eqs. 22–23 with θ = ½. BDF2 and BDF3 for both scales and the startup: ours |
 | Quadrature | One rule of degree q = 3k, k the velocity degree, with all weights positive, for every volume integral, projection and stored subscale | Ours; makes orthogonality exact in the inner product actually computed |
 | OSS projection | τ-weighted (τ\_t when dynamic), onto unconstrained spaces, consistent mass | Weights: Colomés eqs. 33, 53. Unconstrained spaces: Codina 2008 eq. 18 and Remark 1 |
 | Force | Kept in the residual and the projection; requires f in L² | Colomés eq. 17 and §2.2.3 |
@@ -84,11 +84,11 @@ Every scheme is written as D\_t g = (α0 g − g\_hist)/δt at a solve level, so
 
 The same row applies to u\_h and, for dynamic subscales, to ũ with its stored histories. τ\_t = (χ\_D α0/δt + 1/τ\_m)⁻¹ uses the scheme's α0, which gives τ\_t = (2/δt + 1/τ\_m)⁻¹ for Crank–Nicolson.
 
-Crank–Nicolson. The unknowns are the half-level states u\_h^(n+½), p\_h^(n+½) and ũ^(n+½), and every spatial term, τ, a and the OSS projections are evaluated with them. This is the one-leg form of Codina et al. 2007 eqs. 22–23, rewritten with w = g^(n+½), since (g^(n+1) − gⁿ)/δt = (w − gⁿ)/(δt/2). Data at the half level are endpoint averages, as in that paper: f^(n+½) = ½(f^(n+1) + fⁿ), and on Γ\_D the half-level velocity is ½(g^(n+1) + gⁿ), so the extrapolated u\_h^(n+1) matches the Dirichlet data exactly. After convergence u\_h and ũ are extrapolated; the pressure is not, and is reported at t^(n+½). For this scheme, read every superscript n+1 in the master formulation and the algorithm as n+½. Extrapolating two orthogonal subscales keeps ũ^(n+1) orthogonal for OSS.
+Crank–Nicolson. The unknowns are the half-level states u\_h^(n+½), p\_h^(n+½) and ũ^(n+½), and every spatial term, τ, a and the OSS projections are evaluated with them. This is the one-leg form of Codina et al. 2007 eqs. 22–23, rewritten with w = g^(n+½), since (g^(n+1) − gⁿ)/δt = (w − gⁿ)/(δt/2); here g^(n+½) denotes the endpoint average ½(gⁿ + g^(n+1)), not g evaluated at t^(n+½). Data at the half level are endpoint averages, as in that paper: f^(n+½) = ½(f^(n+1) + fⁿ), and on Γ\_D the half-level velocity is ½(g^(n+1) + gⁿ), so the extrapolated u\_h^(n+1) matches the Dirichlet data exactly. After convergence u\_h and ũ are extrapolated; the pressure is not, and is reported at t^(n+½). For this scheme, read every superscript n+1 in the master formulation and the algorithm as n+½. Extrapolating two orthogonal subscales keeps ũ^(n+1) orthogonal for OSS.
 
-Startup. BDF2 and BDF3 start with lower orders: step 1 uses BDF1, step 2 uses BDF2, and BDF3 runs from step 3; the subscale histories follow the same sequence. This keeps BDF2 second order but limits a BDF3 run to second order globally, because of the BDF1 first step. When a case provides an exact solution, the velocity histories may instead be initialised from it (exact-history startup), which the temporal convergence test uses to observe third order. Subscale histories start at zero in both startups. Crank–Nicolson needs no startup.
+Startup. With lower-order startup, step 1 uses BDF1 for every scheme; BDF2 and Crank–Nicolson run from step 2, and BDF3 uses BDF2 at step 2 and runs from step 3. The subscale histories follow the same sequence. This keeps BDF2 and Crank–Nicolson second order but limits a BDF3 run to second order globally, because of the BDF1 first step. For Crank–Nicolson the BDF1 first step also matters beyond accuracy: the extrapolation u^(n+1) = 2u^(n+½) − uⁿ never damps a defect in the starting state, so an initial velocity that misses the Dirichlet data or is not discretely divergence-free would leave a sign-alternating error, with a pressure component growing like 1/δt. The backward Euler step removes that defect. Exact-history startup, available when a case provides an exact solution, fills the velocity histories at t⁰, t⁻¹ and t⁻² (negative times) from it, so BDF2 and BDF3 run at full order from step 1; Crank–Nicolson still takes its BDF1 first step. Subscale histories start at zero in both modes, so in general problems the first subscale value is only first-order accurate; the temporal convergence test is not affected.
 
-Stability. BDF1 and BDF2 are A-stable. BDF3 is not: its stability region misses a sector near the imaginary axis, so weakly damped, convection-dominated runs may need a smaller δt. Crank–Nicolson is A-stable but does not damp high frequencies, and the unconditional stability result of Codina et al. 2007 does not extend to it (their remark after the proof of Theorem 2).
+Stability. BDF1 and BDF2 are A-stable. BDF3 is only A(α)-stable, with α ≈ 86°: its stability region excludes a small bounded region of the left half-plane next to the imaginary axis (roughly −1/12 < Re z < 0 and |Im z| < 1.94, with z = λδt), so weakly damped, convection-dominated runs may need a smaller δt. Crank–Nicolson is A-stable but does not damp high frequencies. The stability analysis of Codina et al. 2007 covers backward Euler; a remark in that paper notes that one bound their Theorem 3 needs (their eq. 49) is not expected to hold for Crank–Nicolson, so no unconditional stability result is claimed for it here.
 
 ## Boundary conditions and quadrature
 
@@ -97,7 +97,7 @@ Verify every variant on periodic and all-Dirichlet problems first, where no boun
 | Boundary | Velocity | Pressure | Terms added |
 | --- | --- | --- | --- |
 | Periodic | Periodic FE space | Periodic; mean fixed to zero | None |
-| Dirichlet Γ\_D | u\_h = g strongly at t^(n+1) | Mean fixed to zero if Γ\_D is the whole boundary | None; ũ is not constrained (bubble assumption) |
+| Dirichlet Γ\_D | u\_h = g strongly at the solve level (endpoint average for Crank–Nicolson) | Mean fixed to zero if Γ\_D is the whole boundary | None; ũ is not constrained (bubble assumption) |
 | Outflow Γ\_N | Natural | Natural | ½⟨(u\_h·n) u\_h, v\_h⟩ in c; no traction load |
 
 The natural condition implied on Γ\_N by the gradient-form weak equation is the do-nothing condition:
@@ -159,13 +159,13 @@ Each case is the master formulation with the switch values in its row; R̂\_u = 
 | Case | a | Velocity subscale ũ | (D\_t ũ, v\_h) term | ξ\_h, ζ\_h | Stored per quadrature point |
 | --- | --- | --- | --- | --- | --- |
 | Sta-Lin-ASGS | u\_h | τ\_m R\_u | No | 0, 0 | Nothing |
-| Dyn-Lin-ASGS | u\_h | τ\_t (R\_u + ũ\_hist/δt) | Yes | 0, 0 | ũⁿ (and ũⁿ⁻¹ for BDF2) |
+| Dyn-Lin-ASGS | u\_h | τ\_t (R\_u + ũ\_hist/δt) | Yes | 0, 0 | Subscale history: ũⁿ, plus ũⁿ⁻¹ for BDF2, or ũⁿ⁻¹ and ũⁿ⁻² for BDF3 |
 | Sta-Nl-ASGS | u\_h + ũ | τ\_m(a) R\_u(a) | No | 0, 0 | Current iterate of ũ |
-| Dyn-Nl-ASGS | u\_h + ũ | τ\_t(a) (R\_u(a) + ũ\_hist/δt) | Yes | 0, 0 | Current iterate, ũⁿ (and ũⁿ⁻¹) |
+| Dyn-Nl-ASGS | u\_h + ũ | τ\_t(a) (R\_u(a) + ũ\_hist/δt) | Yes | 0, 0 | Current iterate and the subscale history |
 | Sta-Lin-OSS | u\_h | τ\_m (R̂\_u − ξ\_h) | No | Weight τ\_m, τ\_c | Nothing (ξ\_h, ζ\_h are FE functions) |
-| Dyn-Lin-OSS | u\_h | τ\_t (R̂\_u + ũ\_hist/δt − ξ\_h) | No | Weight τ\_t, τ\_c | ũⁿ (and ũⁿ⁻¹) |
+| Dyn-Lin-OSS | u\_h | τ\_t (R̂\_u + ũ\_hist/δt − ξ\_h) | No | Weight τ\_t, τ\_c | Subscale history |
 | Sta-Nl-OSS | u\_h + ũ | τ\_m(a) (R̂\_u(a) − ξ\_h) | No | Weight τ\_m, τ\_c | Current iterate of ũ |
-| Dyn-Nl-OSS | u\_h + ũ | τ\_t(a) (R̂\_u(a) + ũ\_hist/δt − ξ\_h) | No | Weight τ\_t, τ\_c | Current iterate, ũⁿ (and ũⁿ⁻¹) |
+| Dyn-Nl-OSS | u\_h + ũ | τ\_t(a) (R̂\_u(a) + ũ\_hist/δt − ξ\_h) | No | Weight τ\_t, τ\_c | Current iterate and the subscale history |
 
 Only the two linear-splitting ASGS cases are fully explicit in u\_h and p\_h, so the inner solve alone completes the time step. Every OSS case also needs the outer loop because ξ\_h and ζ\_h are lagged, and every nonlinear-splitting case because ũ sits inside a, τ\_m and τ\_c. Colomés et al. report the linear ASGS cases diverging on coarse turbulent meshes and dynamic OSS as robust and cheapest, with no significant cost difference between its linear and nonlinear forms (§5.2.2). Dyn-Nl-OSS is the target because it is the most complete model, not because the evidence ranks it above Dyn-Lin-OSS.
 
@@ -236,9 +236,9 @@ Recommended use: a few Picard iterations, then Newton once the residual has drop
 
 One time step is an inner solve for (u\_h, p\_h), Newton or Picard, inside an outer fixed point on the stored subscale and the projections; the two linear-splitting ASGS cases need only the inner solve.
 
-Given u\_hⁿ, u\_hⁿ⁻¹, ũⁿ, ũⁿ⁻¹, ξ\_hⁿ and ζ\_hⁿ:
+Given the velocity and subscale histories the scheme needs (back to level n−2 for BDF3), and ξ\_hⁿ, ζ\_hⁿ:
 
-1. Form u\_hist and ũ\_hist from the BDF table. Initialise (u\_h, p\_h) from the previous step, the stored subscale ũ\* ← ũⁿ, and ξ\_h, ζ\_h ← their previous values.
+1. Form u\_hist and ũ\_hist from the Time schemes table. Initialise (u\_h, p\_h) from the previous step, the stored subscale ũ\* ← ũⁿ, and ξ\_h, ζ\_h ← their previous values.
 2. Inner solve: Newton or Picard on the master FE equation with ũ substituted, as in the linearization section. Frozen: ũ\* inside a (nonlinear splitting), ξ\_h and ζ\_h (OSS), ũ\_hist. In Picard mode, a single inner iteration per outer iteration is allowed only in cases that run step 5; the two linear-splitting ASGS cases have no outer loop, so step 2 itself must iterate until the FE residual is below tolerance.
 3. Subscale update (nonlinear splitting only): at each quadrature point iterate ũ\* ← τ\_t(a) (R + χ\_D ũ\_hist/δt − ξ\_h) with a = u\_h + ũ\*, where R = R\_u for ASGS and R = R̂\_u for OSS, until the pointwise change is below tolerance. The accelerated form below is equivalent.
 4. Projections (OSS only): recompute ξ\_h and ζ\_h with the current u\_h, p\_h and a.

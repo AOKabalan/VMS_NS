@@ -1,3 +1,23 @@
+**Check of the Phase 0 answers — 21 October 2026**
+
+Reviewed `docs/formulation_spec.md`, SHA-256 `bce98772729e2c9e799f3317fffb71716a55ae86ca53b4d2815612b9ea5e390f`, against the addendum pass below. Every change from the previous revision is wording; no equation changed. I checked the Time schemes section, the Fixed choices time-scheme row, the eight-cases table and the algorithm, plus every remaining history-level reference.
+
+**Result: two items do not match yet; the rest matches.**
+
+| Item | Spec says | Phase 0 finding or answer | Agree / Disagree | Note |
+| --- | --- | --- | --- | --- |
+| B01 — Crank–Nicolson BDF1 first step, lines 24, 89 | Step 1 is BDF1 for every scheme in both startup modes; this removes the start-up defect. | Answer 1; A06, A08, A-D3. | Agree | With \(u_h^1\) from BDF1, the endpoint Dirichlet match (line 87) and the orthogonality of \(\tilde u^1\) hold. Second order is kept. |
+| B02 — exact-history levels, line 89 | Velocity histories at \(t^0,t^{-1},t^{-2}\); BDF2 and BDF3 at full order from step 1. | Answer 2; A10, A-D4. | Agree | |
+| B03 — stability wording, line 91 | BDF3 is A(α)-stable with α ≈ 86° and a bounded excluded region; the 2007 remark concerns eq. 49 for Theorem 3. | A11, A-D5. | Agree | |
+| B04 — endpoint-average meaning, line 87 | \(g^{n+1/2}=\tfrac12(g^n+g^{n+1})\), not \(g(t^{n+1/2})\). | A04, A-D1. | Agree | |
+| B05 — stale references, lines 5, 100, 162–168, 239 | "solve level"; histories back to n−2 for BDF3. | A14. | Agree | |
+| B06 — stale reference, line 117 | "ũ, ũⁿ, ũⁿ⁻¹ are stored at its points." | A14 listed line 117; answer 3 says the n−1 references are fixed. | Disagree | BDF3 also stores \(\tilde u^{n-2}\). Suggested: "ũ and the subscale histories the scheme needs are stored at its points". |
+| B07 — subscale accuracy sentence, line 89 | "Subscale histories start at zero in both modes, so in general problems the first subscale value is only first-order accurate." | A10, A-D4: the defect comes from zero values at \(t^{-1},t^{-2}\) under exact-history BDF2/BDF3. A BDF1 first step from \(\tilde u^0=0\) is consistent. | Disagree (wording) | In lower-order mode, and for Crank–Nicolson in both modes, step 1 is BDF1 from the true initial value \(\tilde u^0=0\), so there is no defect. Suggested: "With exact-history startup, BDF2 and BDF3 use zero subscale values at negative times, which are not a history of the subscale equation, so in general problems the first subscale value has an error of order δt·\|R\_u\|; a BDF1 first step from ũ⁰ = 0 has no such defect. The temporal convergence test is not affected." |
+
+Two minor points do not block anything. Line 24 says BDF2 and BDF3 "start with lower orders" without mentioning the exact-history option. Line 5 still says "Every variant ... with three switches", although the Galerkin baseline is not a switch setting (A14). B06 and B07 are wording only; they change no equation and nothing in Phase 1.
+
+---
+
 **Addendum pass — 21 October 2026**
 
 This pass covers the spec material added for the implementation plan (plan §13, Phase 0): the new sections Time schemes and Galerkin baseline, the revised notation, and the revised fixed-choice rows Variants, Interpolation, Time scheme and Quadrature. The rest of the spec is unchanged from the revision checked in the final pass below, so P01–P08 remain the disposition for it.
