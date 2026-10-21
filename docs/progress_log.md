@@ -52,3 +52,47 @@ Open questions:
 1. Wire rules 3 and 6 in phases 2 and 4 as described above?
 2. Refuse or replace an existing results folder? Refusal is the current, safer choice.
 3. Heads-up for phase 2: Kovasznay is posed on [−0.5, 1] × [−0.5, 1.5], but `[mesh]` has only `lengths`. Either phase 2 adds an `origin` field to `[mesh]` or the case shifts coordinates.
+
+## Phase 2: Problems, meshes and boundaries (2026-10-21)
+Done: Before this phase the plan was amended (commit "Plan: mesh geometry belongs to the case"). `[mesh]` now has only optional `source`, `cells` (builtin only) and `file` (gmsh only), each defaulting to the case's choice; `config.py` and its tests were updated to match.
+- `problem/mesh_loading.py` provides `rectangle`, `periodic_rectangle` (periodic in both directions, no boundary names) and `box`, each on [lower, upper]. It holds the name → tag tables `RECTANGLE_TAGS` (x_min 1, x_max 2, y_min 3, y_max 4) and `BOX_TAGS` (adds z_min 5, z_max 6). `gmsh_mesh` reads the facet-dimension `$PhysicalNames` entries. `builtin_cells` returns the config override or the case default and rejects a gmsh source or a wrong number of cells.
+- `problem/boundary_conditions.py` has `Dirichlet(value)` and `Outflow()`, plus `dirichlet_bc(space, name, value, boundary_tags)`. An unknown name raises an error listing the available ones.
+- `problem/problem_definition.py` has the frozen `Problem` dataclass of plan §8 and `exact_solution_forcing`, which derives f = ∂t u + u·∇u − νΔu + ∇p in UFL with ∂t through `ufl.variable`. It also has `case_parameters` (case defaults overridden by `[case_parameters]`, unknown names rejected), `check_problem` and `uses_pressure_null_space` (true exactly when no boundary is `Outflow`). `check_problem` requires every named boundary to have exactly one known condition and checks that an exact velocity is divergence-free: ‖div u‖ ≤ 1e-10 ‖∇u‖ at t = 0 and 1.
+- `cases/__init__.py` holds the registry `CASES` and `build_problem(config)`. That function rejects an unknown case (listing the available ones), runs `check_problem`, and applies plan §7 rule 3 (exact-history startup needs an exact solution), as decided after phase 1.
+- Cases, all built-in only, with Dirichlet exact data on every side except Taylor–Green:
+
+  | Case | Domain | Default cells | Parameter (default) | Solution |
+  | --- | --- | --- | --- | --- |
+  | `manufactured_spatial` | unit square | 16×16 | viscosity 0.01 | u = (1 + t) curl ψ with ψ = sin²(πx) sin²(πy), built with UFL derivatives; p = (1 + t) cos(πx) sin(πy) |
+  | `manufactured_temporal` | unit square | 4×4 | viscosity 0.01 | u = cos t (y, x), p = 0 |
+  | `kovasznay` | [−0.5, 1] × [−0.5, 1.5] | 24×32 (h = 1/16) | reynolds 40 | ν = 1/Re, λ = Re/2 − √(Re²/4 + 4π²) |
+  | `taylor_green_2d` | periodic (0, 2π)² | 32×32 | viscosity 0.01 | no boundaries |
+
+- `tests/data/square_named.msh` is the unit square with h = 0.25, physical curves left 11, right 12, bottom 13, top 14 and physical surface fluid 20. The tags are deliberately not 1–4. It was generated with gmsh 4.14 (`gmsh -2 -format msh41`).
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean.
+- `pytest tests/unit`: 68 passed in 4.9 s (44 config, 24 in `test_meshes_and_boundaries.py`).
+- U7:
+  - Rectangle and box with a non-zero lower corner: each name's facets lie on its coordinate plane (mean of x_i over ds(tag) equals the plane value, spread 0), and the tagged lengths sum to the whole boundary.
+  - The periodic rectangle has no ds and the right area and centre.
+  - The gmsh mesh loads {left: 11, right: 12, bottom: 13, top: 14}, each on its side, with the surface name excluded.
+  - A `DirichletBC` by name sets exactly the nodes of that boundary and leaves every other node zero (builtin and gmsh).
+  - An unknown name lists the available ones.
+- Phase 2 acceptance:
+  - Every case builds on a 4×4 mesh: 32 cells, initial velocity equal to the exact one at t = 0, finite forcing, boundary conditions covering all named boundaries, pressure null space on.
+  - The derived forcing vanishes to round-off for `taylor_green_2d` (and also for `kovasznay`): ‖f‖ < 1e-12 ‖∇p‖, about 1e-15 measured.
+  - Extra checks: the derived forcing equals a hand derivation for `manufactured_temporal`; rule 3 is triggered through `build_problem`; invalid case setups are rejected; `check_problem` rejects unknown, unassigned and divergent cases; the null-space decision is correct.
+- Manual: all four cases and the gmsh mesh built on 1 and 2 MPI ranks give the same global cell counts and forcing norms.
+
+Deviations from spec or plan:
+1. `check_problem` also requires every named boundary to have a condition. The plan does not say this, but otherwise an unassigned boundary would silently act as an outflow without the ½(u·n)u term, and the null-space decision would be wrong.
+2. For p = 0 (`manufactured_temporal`), UFL cannot take the gradient of a constant without a mesh, so `exact_solution_forcing` uses a zero ∇p for any pressure without spatial dependence.
+3. All meshes are built at the origin and then translated. In Firedrake 2026.10.0, `RectangleMesh(nx, ny, Lx, Ly, originX, originY)` treats Lx and Ly as the upper corner rather than the lengths, and `BoxMesh` and `PeriodicRectangleMesh` take no origin.
+4. The `.geo` source of the test mesh is not committed, since the plan lists only the `.msh`; its content is described above.
+5. The run script does not build the problem yet; it is not in the phase 2 file list. Rule 3 and an unknown case name are therefore caught only when the time stepper (phase 4) calls `build_problem`.
+
+Open questions:
+1. Defaults not fixed by the plan: ν = 0.01 for `manufactured_temporal` (V2 gives no ν; the solution has Δu = 0, so ν only enters τ) and the default cells listed above. Please confirm or change.
+2. Firedrake 2026.10.0 makes `topological_dimension` and `geometric_dimension` properties, not methods, so plan §3's `mesh.geometric_dimension()` must be read as `mesh.geometric_dimension`.
+3. Noise: when pytest is called with flags such as `-q` or `-x`, PETSc reports them as unused options at exit. This is harmless; a `tests/conftest.py` that initialises petsc4py with no arguments would remove it, if you want that file added.
