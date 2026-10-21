@@ -43,8 +43,19 @@ quadrature rule of twice the common degree.
 ## Test and lint
 
 ```bash
-pytest tests/unit
+pytest tests/unit                      # seconds
+pytest tests/verification -m slow      # minutes: convergence and validation tests V1–V4
 ruff check . && ruff format --check .
+```
+
+A convergence study runs a base configuration on several meshes or step counts and tabulates the
+final value and rate of every configured diagnostic in
+`results/<case>/<run_name>_study/convergence.csv`; each level is an ordinary run in
+`results/<case>/<run_name>_<level>/`. Run it serially:
+
+```bash
+python scripts/run_convergence_study.py configs/<file>.toml --cells 8x8 16x16 32x32
+python scripts/run_convergence_study.py configs/<file>.toml --steps 20 40 80 160
 ```
 
 ## Spec symbols in code

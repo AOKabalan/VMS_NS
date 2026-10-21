@@ -131,6 +131,16 @@ class TimeStepper:
             len(outflow),
         )
 
+    @property
+    def velocity(self) -> fd.Function:
+        """Endpoint velocity u_h of the last completed step."""
+        return self._history[0]
+
+    @property
+    def pressure(self) -> fd.Function:
+        """Pressure of the last completed step, at its solve level."""
+        return self._pressure
+
     def run(self) -> None:
         """Integrate from t = 0 to t_end, writing iteration logs, diagnostics and fields."""
         comm = self._problem.mesh.comm

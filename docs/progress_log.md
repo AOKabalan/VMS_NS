@@ -203,3 +203,60 @@ Open questions:
    | g(t)(y, −x), rotation | Crank–Nicolson | 6.5e-5, 1.6e-5, 4.1e-6 | 2.00, 2.00 | 1.99, 2.00 |
 
    Recommendation: change `manufactured_temporal` to u = g(t)(y, −x), p = 0. It is still linear, divergence-free and in every FE space, and its rotational truncation error cannot be absorbed by the pressure. This changes the plan's Phase 2 case definition and the meaning of V2, so it needs your decision before phase 4b. The alternative is to keep the field and measure the pressure error in V2.
+
+## Phase 4b: Galerkin verification (2026-10-21)
+Done: Before this phase, commit "Plan: rotational manufactured_temporal" changed `manufactured_temporal` to u = cos t (y, −x), p = 0, together with its hand-derived forcing test. It also updated plan §13 Phase 2 and §10 V2: the field must have nonzero vorticity, and V2 also asserts pressure orders, comparing against the exact pressure at the solve level (t^(n+1) for BDF, t^(n+½) for Crank–Nicolson) with zero-mean normalization.
+- `scripts/run_convergence_study.py` takes a base TOML and either `--cells NxM ...` or `--steps N ...` (dt = t_end/N). For each level it writes the level's resolved configuration into `results/<case>/<run_name>_study/` and runs it with `run_simulation.py` as a subprocess, so every level is an ordinary run with all plan §9 files. It then reads each run's final diagnostics and writes `convergence.csv` (level, refinement, value and rate per diagnostic; rate = log(e_{i−1}/e_i)/log(N_i/N_{i−1})). The table is also logged. The script refuses an existing study folder and stops at the first failed level.
+- `TimeStepper` gained read-only `velocity` (endpoint) and `pressure` (solve level) properties, used by V3.
+- Verification tests in `tests/verification/`, all marked `slow`, with the helper `study.py`:
+  - V1 `test_spatial_convergence.py`: P2/P1, BDF1, two steps of dt = 0.05, meshes 8, 16, 32.
+  - V2 `test_temporal_convergence.py`: 4×4, P2/P1, T = 1, N = 20, 40, 80, 160 for BDF1, BDF2, BDF3 (exact history) and Crank–Nicolson; BDF3 with lower-order startup is logged and checked at ≥ 1.8.
+  - V3 `test_steady_equivalence.py`: Kovasznay Re = 40, BDF1 with dt = 5 to T = 100, meshes "16" and "32" taken as h = 1/16 and h = 1/32 (cells 24×32 and 48×64).
+  - V4 `test_taylor_green.py`: BDF2 with dt = 0.025 to T = 1, meshes 16 and 32.
+- The README documents the verification and study commands.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean.
+- `pytest tests/unit`: 124 passed.
+- `pytest tests/verification -m slow`: 9 passed in 119 s.
+
+The rates are between the two finest levels; the threshold is the expected rate − 0.2.
+
+V1, spatial (manufactured_spatial, Taylor–Hood P2/P1):
+
+| Mesh | ‖u − u_ex‖ | Rate | ‖∇(u − u_ex)‖ | Rate | ‖p − p_ex‖ | Rate |
+| --- | --- | --- | --- | --- | --- | --- |
+| 8 | 1.436e-2 | | 9.035e-1 | | 1.142e-2 | |
+| 16 | 1.884e-3 | 2.93 | 2.327e-1 | 1.96 | 1.910e-3 | 2.58 |
+| 32 | 2.093e-4 | **3.17** (≥ 2.8) | 5.091e-2 | **2.19** (≥ 1.8) | 4.442e-4 | **2.10** (≥ 1.8) |
+
+V2, temporal (manufactured_temporal, P2/P1, 4×4, T = 1). Velocity at T; pressure at the solve level, zero mean:
+
+| Scheme | N | ‖u − u_ex‖ | Rate | ‖p − p_ex‖ | Rate |
+| --- | --- | --- | --- | --- | --- |
+| BDF1 | 20 / 40 / 80 / 160 | 3.223e-3 / 1.627e-3 / 8.181e-4 / 4.102e-4 | 0.99, 0.99, **1.00** (≥ 0.8) | 3.006e-3 / 1.489e-3 / 7.409e-4 / 3.696e-4 | 1.01, 1.01, **1.00** (≥ 0.8) |
+| BDF2 | 20 / 40 / 80 / 160 | 1.080e-4 / 2.645e-5 / 6.555e-6 / 1.633e-6 | 2.03, 2.01, **2.01** (≥ 1.8) | 1.342e-4 / 3.394e-5 / 8.534e-6 / 2.140e-6 | 1.98, 1.99, **2.00** (≥ 1.8) |
+| BDF3, exact history | 20 / 40 / 80 / 160 | 4.262e-6 / 5.237e-7 / 6.488e-8 / 8.073e-9 | 3.02, 3.01, **3.01** (≥ 2.8) | 3.994e-6 / 4.803e-7 / 5.884e-8 / 7.278e-9 | 3.06, 3.03, **3.02** (≥ 2.8) |
+| Crank–Nicolson | 20 / 40 / 80 / 160 | 6.520e-5 / 1.624e-5 / 4.058e-6 / 1.014e-6 | 2.00, 2.00, **2.00** (≥ 1.8) | 1.079e-4 / 2.712e-5 / 6.801e-6 / 1.703e-6 | 1.99, 2.00, **2.00** (≥ 1.8) |
+| BDF3, lower-order startup (logged) | 20 / 40 / 80 / 160 | 9.039e-5 / 2.249e-5 / 5.627e-6 / 1.408e-6 | 2.01, 2.00, **2.00** (≥ 1.8) | 2.940e-5 / 7.418e-6 / 1.870e-6 / 4.698e-7 | 1.99, 1.99, **1.99** (≥ 1.8) |
+
+V3, steady Kovasznay (Re = 40, P2/P1, BDF1 dt = 5 to T = 100; final relative step change 0 < 1e-10 in every run):
+- Newton and Picard steady velocities differ by 4.4e-13 relative (≤ 1e-8).
+- Errors from mesh 16 (24×32) to mesh 32 (48×64): velocity 4.096e-4 → 5.112e-5 (×8.0, rate 3.0); pressure 5.152e-4 → 1.276e-4 (×4.0, rate 2.0). Both drop, as required.
+
+V4, Taylor–Green (ν = 0.01, P2/P1, BDF2 dt = 0.025 to T = 1):
+
+| Mesh | ‖u − u_ex‖ at T | Kinetic energy at T |
+| --- | --- | --- |
+| 16 | 7.826e-2 | 9.47098 |
+| 32 | 4.720e-3 (drop ×16.6, ≥ 3) | 9.48217 (exact π²e^(−0.04) = 9.48261; 0.005 %, ≤ 1 %) |
+
+Deviations from spec or plan:
+1. Choices the plan leaves open:
+   - V1 uses dt = 0.05; with a solution linear in time, any dt gives the same spatial error.
+   - V3 reads "mesh 16 and 32" as h = 1/16 and 1/32 on the 1.5 × 2 Kovasznay domain. It reaches steady state with dt = 5 and T = 100 and checks the final relative step change from `outer_iterations.csv`.
+   - V4 uses dt = 0.025.
+2. Not in the plan: the verification helper `tests/verification/study.py`, the `TimeStepper.velocity` and `.pressure` properties, and the README section. The study script reuses `run_simulation.py` through a subprocess per level, so the runs are serial even if the study itself is started under MPI; the README says to run it serially.
+3. V2's pressure assertion follows the instruction given with the V2 decision. The plan's V2 text was updated with it in the "Plan: rotational manufactured_temporal" commit.
+
+Open questions: None.
