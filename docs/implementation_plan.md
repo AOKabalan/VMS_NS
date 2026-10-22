@@ -88,12 +88,16 @@ navier-stokes-vms/
 │       ├── cylinder_dfg_2d.py
 │       └── lattice_vortex.py
 ├── meshes/
-│   ├── cylinder_dfg_2d.geo
-│   └── cylinder_dfg_2d.msh
+│   ├── cylinder_dfg_2d.geo            # coarse test mesh and production levels 1–3
+│   └── cylinder_dfg_2d.msh            # level 1; _level2.msh, _level3.msh, _coarse.msh
+├── data/references/<case>/            # validation reference data, each with a README.md
 ├── configs/                           # one TOML file per experiment
+│   └── validation/                    # one TOML file per validation run (phase 10)
 ├── scripts/
 │   ├── run_simulation.py              # python scripts/run_simulation.py configs/<file>.toml
-│   └── run_convergence_study.py
+│   ├── run_convergence_study.py
+│   ├── run_validation.py              # a validation run and its comparison
+│   └── run_validation_queue.sh        # every validation run in sequence, resumable
 ├── tests/
 │   ├── data/                          # small meshes for tests
 │   ├── unit/                          # seconds
@@ -398,6 +402,8 @@ Open questions: <none, or list>
 - For problems with the pressure null space, check the interpolated Dirichlet trace at every solve level: reject |∫u_D·n ds| > 1e-10 ∫|u_D·n| ds with a discrete-flux compatibility error. Do not apply the check with an outflow boundary.
 
 ### Phase 10: Validation scripts
+
+Phase 10a delivers everything below except the long runs: reference data in `data/references/<case>/` (Ghia Tables I–II at Re = 100 and 1000, the FEATFLOW DFG 2D-2 results and archives, the thesis' exact energy decay), the three cases, the cylinder meshes (a coarse test mesh and production levels 1–3), `scripts/run_validation.py` (run or `--analyse-only`, writing `validation.csv` and `validation.md`), one config per run in `configs/validation/`, the resumable `scripts/run_validation_queue.sh` with a `--smoke` mode, the U5 check on the coarse cylinder mesh and a runtime estimate. The owner launches the full queue; its results and the comparison tables belong to phase 10b.
 
 - Files: `cases/lid_driven_cavity.py`, `cases/cylinder_dfg_2d.py`, `cases/lattice_vortex.py`, `meshes/cylinder_dfg_2d.geo` and `.msh`, configs for each.
 - Lid-driven cavity: Re = 100 and 1000 against the centreline data of Ghia, Ghia and Shin (1982), embedded in the case with the citation. If the table is not available to you, stop and ask.

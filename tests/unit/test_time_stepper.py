@@ -169,6 +169,30 @@ def test_short_run_writes_every_output_with_sensible_contents(
         )
 
 
+def test_after_step_callback_can_stop_the_run_early(tmp_path: Path) -> None:
+    config = Config(
+        case="manufactured_spatial",
+        run_name="early",
+        mesh=MeshOptions(cells=(4, 4)),
+        discretization=DiscretizationOptions(velocity_degree=2, pressure_degree=1),
+        time=TimeOptions(scheme="bdf1", dt=0.1, t_end=1.0),
+        stabilization=StabilizationOptions(method="none"),
+        output=OutputOptions(vtk_every=5),
+    )
+    stepper = TimeStepper(config, build_problem(config), tmp_path, logging.getLogger(__name__))
+    seen = []
+
+    def stop_at_step_three(step: int, time: float) -> bool:
+        seen.append((step, time))
+        return step == 3
+
+    stepper.run(stop_at_step_three)
+    assert seen == [(1, 0.1), (2, 0.2), (3, 0.3)]
+    assert [row["step"] for row in rows(tmp_path / "time_steps.csv")] == ["1", "2", "3"]
+    # The state at the stop is written even though step 3 is not a VTK step.
+    assert pvd_times(tmp_path / "fields" / "velocity.pvd") == pytest.approx([0.3])
+
+
 def test_crank_nicolson_pressure_is_written_at_the_half_level(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

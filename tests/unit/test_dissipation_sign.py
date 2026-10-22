@@ -1,6 +1,7 @@
 """Eigenvalue checks of static ASGS and OSS dissipation, and the cell-diameter regression (U5)."""
 
 import logging
+from pathlib import Path
 
 import firedrake as fd
 import numpy as np
@@ -34,11 +35,13 @@ def free_matrix(
 
 
 @pytest.mark.parametrize("k", [1, 2])
-@pytest.mark.parametrize("mesh_kind", ["left", "crossed", "box"])
+@pytest.mark.parametrize("mesh_kind", ["left", "crossed", "box", "cylinder"])
 @pytest.mark.parametrize("nu", [10.0, 1e-4], ids=["viscous", "convective"])
 def test_static_asgs_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, nu: float) -> None:
     mesh = (
-        fd.UnitCubeMesh(2, 2, 2)
+        fd.Mesh(str(Path(__file__).resolve().parents[2] / "meshes/cylinder_dfg_2d_coarse.msh"))
+        if mesh_kind == "cylinder"
+        else fd.UnitCubeMesh(2, 2, 2)
         if mesh_kind == "box"
         else fd.UnitSquareMesh(4, 4, diagonal=mesh_kind)
     )
@@ -68,7 +71,7 @@ def test_static_asgs_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, 
 
 
 @pytest.mark.parametrize("k", [1, 2])
-@pytest.mark.parametrize("mesh_kind", ["left", "crossed", "box"])
+@pytest.mark.parametrize("mesh_kind", ["left", "crossed", "box", "cylinder"])
 @pytest.mark.parametrize("nu", [10.0, 1e-4], ids=["viscous", "convective"])
 def test_static_oss_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, nu: float) -> None:
     """E(u, p; v, q) with (ξ_h, ζ_h) eliminated: the Schur complement of the coupled form.
@@ -77,7 +80,9 @@ def test_static_oss_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, n
     the same matrix as assembling E column by column with each column's projections.
     """
     mesh = (
-        fd.UnitCubeMesh(2, 2, 2)
+        fd.Mesh(str(Path(__file__).resolve().parents[2] / "meshes/cylinder_dfg_2d_coarse.msh"))
+        if mesh_kind == "cylinder"
+        else fd.UnitCubeMesh(2, 2, 2)
         if mesh_kind == "box"
         else fd.UnitSquareMesh(4, 4, diagonal=mesh_kind)
     )

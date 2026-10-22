@@ -73,6 +73,30 @@ For all-Dirichlet problems, each solve level checks the interpolated boundary fl
 data whose net flux exceeds 1e-10 times the integral of its absolute normal flux.
 In 3D, results with VMS depend on the process count at the level of the quadrature error.
 
+## Validation
+
+Three validation cases compare against published data: `lid_driven_cavity` (Ghia, Ghia and
+Shin 1982, Re = 100 and 1000), `cylinder_dfg_2d` (DFG 2D-2, FEATFLOW reference) and
+`lattice_vortex` (exact kinetic-energy decay, MSc thesis §6.2). Their reference data and
+sources are in `data/references/<case>/`; the cylinder meshes are generated from
+`meshes/cylinder_dfg_2d.geo` (a coarse test mesh and production levels 1–3, see the `.geo`).
+
+```bash
+# One run and its comparison, written to validation.csv and validation.md in the results folder:
+OMP_NUM_THREADS=1 mpiexec -n 4 python scripts/run_validation.py configs/validation/<file>.toml
+# Re-analyse a finished run without running it again:
+python scripts/run_validation.py configs/validation/<file>.toml --analyse-only
+# Every config in configs/validation, shortest first, 4 ranks each (hours; the owner launches it):
+bash scripts/run_validation_queue.sh
+# The same queue with 3 steps per run, into results/validation_smoke:
+bash scripts/run_validation_queue.sh --smoke
+```
+
+The queue appends one line per run to `results/validation_queue.log`, keeps going after a
+failed run, skips runs that already have `validation.csv` and moves an interrupted run's folder
+to `<folder>.incomplete-<timestamp>` before running it again. It ends by writing
+`results/VALIDATION_DONE` and, where `notify-send` exists, a desktop notification.
+
 ## Test and lint
 
 ```bash

@@ -2,6 +2,7 @@
 
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import firedrake as fd
@@ -246,7 +247,7 @@ class TimeStepper:
         """Pressure of the last completed step, at its solve level."""
         return self._pressure
 
-    def run(self) -> None:
+    def run(self, after_step: Callable[[int, float], bool] | None = None) -> None:
         """Integrate from t = 0 to t_end, writing iteration logs, diagnostics and fields."""
         comm = self._problem.mesh.comm
         steps = round(self._config.time.t_end / self._config.time.dt)
@@ -257,6 +258,15 @@ class TimeStepper:
             self._initialise()
             for step in range(1, steps + 1):
                 self._step(step, step == steps, logs, diagnostics)
+                if after_step is not None and after_step(step, self._time(step)):
+                    if self._config.output.vtk_every and step != steps:
+                        self._fields.write(
+                            self.velocity,
+                            self.pressure,
+                            self._time(step),
+                            float(self._pressure_time),
+                        )
+                    break
         finally:
             logs.close()
             diagnostics.close()

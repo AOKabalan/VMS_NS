@@ -843,3 +843,102 @@ Deviations from spec or plan:
 5. Galerkin forces agree within 5.7351e-13 relative (maximum absolute difference 2.4869e-14), confirming that the force diagnostic is MPI-correct. VMS force differences come from the pressure, which carries the quadrature-orientation noise through τ; boundary tractions on the coarse mesh amplify it. These bounds allow that quadrature error while detecting O(1) differences from MPI bugs.
 
 Open questions: None. The d = π choice, flux guard, retained default quadrature and diagnostic-specific MPI acceptance rules were explicitly resolved by the owner.
+
+## Phase 10a: Validation cases (2026-10-22)
+Done: Taken over mid-phase from another agent, whose work was uncommitted. All of it was read and treated as unverified; the fixes are listed below.
+- Reference data, each folder with a README.md (source, table or page, method, date):
+  - `data/references/lid_driven_cavity/`: Ghia, Ghia and Shin (1982), Tables I–II, u at x = 0.5 and v at y = 0.5 for Re = 100 and 1000, at the paper's 17 stations.
+    - I re-verified every value from 400 dpi renderings of PDF pages 12–13: all 68 values and 34 stations agree.
+    - The commonly quoted extremes agree with the PDF, where they are underscored as local extrema: Re 100 u min −0.21090 at y = 0.4531, v max 0.17527 at x = 0.2344, v min −0.24533 at x = 0.8047; Re 1000 u min −0.38289 at y = 0.1719, v max 0.37095 at x = 0.1563, v min −0.51550 at x = 0.9063.
+  - `data/references/cylinder_dfg_2d/`: FEATFLOW's finest level (6, k = 1/200) in `featflow.json`. I re-checked all nine values against the page: C_D min/max/mean/amplitude 3.1569/3.2200/3.1884/0.0631; C_L −1.0206/0.9859/−0.0173/2.008; St 0.30188.
+    - The 1996 intervals (Schäfer and Turek, Table 4) are kept as context.
+    - All five FEATFLOW archives are kept unchanged, with SHA-256 sums; they pass ZIP CRC checks.
+    - `featflow_curve.csv` is the level-6, k = 1/1600 force history from the newer 20141124 archive.
+  - `data/references/lattice_vortex/`: the thesis §6.2 solution and its exact energy ¼ exp(−16νπ²t). Re-checked against the thesis text; the thesis used 3 fixed Newton iterations per step, while we iterate to the tolerances.
+- Cases (each cites its source in the module docstring):
+  - `lid_driven_cavity`: unit square, lid u = (1, 0), Re through case_parameters. Both top corner nodes belong to the stationary walls, with the same value on both incident boundaries.
+  - `cylinder_dfg_2d`: DFG 2D-2, inflow 6y(0.41 − y)/0.41², ν = 1e-3, do-nothing outlet, `force_boundaries = ("cylinder",)`. The docstring notes that FEATFLOW's ν∇u − pI and our symmetric σ give the same force on a no-slip wall.
+  - `lattice_vortex`: the thesis setup, with exact Dirichlet data.
+  - Comparison functions live in the case modules: Ghia maximum deviations; FEATFLOW cycle statistics, from the last lift-minimum-to-minimum cycle, with mean = (max + min)/2, amplitude = max − min, St = D/(Ū × cycle length) and the change in max C_L over the last three cycles; curve deviations aligned at the C_L minimum; the outlet u·n minimum; the energy decay error.
+- Cylinder meshes (`meshes/cylinder_dfg_2d.geo`, `-setnumber refine r` divides every production size by r):
+  - coarse test mesh, 74 vertices;
+  - level 1 (r = 1, unchanged): 1,983 vertices;
+  - level 2 (r = 2.2): 9,075 vertices;
+  - level 3 (r = 4): 29,344 vertices.
+
+  All levels refine at the cylinder and in the wake box (0.25 ≤ x ≤ 1.5, 0.1 ≤ y ≤ 0.3); the cylinder gets about 78, 172 and 314 boundary edges. The coarse mesh and level 1 are reproduced exactly from the `.geo`.
+- `scripts/run_validation.py <config> [--analyse-only | --run-only] [--smoke | --steps N]`:
+  - Runs a case and writes `validation.csv`, written last as the completion marker, plus `validation.md` and per-case tables.
+  - Cavity runs stop at steady state: relative L² change between time levels < 1e-8 on three consecutive steps, through a new `after_step` callback of `TimeStepper.run`.
+  - Cylinder runs log the outlet u·n minimum every step.
+- `configs/validation/`: 13 configs.
+  - Cavity Re 100: Dyn-Nl-OSS P1/P1 64 and 128, P2/P2 64, Taylor–Hood 64.
+  - Cavity Re 1000: Dyn-Lin-OSS P1/P1 64 and 128, P2/P2 64 (see deviation 1).
+  - Lattice vortex: Dyn-Nl-OSS and Dyn-Nl-ASGS P1/P1, 50×50, Crank–Nicolson δt = 0.01, T = 10.
+  - Cylinder level 1: Taylor–Hood, Dyn-Nl-OSS P1/P1 and P2/P2 with BDF2 δt = 0.005, and Dyn-Nl-OSS P1/P1 with δt = 0.0025, all to t = 30. The level is in the run name and the mesh file is explicit.
+- `scripts/run_validation_queue.sh [--smoke]`:
+  - Runs cheapest first within cavity, lattice vortex and cylinder (mesh size × degree² × steps), each with `OMP_NUM_THREADS=1 mpiexec -n 4`, then the serial analysis.
+  - Logs config, status and wall time to `validation_queue.log`, continues after failures, skips runs with `validation.csv`, and moves an interrupted folder to `.incomplete-<timestamp>`.
+  - Writes `VALIDATION_DONE` and calls `notify-send` if present. `--smoke` runs 3 steps per config into `results/validation_smoke/`.
+- Fixes to the handed-over work:
+  - **Point evaluation:** the smoke queue failed with "Point evaluation gave different results across processes". `Function.at` evaluates a point on a partition boundary on every rank that touches it and rejects round-off differences (it is also deprecated). Centreline and outlet sampling now use `fd.PointEvaluator`, a VertexOnlyMesh that gives each point one owner. The MPI "Sorry!" text was only Open MPI's missing help file for a non-zero exit.
+  - **Queue stdin:** the queue then stopped after its first run ("0 completed, 0 skipped, 1 failed"). `mpiexec` read the loop's stdin and consumed the remaining config lines; both commands now read `/dev/null`.
+  - **Ordering:** the queue order includes the mesh size of gmsh meshes and the number of steps.
+  - Ruff was already clean at the handover; the unit run left behind had passed (347).
+- README: a validation section (commands, queue behaviour). Plan: §4 layout and §13 Phase 10a.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean (65 files).
+- `pytest tests/unit -n 4`: 348 passed in 35 s.
+  - New: `test_validation_cases.py` (9 tests: transcription and stations, comparison functions on synthetic data including a pure-sine lift of known frequency and amplitude, cylinder names and outlet minimum, reference archives and curve, configs) and `test_after_step_callback_can_stop_the_run_early`.
+  - U5 and the case-build test now include the cylinder meshes.
+- `OMP_NUM_THREADS=1 pytest tests/verification -m slow -n 4`: 63 passed in 9 min 50 s, all earlier verification tests.
+- U5 on the coarse cylinder mesh (74 vertices; Dirichlet on every boundary for the eigenvalue check) passes for ASGS and OSS, P1/P1 and P2/P2, ν = 10 and 1e-4. The worst λ_min/λ_max is −1.0e-16 (OSS P2/P2, ν = 10: −1.55e-14 against 153).
+- Smoke queue on 4 ranks: 13 completed, 0 failed, in 4 min.
+  - Rerun: 12 skipped and 1 rerun after its `validation.csv` was deleted, with the old folder moved to `.incomplete-20261022T175321567086162`.
+  - Smoke outputs: the cavity profile comparison runs on 4 ranks; the cylinder reports "insufficient lift minima" instead of inventing cycle statistics; the lattice energy error at t = 0.03 is 0.45%, the interpolation error of the initial state.
+
+Runtime estimate. Probes of each config on 4 ranks with the real mesh, δt and solver settings: 30 steps for the cavities (they stop at steady state), 50 for the lattice vortex and cylinder levels 1–2, 20 for level 3. A projection is the probe's setup plus first two steps, plus the mean time of the later steps times the remaining steps. The cylinder probes cover only the start from rest (t ≤ 0.25), so the shedding phase may cost somewhat differently. RSS is the sum over the 4 ranks.
+
+| Run | Probe s/step | Outer per step | Steps | Projected | Peak RSS |
+| --- | --- | --- | --- | --- | --- |
+| cavity Re 100 Dyn-Nl-OSS P1/P1 64 | 0.74 | 3.7 | 17 (steady) | 0.01 h | 1.5 GB |
+| cavity Re 100 Taylor–Hood 64 | 0.18 | 1 | 17 (steady) | < 0.01 h | 1.4 GB |
+| cavity Re 100 Dyn-Nl-OSS P1/P1 128 | 1.94 | 2.4 | 17 (steady) | 0.02 h | 2.0 GB |
+| cavity Re 100 Dyn-Nl-OSS P2/P2 64 | 2.08 | 2.4 | 17 (steady) | 0.02 h | 2.0 GB |
+| cavity Re 1000 Dyn-Lin-OSS P1/P1 64 | 1.04 | 1 | ~59 | 0.02 h | 1.6 GB |
+| cavity Re 1000 Dyn-Lin-OSS P1/P1 128 | 4.44 | 1 | ~59 | 0.10 h | 2.5 GB |
+| cavity Re 1000 Dyn-Lin-OSS P2/P2 64 | 3.75 | 1 | ~59 | 0.06 h | 2.7 GB |
+| lattice Dyn-Nl-ASGS P1/P1 | 0.88 | 9.0 | 1,000 | 0.24 h | 1.3 GB |
+| lattice Dyn-Nl-OSS P1/P1 | 0.88 | 5.7 | 1,000 | 0.25 h | 1.5 GB |
+| cylinder L1 Taylor–Hood δt 0.005 | 0.11 | 1 | 6,000 | 0.19 h | 1.4 GB |
+| cylinder L1 Dyn-Nl-OSS P1/P1 δt 0.005 | 0.70 | 7.2 | 6,000 | 1.16 h | 1.5 GB |
+| cylinder L1 Dyn-Nl-OSS P1/P1 δt 0.0025 | 0.64 | 6.5 | 12,000 | 2.13 h | 1.5 GB |
+| cylinder L1 Dyn-Nl-OSS P2/P2 δt 0.005 | 2.71 | 8.4 | 6,000 | 4.53 h | 1.7 GB |
+| cylinder L2 Taylor–Hood δt 0.005 | 0.65 | 1 | 6,000 | 1.08 h | 1.7 GB |
+| cylinder L2 Dyn-Nl-OSS P1/P1 δt 0.005 | 2.89 | 7.0 | 6,000 | 4.81 h | 1.7 GB |
+| cylinder L2 Dyn-Nl-OSS P1/P1 δt 0.0025 | 2.49 | 6.1 | 12,000 | 8.30 h | 1.7 GB |
+| cylinder L2 Dyn-Nl-OSS P2/P2 δt 0.005 | 13.80 | 8.1 | 6,000 | 23.0 h | 2.9 GB |
+| cylinder L3 Taylor–Hood δt 0.005 | 1.85 | 1 | 6,000 | 3.09 h | 2.4 GB |
+| cylinder L3 Dyn-Nl-OSS P1/P1 δt 0.005 | 12.07 | 7.2 | 6,000 | 20.1 h | 2.5 GB |
+| cylinder L3 Dyn-Nl-OSS P1/P1 δt 0.0025 | 12.22 | 6.8 | 12,000 | 40.8 h | 2.5 GB |
+| cylinder L3 Dyn-Nl-OSS P2/P2 δt 0.005 | 60.07 | 8.2 | 6,000 | 100.1 h | 6.6 GB |
+
+The committed queue (cavity, lattice vortex, cylinder level 1) totals about 9 h; every probed run together is about 210 h.
+
+Deviations from spec or plan:
+1. **Re 1000 cavity uses linear splitting (Dyn-Lin-OSS), with 5 Picard iterations before Newton.** With Dyn-Nl-OSS at δt = 5:
+   - The P1/P1 128 and P2/P2 64 runs diverge in Newton at step 1, from rest. With the Picard warm-up the inner solve converges, but every variant then fails the local subscale update at step 1: δt = 5 with warm-up, δt = 1, 0.5 and 0.05 fail; only δt = 0.01 works.
+   - The update fails even with 1,000 sweeps, accelerated or fixed point.
+   - A probe of P1/P1 64 at δt = 0.5 shows 6 of 49,152 quadrature points still changing after 60 sweeps, all in the cells at the two top corners (x ≈ 0 or 1, y ≈ 0.99–1).
+   - There the lid jump gives |∇u_h| ≈ 1/h, while τ reaches h²/(4ν) ≈ 0.06 at Re 1000. So τ|∇u_h| ≈ 4, the near-singular local problem of the spec paragraph on static nonlinear subscales. Dynamic subscales do not help unless δt|∇u_h| is moderate, which needs δt ≈ 0.01: about 20,000 steps to steady state, roughly 17 h for P1/P1 64 alone.
+   - Re 100 is unaffected (τ|∇u_h| ≈ 0.4).
+   - Per the spec, the failure is reported, not repaired. The configs say so in a comment; this is open question 1.
+2. Cylinder configs name the mesh level (`_l1_`) and give the mesh file explicitly; they run level 1 until you choose the levels (open question 2).
+3. `run_validation.py` has `--run-only` and `--steps N` besides the requested flags: the queue runs the simulation under MPI and the analysis serially, and `--steps` serves the runtime probes.
+4. Cavity steadiness is judged between time levels with a 1e-8 relative tolerance on three consecutive steps, at δt = 5 as in V3.
+5. Cycle extrema are sampled values. Lift minima, which set the cycle and St, are refined by a local quadratic; FEATFLOW's 1/f values are quantised by their sampling.
+
+Open questions:
+1. Re 1000 cavity: keep Dyn-Lin-OSS (feasible, about 10 min for all three); run Dyn-Nl-OSS at δt = 0.01 (about 17 h for P1/P1 64, more for 128 and P2/P2); or drop the Re 1000 VMS runs.
+2. Cylinder levels and cuts, against the 24 h budget: the proposal is in the report to the owner and is decided there.

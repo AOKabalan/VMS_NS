@@ -1,0 +1,56 @@
+case = "cylinder_dfg_2d"
+run_name = "cylinder_th_l1_dt0.005"
+
+[case_parameters]
+
+[mesh]
+file = "meshes/cylinder_dfg_2d.msh"
+
+[discretization]
+velocity_degree = 2
+pressure_degree = 1
+
+[time]
+scheme = "bdf2"
+dt = 0.005
+t_end = 30
+startup = "lower_order"
+
+[stabilization]
+method = "none"
+subscale_space = "oss"
+subscale_dynamics = "dynamic"
+scale_splitting = "nonlinear"
+c1 = 4.0
+c2 = 2.0
+pressure_subscale = true
+
+[convection]
+form = "skew_symmetric_1"
+
+[solver]
+linearization = "newton"
+newton_tau = "frozen"
+picard_iterations_before_newton = 0
+inner_rtol = 1e-10
+inner_atol = 1e-12
+inner_max_iterations = 30
+outer_rtol = 1e-08
+outer_max_iterations = 30
+subscale_update = "accelerated"
+subscale_rtol = 1e-10
+subscale_max_iterations = 50
+
+[solver.petsc]
+ksp_type = "preonly"
+pc_type = "lu"
+pc_factor_mat_solver_type = "mumps"
+
+[output]
+vtk_every = 0
+diagnostics = [
+    "kinetic_energy",
+    "divergence_l2",
+    "force",
+]
+console_level = "WARNING"

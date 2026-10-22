@@ -1,0 +1,59 @@
+case = "lid_driven_cavity"
+run_name = "cavity_re0100_oss_p1_128"
+
+[case_parameters]
+reynolds = 100
+
+[mesh]
+cells = [
+    128,
+    128,
+]
+
+[discretization]
+velocity_degree = 1
+pressure_degree = 1
+
+[time]
+scheme = "bdf1"
+dt = 5
+t_end = 500
+startup = "lower_order"
+
+[stabilization]
+method = "vms"
+subscale_space = "oss"
+subscale_dynamics = "dynamic"
+scale_splitting = "nonlinear"
+c1 = 4.0
+c2 = 2.0
+pressure_subscale = true
+
+[convection]
+form = "skew_symmetric_1"
+
+[solver]
+linearization = "newton"
+newton_tau = "frozen"
+picard_iterations_before_newton = 0
+inner_rtol = 1e-10
+inner_atol = 1e-12
+inner_max_iterations = 30
+outer_rtol = 1e-08
+outer_max_iterations = 30
+subscale_update = "accelerated"
+subscale_rtol = 1e-10
+subscale_max_iterations = 50
+
+[solver.petsc]
+ksp_type = "preonly"
+pc_type = "lu"
+pc_factor_mat_solver_type = "mumps"
+
+[output]
+vtk_every = 0
+diagnostics = [
+    "kinetic_energy",
+    "divergence_l2",
+]
+console_level = "WARNING"

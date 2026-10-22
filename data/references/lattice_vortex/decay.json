@@ -1,0 +1,5 @@
+{
+  "initial_energy": 0.25,
+  "viscosity": 7e-05,
+  "exponent_pi_squared_factor": 16
+}

@@ -144,9 +144,19 @@ def test_unknown_boundary_name_lists_the_available_ones() -> None:
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_each_case_builds_on_a_coarse_mesh(case: str) -> None:
     dimension = 3 if case == "ethier_steinman_3d" else 2
-    problem = build_problem(
-        Config(case=case, run_name="test", mesh=MeshOptions(cells=(4,) * dimension))
+    options = (
+        MeshOptions(
+            file=str(Path(__file__).resolve().parents[2] / "meshes/cylinder_dfg_2d_coarse.msh")
+        )
+        if case == "cylinder_dfg_2d"
+        else MeshOptions(cells=(4,) * dimension)
     )
+    problem = build_problem(Config(case=case, run_name="test", mesh=options))
+    if case in ("cylinder_dfg_2d", "lid_driven_cavity"):
+        assert problem.reference_values
+        assert set(problem.boundary_conditions) == set(problem.boundary_tags)
+        assert uses_pressure_null_space(problem) == (case == "lid_driven_cavity")
+        return
     assert problem.mesh.num_cells() == (384 if dimension == 3 else 32)
     assert problem.exact_velocity is not None and problem.exact_pressure is not None
     assert set(problem.boundary_conditions) == set(problem.boundary_tags)
@@ -185,7 +195,7 @@ def test_case_defaults_and_overrides() -> None:
     [
         (
             Config(case="cavity", run_name="test"),
-            "case = 'cavity': unknown; available: ethier_steinman_3d",
+            "case = 'cavity': unknown; available: cylinder_dfg_2d",
         ),
         (
             Config(case="kovasznay", run_name="test", mesh=MeshOptions(source="gmsh")),
