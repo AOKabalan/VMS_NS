@@ -44,15 +44,40 @@ pressure is written at t^(n+½). An invalid configuration stops the run before a
 written, with a message naming the offending fields. If a nonlinear solve does not converge, the
 run writes the last state to `fields/`, logs the iteration history and exits with status 1.
 
-Available diagnostics: `kinetic_energy`, `divergence_l2`, and, for cases with an exact solution,
-`velocity_error_l2`, `velocity_gradient_error_l2` and `pressure_error_l2`. Error norms use a
-quadrature rule of twice the common degree.
+Available diagnostics: `kinetic_energy`, `subscale_kinetic_energy` (VMS only),
+`linear_momentum`, `angular_momentum`, `force`, `divergence_l2`, and, for cases with an exact
+solution, `velocity_error_l2`, `velocity_gradient_error_l2` and `pressure_error_l2`.
+All integrals are global and use the common quadrature rule; error norms use twice its degree.
+Momentum vectors expand into `_x`, `_y`, `_z` columns; angular momentum in 2D is one scalar.
+A case declares `Problem.force_boundaries`, a tuple of boundary names; `force` writes
+`force_<boundary>_<axis>` for each. It measures the fluid-on-body force
+−∫σn ds with σ = −pI + ν(∇u + ∇uᵀ), without coefficient normalization. A force request without
+declared boundaries is rejected. Forces on an individual open face depend on the pressure gauge;
+closed-boundary forces do not.
+
+In `diagnostics.csv`, `time` labels the endpoint velocity diagnostics; `pressure_time` labels
+the pressure error and force (including its velocity gradient). For Crank–Nicolson, these use
+the half-level pressure and velocity, except at the backward-Euler startup step.
+`subscale_time` labels subscale energy: dynamic subscales use their stored endpoint value;
+static subscales use the converged solve-level value, stored for nonlinear splitting and
+evaluated from the expression otherwise. This time is blank for Galerkin.
+
+The `ethier_steinman_3d` case uses [−1, 1]³, a = π/4, d = π and ν = 1 by default, with exact
+Dirichlet data and all six faces declared for force measurements. Its default mesh is 4³;
+`mesh.cells = [8, 8, 8]` selects the finer smoke-test mesh. The three-step BDF2 check uses
+δt = 0.01 and T = 0.03, for Galerkin P2/P1 and Dyn-Nl-OSS P1/P1, in serial and on two MPI ranks.
+The choice d = π keeps the interpolated Dirichlet trace at zero net flux for P1 as well as P2.
+With d = π/2 on the default tetrahedral mesh, the P1 trace has nonzero flux, making the
+constant-test continuity equation inconsistent (evidence in the Phase 9 progress entry).
+For all-Dirichlet problems, each solve level checks the interpolated boundary flux and rejects
+data whose net flux exceeds 1e-10 times the integral of its absolute normal flux.
+In 3D, results with VMS depend on the process count at the level of the quadrature error.
 
 ## Test and lint
 
 ```bash
 pytest tests/unit                      # seconds
-OMP_NUM_THREADS=1 pytest tests/verification -m slow -n 4  # about 9 minutes: V1–V4
+OMP_NUM_THREADS=1 pytest tests/verification -m slow -n 4  # V1–V4 and the 3D serial/MPI check
 ruff check . && ruff format --check .
 ```
 

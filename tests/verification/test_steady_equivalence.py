@@ -83,7 +83,11 @@ def march(config: Config, problem: Problem, folder: Path) -> TimeStepper:
 
 def final_diagnostics(folder: Path) -> dict[str, float]:
     with (folder / "diagnostics.csv").open(encoding="utf-8") as stream:
-        return {key: float(value) for key, value in list(csv.DictReader(stream))[-1].items()}
+        return {
+            key: float(value)
+            for key, value in list(csv.DictReader(stream))[-1].items()
+            if value != ""
+        }
 
 
 def test_galerkin_newton_and_picard_reach_the_same_steady_velocity(tmp_path: Path) -> None:

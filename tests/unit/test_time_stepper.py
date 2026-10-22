@@ -150,7 +150,13 @@ def test_short_run_writes_every_output_with_sensible_contents(
     outer = rows(folder / "outer_iterations.csv")
     assert [row["converged"] for row in outer] == ["True"] * steps
     diagnostics = rows(folder / "diagnostics.csv")
-    assert list(diagnostics[0]) == ["step", "time", *config.output.diagnostics]
+    assert list(diagnostics[0]) == [
+        "step",
+        "time",
+        "pressure_time",
+        "subscale_time",
+        *config.output.diagnostics,
+    ]
     assert len(diagnostics) == steps
     assert all(math.isfinite(float(row["velocity_error_l2"])) for row in diagnostics)
     assert json.loads((folder / "run_info.json").read_text())["exit_status"] == 0
@@ -170,6 +176,10 @@ def test_crank_nicolson_pressure_is_written_at_the_half_level(
     assert status == 0
     assert pvd_times(folder / "fields" / "velocity.pvd") == pytest.approx([0.5, 0.75])
     assert pvd_times(folder / "fields" / "pressure.pvd") == pytest.approx([0.375, 0.625])
+    diagnostics = rows(folder / "diagnostics.csv")
+    assert [float(row["time"]) for row in diagnostics] == [0.25, 0.5, 0.75]
+    assert [float(row["pressure_time"]) for row in diagnostics] == [0.25, 0.375, 0.625]
+    assert all(row["subscale_time"] == "" for row in diagnostics)
 
 
 def test_inner_solve_failure_exits_nonzero_and_writes_the_last_state(

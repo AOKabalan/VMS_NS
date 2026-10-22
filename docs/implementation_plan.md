@@ -232,6 +232,7 @@ A case module exposes one function, `build(config) -> Problem`. `Problem` holds 
 | `initial_velocity` | `(x) -> UFL` | u₀ |
 | `exact_velocity`, `exact_pressure` | `(x, t) -> UFL` or `None` | For errors and exact-history startup |
 | `reference_values` | `dict` or `None` | Validation targets |
+| `force_boundaries` | `tuple[str, ...]`, default empty | Named boundaries measured separately by the force diagnostic |
 
 - `x` is `SpatialCoordinate(mesh)`; `t` is a Firedrake `Constant` owned by the time stepper. `Dirichlet.value` is also `(x, t) -> UFL`.
 - When a case has an exact solution, the forcing is derived from it symbolically with UFL (`f = ∂t u + u·∇u − νΔu + ∇p`, with time handled through `ufl.variable`), never typed by hand. Every case with an exact solution checks that its velocity is divergence-free.
@@ -253,11 +254,12 @@ Every run writes to `results/<case>/<run_name>/`:
 | `inner_iterations.csv` | One row per inner (Newton or Picard) iteration |
 | `outer_iterations.csv` | One row per outer iteration |
 | `time_steps.csv` | One row per time step |
-| `diagnostics.csv` | One row per time step, one column per configured diagnostic |
+| `diagnostics.csv` | One row per time step; scalar diagnostics and expanded vector/boundary components, with their field times |
 | `fields/` | VTK output of `u_h`, `p_h` every `vtk_every` steps |
 
 Columns:
 
+- `diagnostics.csv`: `step, time, pressure_time, subscale_time`, then the configured scalar/component columns. `time` is the velocity endpoint; pressure error and force use `pressure_time` and the solve-level velocity. Dynamic subscale energy uses its stored endpoint; static energy uses the solve level (`subscale_time`, blank for Galerkin). Vectors use `_x`, `_y`, `_z`; force uses `force_<boundary>_<axis>`; angular momentum in 2D is scalar.
 - `inner_iterations.csv`: `step, time, outer_iteration, inner_iteration, method, residual_norm, relative_residual, update_norm, linear_iterations`
 - `outer_iterations.csv`: `step, time, outer_iteration, inner_iterations, velocity_change, pressure_change, subscale_change, xi_change, zeta_change, fe_residual_norm, converged`
 - `time_steps.csv`: `step, time, scheme_used, dt, outer_iterations, inner_iterations_total, converged, wall_time`
@@ -391,8 +393,9 @@ Open questions: <none, or list>
 ### Phase 9: Diagnostics and 3D check
 
 - Files: `postprocessing/diagnostics.py` extensions, `cases/ethier_steinman_3d.py`.
-- Details: diagnostics registry entries for kinetic energy of u_h and of ũ, linear momentum, angular momentum (a scalar in 2D, a vector in 3D), divergence norm, and drag and lift on a named boundary from the traction σn with σ = −pI + ν(∇u + ∇uᵀ). `ethier_steinman_3d`: the Ethier–Steinman exact solution on the cube [−1, 1]³, forcing derived as in section 8 (it must come out as zero to round-off, which checks the formula).
-- Acceptance: 3D smoke run on meshes 4 and 8 for Galerkin and Dyn-Nl-OSS: runs to completion, and the velocity error drops with refinement; the same run on 2 MPI ranks gives the same diagnostics to 1e-10 relative.
+- Details: diagnostics registry entries for kinetic energy of u_h and of ũ, linear momentum, angular momentum (a scalar in 2D, a vector in 3D), divergence norm, and raw fluid-on-body force −∫σn ds on each boundary in `Problem.force_boundaries`, with σ = −pI + ν(∇u + ∇uᵀ). Drag/lift coefficients belong to Phase 10 (owner's Phase 9 clarification). Pressure-dependent diagnostics use the solve-level pressure and velocity, including the Crank–Nicolson half level. `ethier_steinman_3d`: the Ethier–Steinman exact solution on the cube [−1, 1]³, forcing derived as in section 8 (it must come out as zero to round-off, which checks the formula).
+- Acceptance: 3D smoke run on meshes 4 and 8 for Galerkin and Dyn-Nl-OSS: runs to completion, and the velocity error drops with refinement. Compare every diagnostic at every step with the same run on 2 MPI ranks. For Galerkin, polynomial-integrand diagnostics (energies, momentum, angular momentum, divergence, forces) agree to 1e-10 relative; error norms against exact solutions have non-polynomial integrands and use 1e-8 relative (absolute floor 1e-13 for both). For VMS, each force component uses absolute tolerance 1e-3 times the largest absolute force component in the serial reference run, over all steps and measured faces. Every other VMS diagnostic uses 1e-4 relative with absolute floor 1e-4 in the nondimensional benchmark units. Keep default quadrature; non-polynomial 3D integrands have partition-dependent quadrature error (spec: Boundary conditions and quadrature). Report the actual largest differences and, without asserting it, whether the largest force difference decreases from mesh 4 to mesh 8. Galerkin forces verify the force diagnostic's MPI correctness; VMS pressure carries quadrature-orientation noise through τ, which coarse-mesh boundary tractions amplify. These bounds distinguish that error from O(1) MPI errors.
+- For problems with the pressure null space, check the interpolated Dirichlet trace at every solve level: reject |∫u_D·n ds| > 1e-10 ∫|u_D·n| ds with a discrete-flux compatibility error. Do not apply the check with an outflow boundary.
 
 ### Phase 10: Validation scripts
 

@@ -68,8 +68,10 @@ class FieldWriter:
 
 
 def open_diagnostics_csv(comm: MPI.Comm, folder: Path, names: Sequence[str]) -> CsvWriter:
-    """diagnostics.csv with one row per time step and one column per configured diagnostic."""
-    return CsvWriter(comm, folder / "diagnostics.csv", ("step", "time", *names))
+    """diagnostics.csv with field times and the expanded diagnostic columns."""
+    return CsvWriter(
+        comm, folder / "diagnostics.csv", ("step", "time", "pressure_time", "subscale_time", *names)
+    )
 
 
 @dataclass(frozen=True)

@@ -9,6 +9,7 @@ import ufl
 from ufl.core.expr import Expr
 from ufl.measure import Measure
 
+from navier_stokes_vms.problem.boundary_conditions import named_boundary_measure
 from navier_stokes_vms.problem.problem_definition import Problem
 
 
@@ -24,18 +25,59 @@ class DiagnosticState:
     dx: Measure
     error_dx: Measure
     pressure_null_space: bool
+    solve_velocity: fd.Function
+    ds: Measure
+    subscale_velocity: Expr | None
+    subscale_time: fd.Constant | None
 
 
 @dataclass(frozen=True)
 class Diagnostic:
-    """A scalar functional of the state and whether it needs the case's exact solution."""
+    """A functional, possibly with named components, and its exact-solution requirement."""
 
-    evaluate: Callable[[DiagnosticState], float]
+    evaluate: Callable[[DiagnosticState], float | dict[str, float]]
     needs_exact_solution: bool
 
 
 def _kinetic_energy(state: DiagnosticState) -> float:
     return fd.assemble(ufl.inner(state.velocity, state.velocity) / 2 * state.dx)
+
+
+def _subscale_kinetic_energy(state: DiagnosticState) -> float:
+    return fd.assemble(ufl.inner(state.subscale_velocity, state.subscale_velocity) / 2 * state.dx)
+
+
+def _components(expression: Expr, measure: Measure) -> dict[str, float]:
+    return {
+        axis: fd.assemble(expression[i] * measure)
+        for i, axis in enumerate("xyz"[: expression.ufl_shape[0]])
+    }
+
+
+def _linear_momentum(state: DiagnosticState) -> dict[str, float]:
+    return _components(state.velocity, state.dx)
+
+
+def _angular_momentum(state: DiagnosticState) -> float | dict[str, float]:
+    x = fd.SpatialCoordinate(state.problem.mesh)
+    if state.problem.mesh.geometric_dimension == 2:
+        return fd.assemble((x[0] * state.velocity[1] - x[1] * state.velocity[0]) * state.dx)
+    return _components(ufl.cross(x, state.velocity), state.dx)
+
+
+def _force(state: DiagnosticState) -> dict[str, float]:
+    mesh = state.problem.mesh
+    gradient = ufl.grad(state.solve_velocity)
+    stress = -state.pressure * ufl.Identity(mesh.geometric_dimension)
+    stress += state.problem.viscosity * (gradient + ufl.transpose(gradient))
+    traction = -ufl.dot(stress, fd.FacetNormal(mesh))
+    values = {}
+    for name in state.problem.force_boundaries:
+        ds = named_boundary_measure(state.ds, (name,), state.problem.boundary_tags)
+        values.update(
+            {f"{name}_{axis}": value for axis, value in _components(traction, ds).items()}
+        )
+    return values
 
 
 def _divergence_l2(state: DiagnosticState) -> float:
@@ -68,6 +110,10 @@ def _pressure_error_l2(state: DiagnosticState) -> float:
 
 DIAGNOSTICS: dict[str, Diagnostic] = {
     "kinetic_energy": Diagnostic(_kinetic_energy, needs_exact_solution=False),
+    "subscale_kinetic_energy": Diagnostic(_subscale_kinetic_energy, needs_exact_solution=False),
+    "linear_momentum": Diagnostic(_linear_momentum, needs_exact_solution=False),
+    "angular_momentum": Diagnostic(_angular_momentum, needs_exact_solution=False),
+    "force": Diagnostic(_force, needs_exact_solution=False),
     "divergence_l2": Diagnostic(_divergence_l2, needs_exact_solution=False),
     "velocity_error_l2": Diagnostic(_velocity_error_l2, needs_exact_solution=True),
     "velocity_gradient_error_l2": Diagnostic(
@@ -78,11 +124,11 @@ DIAGNOSTICS: dict[str, Diagnostic] = {
 
 
 def check_diagnostics_supported(names: Sequence[str], problem: Problem) -> None:
-    """Reject error diagnostics for a case without an exact solution."""
-    if problem.exact_velocity is not None:
-        return
+    """Reject diagnostics whose required exact solution or force boundaries are absent."""
+    if "force" in names and not problem.force_boundaries:
+        raise ValueError("output.diagnostics: force requires the case to declare force_boundaries")
     needing = [name for name in names if DIAGNOSTICS[name].needs_exact_solution]
-    if needing:
+    if needing and problem.exact_velocity is None:
         raise ValueError(
             f"output.diagnostics: {', '.join(needing)} need an exact solution, "
             "which this case does not provide"
@@ -91,4 +137,27 @@ def check_diagnostics_supported(names: Sequence[str], problem: Problem) -> None:
 
 def evaluate_diagnostics(names: Sequence[str], state: DiagnosticState) -> dict[str, float]:
     """The configured diagnostics of the current state, in configuration order."""
-    return {name: DIAGNOSTICS[name].evaluate(state) for name in names}
+    values = {}
+    for name in names:
+        value = DIAGNOSTICS[name].evaluate(state)
+        if isinstance(value, dict):
+            values.update({f"{name}_{component}": entry for component, entry in value.items()})
+        else:
+            values[name] = value
+    return values
+
+
+def diagnostic_columns(names: Sequence[str], problem: Problem) -> tuple[str, ...]:
+    """Scalar column names after expanding vectors and the case's measured boundaries."""
+    axes = "xyz"[: problem.mesh.geometric_dimension]
+    columns = []
+    for name in names:
+        if name == "linear_momentum" or (name == "angular_momentum" and len(axes) == 3):
+            columns.extend(f"{name}_{axis}" for axis in axes)
+        elif name == "force":
+            columns.extend(
+                f"force_{boundary}_{axis}" for boundary in problem.force_boundaries for axis in axes
+            )
+        else:
+            columns.append(name)
+    return tuple(columns)

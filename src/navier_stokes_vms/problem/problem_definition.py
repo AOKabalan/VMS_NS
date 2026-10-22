@@ -33,6 +33,7 @@ class Problem:
     exact_velocity: SpaceTimeExpression | None = None
     exact_pressure: SpaceTimeExpression | None = None
     reference_values: Mapping[str, float] | None = None
+    force_boundaries: tuple[str, ...] = ()
 
 
 def exact_solution_forcing(
@@ -82,6 +83,8 @@ def case_parameters(config: Config, defaults: Mapping[str, float]) -> dict[str, 
 def check_problem(problem: Problem) -> None:
     """Every named boundary has exactly one known condition; an exact velocity is solenoidal."""
     for name in problem.boundary_conditions:
+        boundary_tag(name, problem.boundary_tags)
+    for name in problem.force_boundaries:
         boundary_tag(name, problem.boundary_tags)
     missing = sorted(set(problem.boundary_tags) - set(problem.boundary_conditions))
     if missing:

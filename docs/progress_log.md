@@ -769,3 +769,77 @@ Deviations from spec or plan:
 10. The finite-difference Jacobian test and the nonlinear run tests now cover OSS, and U9 is a new row in plan §10.
 
 Open questions: None. Resolved: exact-history startup keeps zero subscale values at negative times (your decision 2). The subscale has no exact history in general, the spec states the first-step defect, and U8 covers BDF3 with a subscale that vanishes smoothly at t = 0.
+
+## Phase 9: Diagnostics and 3D verification (2026-10-22)
+
+Done:
+- `postprocessing/diagnostics.py` adds `subscale_kinetic_energy`, `linear_momentum`, `angular_momentum` and `force`. Every integral uses global `assemble`; the common quadrature rule is used except for error norms, which retain degree 2q.
+- Subscale energy is ½∫|ũ|². Dynamic cases read the stored endpoint subscale; static nonlinear cases read the converged stored iterate; static linear cases evaluate the converged closure expression. All eight VMS variants are covered. Configuration rejects subscale energy with `method = "none"`.
+- Momentum vectors expand into `_x`, `_y`, `_z` columns; 2D angular momentum is the scalar ∫(x u_y − y u_x). `Problem.force_boundaries` is an optional tuple of boundary names. `force` expands into `force_<boundary>_<axis>` and measures −∫σn ds separately on each declared boundary, with σ = −pI + ν(∇u + ∇uᵀ). Requests without declared force boundaries fail setup validation; unknown boundary names are rejected. No drag/lift coefficient normalization is added.
+- `diagnostics.csv` now includes `pressure_time` and `subscale_time`. `time` labels endpoint velocity diagnostics. Pressure error and force use `pressure_time` and the solve-level velocity, including the Crank–Nicolson half level. Dynamic subscale energy uses the endpoint time; static energy uses the solve time; Galerkin's subscale timestamp is blank. The convergence-study driver reads expanded diagnostic columns and excludes time metadata. The earlier steady-test CSV reader now skips blank optional metadata.
+- `cases/ethier_steinman_3d.py` implements the cyclic exponential–trigonometric exact velocity on [−1,1]³, with a = π/4, **d = π**, ν = 1, exact Dirichlet data on all six faces and all six faces declared for force measurement. For this Beltrami flow p = −|u|²/2; forcing is derived through the existing UFL helper. Reference: [Ethier and Steinman (1994)](https://doi.org/10.1002/fld.1650190502).
+- The time stepper checks the interpolated Dirichlet trace at every solve level when the pressure null space is active and physical boundaries exist. The check globally assembles the net flux and the integral of the absolute normal flux, rejecting |∫u_D·n ds| > 1e-10 ∫|u_D·n| ds. The error names the step, solve time, measured flux and scale, and explains discrete flux compatibility. Crank–Nicolson uses the interpolated endpoint average. Outflow problems skip this check; fully periodic problems have no physical boundary flux.
+- The default quadrature rule is retained, as explicitly requested. The owner's updated spec paragraph explains partition-dependent tetrahedral quadrature; README records the resulting VMS process-count dependence. No quadrature degree, point set, solver tolerance or refinement threshold was changed to hide discrepancies.
+
+Tests:
+- `OMP_NUM_THREADS=1 pytest tests/unit -n 4 -q`: **327 passed in 51.91 s**, including all earlier unit tests.
+- `ruff check .`, `ruff format --check .`, `git diff --check`: clean.
+- Analytic diagnostics tests, without solves: uniform flow and rigid rotation momentum/angular momentum in 2D/3D; plane Poiseuille wall shear and pressure force signs/magnitudes, including inlet/outlet and spanwise faces; subscale energy evaluated directly and through stored quadrature fields in 2D/3D, k = 1,2. The energy test also distinguishes q from 2q.
+- Time-stepper wiring tests cover all eight VMS cases at BDF2 and Crank–Nicolson levels. A separate prescribed-field test distinguishes half-level force velocity from the extrapolated endpoint, and checks pressure error at the half time. The existing output test checks startup and half-level CSV/VTK pressure times.
+- Ethier exact forcing and divergence norms are below 1e-13 at t = 0, 0.17 and 1. Interpolated P1/P2 boundary flux is below 1e-13 on meshes 4 and 8. Guard tests reject d = π/2 under both BDF2 and Crank–Nicolson, accept d = π, detect boundary data that become incompatible at the second step, verify endpoint averaging, and skip the check with outflow.
+- `OMP_NUM_THREADS=1 pytest tests/verification -m slow -n 4 -q`: **63 passed in 615.35 s**, including all 61 earlier slow tests. The 3D tests complete **all eight runs** before comparing diagnostics: both pairs, meshes 4/8, serial/two ranks. All steps converge and both 3D tests pass the final rules. The preceding run passed all 61 earlier slow tests, with only the two 3D assertions failing under the superseded MPI rules (61 passed, 2 failed in 643.07 s).
+
+3D refinement: three steps with BDF2, δt = 0.01, T = 0.03, lower-order startup (BDF1, BDF2, BDF2), default solver tolerances, all diagnostics enabled and VTK disabled:
+
+| Formulation | Pair | Mesh-4 velocity L² error | Mesh-8 velocity L² error | Drop factor | Observed rate |
+| --- | --- | --- | --- | --- | --- |
+| Galerkin | P2/P1 | 0.1155107144313311 | 0.016579676135947765 | 6.96700668 | 2.80053895 |
+| Dyn-Nl-OSS | P1/P1 | 1.0057415840094566 | 0.2672772792788728 | 3.76291463 | 1.91185056 |
+
+These are coarse-mesh smoke checks, not asymptotic convergence certification. Rates approach the expected 3 and 2; the Galerkin rate is lower on these two meshes. The tests require only a decrease, as requested, and were not tuned to achieve a target rate.
+
+Largest serial/two-rank differences across all three steps in the final acceptance run (raw relative differences, before applying an absolute floor):
+
+| Formulation | Mesh | Largest absolute difference | Largest relative difference | Where |
+| --- | --- | --- | --- | --- |
+| Galerkin | 4 | 4.28033e-10 | 5.58377e-10 | pressure_error_l2, step 2 |
+| Galerkin | 8 | 2.81997e-13 | 3.01627e-11 | Absolute: pressure_error_l2, step 2; relative: linear_momentum_x, step 1 (value 1.18547e-4) |
+| Dyn-Nl-OSS | 4 | 2.68987e-3 | 1.58168e-2 | Absolute: force_y_min_y, step 1; relative: force_y_min_y, step 3 |
+| Dyn-Nl-OSS | 8 | 1.99661e-4 | 6.21292e-4 | Absolute: force_y_min_y, step 1; relative: force_y_min_y, step 2 |
+
+- Galerkin's polynomial diagnostics agree within 3.01627e-11 relative (the corresponding absolute discrepancy is 3.576e-15). Its pressure error contains the non-polynomial exact solution; mesh 4 gives 0.7665658362827 versus 0.7665658367107329. The other Galerkin errors meet 1e-10 relative.
+- VMS diagnostics other than force agree within 5.93452e-5 relative (pressure_error_l2 on mesh 4, step 2), so they meet the revised 1e-4 bound. The absolute floor used in the test is 1e-4 in the nondimensional benchmark units; Galerkin retains 1e-13.
+- The maximum VMS force discrepancy is −14.94078829658439 versus −14.938098426301291: 2.68987e-3 absolute and 1.80035e-4 relative. Near cancellation at step 3, the same component is −0.11953153045748921 versus −0.11764092947071975: 1.89060e-3 absolute and 1.58168e-2 relative. Kinetic energy alone (about 6.17e-7 relative difference at step 1) understates the pressure/force sensitivity. The maximum absolute force discrepancy decreases from 2.68987e-3 on mesh 4 to 1.99661e-4 on mesh 8, about 13.5×. This decrease is reported, not asserted. An earlier complete 3D run gave 9.05368e-5 on mesh 8 (29.7× decrease); the table uses the final run. The serial force scales are 14.9407883 and 8.45833573, giving absolute tolerances 0.0149407883 and 0.00845833573, respectively.
+
+Boundary-flux evidence and parameter decision:
+- With the initially requested d = π/2, at t = 0.01 the P1 trace has net flux **0.23533385276573374** on mesh 4 and **0.058833463191433504** on mesh 8. P2 flux is round-off zero. The P1 constant-test continuity equation is inconsistent; Newton stalls at residual 0.02104890 despite updates near 1e-13. This is a data-compatibility defect, not failed nonlinear convergence.
+- Choosing d = π makes both nodal traces discretely flux-free, while retaining the same exact-solution family and exact nodal boundary values. The owner explicitly accepted this parameter choice. The new guard diagnoses incompatible data before any solve instead of silently projecting away the residual.
+
+Quadrature-orientation evidence (independent analytic integral, no solve): ∫exp(0.7x + 1.1y + 1.7z) dx on the default 4³ tetrahedral mesh of [−1,1]³:
+
+| Degree | Serial | Two ranks |
+| --- | --- | --- |
+| q = 3 | 16.377583504693483 | 16.377554366139236 |
+| q = 6 | 16.382309127302463 | 16.382309128852057 |
+| q = 12 | 16.382309179778755 | 16.382309179778770 |
+
+The difference decreases to round-off at q = 12. The installed FIAT default tetrahedral rule is not permutation symmetric, and Firedrake's simplex vertex ordering uses distributed global numbering. Disabling mesh reordering does not remove the effect. This probe supports the spec's quadrature-error explanation; production still uses q = 3k, with errors at 2q, and unchanged default point sets.
+
+Memory, measured on separate serial mesh-8 runs with `/usr/bin/time -v`, including the flux guard, all diagnostics, Python/Firedrake and direct LU:
+
+| Formulation | Unknowns | Maximum RSS | Wall time |
+| --- | --- | --- | --- |
+| Galerkin P2/P1 | 15,468 | 544,644 KiB = 531.88 MiB | 9.75 s |
+| Dyn-Nl-OSS P1/P1 | 5,832 | 432,636 KiB = 422.50 MiB | 12.62 s |
+
+These are process RSS measurements, not isolated factorization memory or performance benchmarks; the slow suite shared the machine.
+For the largest case on two ranks, `resource.getrusage(RUSAGE_SELF).ru_maxrss` measured 469,528 and 463,184 KiB (458.52 and 452.33 MiB). The sum of the rank peaks is 910.85 MiB, an upper bound on simultaneous summed process RSS, not a measurement of unique physical RAM or simultaneous peak allocation.
+
+Deviations from spec or plan:
+1. d = π replaces π/2 for the documented P1 trace-flux compatibility reason, as accepted by the owner. a = π/4 and ν = 1 are unchanged.
+2. Raw boundary forces are implemented; drag/lift coefficients are deferred to Phase 10, per the Phase 9 clarification.
+3. Pressure and subscale time columns make half-level versus endpoint diagnostics explicit. Static subscale energy uses the solve level; dynamic energy uses the stored endpoint.
+4. The owner accepted MPI rules based on the integrands and force scale, not thresholds fitted to the measured discrepancies. Galerkin polynomial-integrand diagnostics retain 1e-10 relative; error norms against exact solutions use 1e-8 relative because their integrands are non-polynomial. Both use absolute floor 1e-13. VMS forces use absolute tolerance 1e-3 times the largest absolute force component in each serial reference run, over all faces, components and steps. Every other VMS diagnostic retains 1e-4 relative with absolute floor 1e-4 in the nondimensional benchmark units. Plan §13 and the test record these rules. Default quadrature remains unchanged.
+5. Galerkin forces agree within 5.7351e-13 relative (maximum absolute difference 2.4869e-14), confirming that the force diagnostic is MPI-correct. VMS force differences come from the pressure, which carries the quadrature-orientation noise through τ; boundary tractions on the coarse mesh amplify it. These bounds allow that quadrature error while detecting O(1) differences from MPI bugs.
+
+Open questions: None. The d = π choice, flux guard, retained default quadrature and diagnostic-specific MPI acceptance rules were explicitly resolved by the owner.

@@ -331,11 +331,21 @@ def test_run_script_refuses_an_existing_results_folder(tmp_path: Path) -> None:
     [
         (
             SHORT_RUN.replace("vtk_every = 0", "vtk_every = 0\ndiagnostics = ['vorticity']"),
-            "output.diagnostics: unknown vorticity; available: divergence_l2",
+            "output.diagnostics: unknown vorticity; available: angular_momentum",
+        ),
+        (
+            SHORT_RUN.replace(
+                "vtk_every = 0", "vtk_every = 0\ndiagnostics = ['subscale_kinetic_energy']"
+            ),
+            "subscale_kinetic_energy requires stabilization.method = 'vms'",
+        ),
+        (
+            SHORT_RUN.replace("vtk_every = 0", "vtk_every = 0\ndiagnostics = ['force']"),
+            "force requires the case to declare force_boundaries",
         ),
         (SHORT_RUN.replace("manufactured_spatial", "cavity"), "case = 'cavity': unknown"),
     ],
-    ids=["rule-6", "unknown-case"],
+    ids=["rule-6", "subscale-without-vms", "force-without-boundary", "unknown-case"],
 )
 def test_run_script_rejects_an_invalid_setup_before_writing(
     tmp_path: Path, text: str, message: str

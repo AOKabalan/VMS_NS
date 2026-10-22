@@ -184,6 +184,13 @@ def validate_config(config: Config) -> None:
         )
     _check_mesh(config.mesh)
     _check_stabilization(config)
+    if (
+        "subscale_kinetic_energy" in config.output.diagnostics
+        and config.stabilization.method == "none"
+    ):
+        raise ValueError(
+            "output.diagnostics: subscale_kinetic_energy requires stabilization.method = 'vms'"
+        )
     solver = config.solver
     if solver.picard_iterations_before_newton > 0 and solver.linearization != "newton":
         raise ValueError(

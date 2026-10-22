@@ -36,12 +36,17 @@ from navier_stokes_vms.formulation.vms import (
     velocity_subscale,
     vms_terms,
 )
-from navier_stokes_vms.postprocessing.diagnostics import DiagnosticState, evaluate_diagnostics
+from navier_stokes_vms.postprocessing.diagnostics import (
+    DiagnosticState,
+    diagnostic_columns,
+    evaluate_diagnostics,
+)
 from navier_stokes_vms.postprocessing.output import CsvWriter, FieldWriter, open_diagnostics_csv
 from navier_stokes_vms.postprocessing.run_logging import IterationLogs, open_iteration_logs
 from navier_stokes_vms.problem.boundary_conditions import (
     Dirichlet,
     Outflow,
+    check_dirichlet_flux,
     dirichlet_bc,
     named_boundary_measure,
 )
@@ -66,6 +71,7 @@ class TimeStepper:
         mesh = problem.mesh
         degree = quadrature_degree(config.discretization.velocity_degree)
         self._dx = volume_measure(mesh, degree)
+        self._ds = boundary_measure(mesh, degree)
         stabilization = config.stabilization
         k = config.discretization.velocity_degree
         if stabilization.method == "vms" and stabilization.subscale_space == "oss":
@@ -100,9 +106,7 @@ class TimeStepper:
         outflow = [name for name, bc in conditions.items() if isinstance(bc, Outflow)]
         outflow_ds = None
         if outflow:
-            outflow_ds = named_boundary_measure(
-                boundary_measure(mesh, degree), outflow, problem.boundary_tags
-            )
+            outflow_ds = named_boundary_measure(self._ds, outflow, problem.boundary_tags)
         u, p, *projections = ufl.split(self._solution)
         v, q, *projection_tests = fd.TestFunctions(space)
         nu = problem.viscosity
@@ -178,6 +182,17 @@ class TimeStepper:
         # With the null space the pressure is fixed by its zero spatial mean (spec: Boundary
         # conditions and quadrature), not by the solver's zero coefficient mean.
         self._zero_mean_pressure = null_space is not None
+        self._boundary_velocity = None
+        self._boundary_bcs = []
+        if null_space is not None and bcs:
+            self._boundary_velocity = fd.Function(velocity_space)
+            self._boundary_bcs = [
+                dirichlet_bc(
+                    velocity_space, name, self._at_solve_level(bc.value, x), problem.boundary_tags
+                )
+                for name, bc in conditions.items()
+                if isinstance(bc, Dirichlet)
+            ]
         self._area = fd.assemble(fd.Constant(1.0) * self._dx)
         inner = InnerSolver(
             self._solution, newton, picard, frozen, bcs, null_space, config.solver, jacobian
@@ -185,6 +200,13 @@ class TimeStepper:
         self._step_solver = StepSolver(
             inner, self._solution, self._iterate, self._dx, config.solver
         )
+        subscale_velocity = self._u_sub
+        subscale_time = self._pressure_time if self._u_sub is not None else None
+        if self._subscales is not None:
+            subscale_velocity = self._subscales.latest
+            subscale_time = self._t_new
+        elif self._iterate is not None:
+            subscale_velocity = self._iterate.value
         self._diagnostic_state = DiagnosticState(
             problem=problem,
             velocity=self._history[0],
@@ -194,6 +216,10 @@ class TimeStepper:
             dx=self._dx,
             error_dx=fd.dx(domain=mesh, degree=2 * degree),
             pressure_null_space=null_space is not None,
+            solve_velocity=self._velocity,
+            ds=self._ds,
+            subscale_velocity=subscale_velocity,
+            subscale_time=subscale_time,
         )
         self._fields = FieldWriter(folder)
         self._folder = folder
@@ -225,7 +251,8 @@ class TimeStepper:
         comm = self._problem.mesh.comm
         steps = round(self._config.time.t_end / self._config.time.dt)
         logs = open_iteration_logs(comm, self._folder)
-        diagnostics = open_diagnostics_csv(comm, self._folder, self._config.output.diagnostics)
+        columns = diagnostic_columns(self._config.output.diagnostics, self._problem)
+        diagnostics = open_diagnostics_csv(comm, self._folder, columns)
         try:
             self._initialise()
             for step in range(1, steps + 1):
@@ -297,7 +324,14 @@ class TimeStepper:
             self._fail(step, result)
         self._advance(coefficients)
         values = evaluate_diagnostics(self._config.output.diagnostics, self._diagnostic_state)
-        diagnostics.write(step=step, time=t, **values)
+        subscale_time = self._diagnostic_state.subscale_time
+        diagnostics.write(
+            step=step,
+            time=t,
+            pressure_time=float(self._pressure_time),
+            subscale_time=None if subscale_time is None else float(subscale_time),
+            **values,
+        )
         logs.time_steps.write(
             step=step,
             time=t,
@@ -336,6 +370,15 @@ class TimeStepper:
         self._alpha0.assign(coefficients.alpha0)
         self._weight_new.assign(coefficients.data_weight_new)
         self._weight_old.assign(coefficients.data_weight_old)
+        if self._boundary_velocity is not None:
+            for bc in self._boundary_bcs:
+                bc.apply(self._boundary_velocity)
+            try:
+                check_dirichlet_flux(self._boundary_velocity, self._ds)
+            except ValueError as error:
+                raise ValueError(
+                    f"step {step}, solve time {float(self._pressure_time):g}: {error}"
+                ) from error
         weighted = zip(coefficients.history_weights, self._history, strict=False)
         self._velocity_history.assign(sum(weight * velocity for weight, velocity in weighted))
         if self._subscales is not None:

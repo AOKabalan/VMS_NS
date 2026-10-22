@@ -51,14 +51,15 @@ def main(argv: list[str] | None = None) -> int:
         diagnostics = RESULTS_ROOT / config.case / config.run_name / "diagnostics.csv"
         with diagnostics.open(encoding="utf-8") as stream:
             last = list(csv.DictReader(stream))[-1]
-        finals.append(
-            (label, refinement, {name: float(last[name]) for name in base.output.diagnostics})
+        names = tuple(
+            name for name in last if name not in ("step", "time", "pressure_time", "subscale_time")
         )
-    _write_table(folder / "convergence.csv", base.output.diagnostics, finals)
-    for label, refinement, values, rates in _with_rates(base.output.diagnostics, finals):
+        finals.append((label, refinement, {name: float(last[name]) for name in names}))
+    _write_table(folder / "convergence.csv", names, finals)
+    for label, refinement, values, rates in _with_rates(names, finals):
         cells = ", ".join(
             f"{name} {values[name]:.4e} ({'-' if rates[name] is None else f'{rates[name]:.2f}'})"
-            for name in base.output.diagnostics
+            for name in names
         )
         logger.info("%s (N = %d): %s", label, refinement, cells)
     logger.info("Table written to %s", folder / "convergence.csv")

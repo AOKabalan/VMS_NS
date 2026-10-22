@@ -41,3 +41,17 @@ def boundary_tag(name: str, boundary_tags: Mapping[str, int]) -> int:
         available = ", ".join(sorted(boundary_tags)) or "none"
         raise ValueError(f"boundary {name!r} does not exist; available: {available}")
     return boundary_tags[name]
+
+
+def check_dirichlet_flux(velocity: fd.Function, measure: Measure) -> None:
+    """All-Dirichlet nodal data must satisfy the constant-test continuity equation."""
+    normal = fd.FacetNormal(velocity.function_space().mesh())
+    normal_velocity = fd.dot(velocity, normal)
+    flux = fd.assemble(normal_velocity * measure)
+    absolute_flux = fd.assemble(abs(normal_velocity) * measure)
+    if abs(flux) > 1e-10 * absolute_flux:
+        raise ValueError(
+            "all-Dirichlet data must be discretely flux-free: interpolated boundary data "
+            f"have net flux {flux:.16e}, exceeding 1e-10 times the absolute normal flux "
+            f"{absolute_flux:.16e}; check the boundary values and their FE interpolation"
+        )

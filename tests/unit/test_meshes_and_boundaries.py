@@ -143,8 +143,11 @@ def test_unknown_boundary_name_lists_the_available_ones() -> None:
 
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_each_case_builds_on_a_coarse_mesh(case: str) -> None:
-    problem = build_problem(Config(case=case, run_name="test", mesh=MeshOptions(cells=(4, 4))))
-    assert problem.mesh.num_cells() == 32
+    dimension = 3 if case == "ethier_steinman_3d" else 2
+    problem = build_problem(
+        Config(case=case, run_name="test", mesh=MeshOptions(cells=(4,) * dimension))
+    )
+    assert problem.mesh.num_cells() == (384 if dimension == 3 else 32)
     assert problem.exact_velocity is not None and problem.exact_pressure is not None
     assert set(problem.boundary_conditions) == set(problem.boundary_tags)
     assert uses_pressure_null_space(problem)
@@ -180,7 +183,10 @@ def test_case_defaults_and_overrides() -> None:
 @pytest.mark.parametrize(
     ("config", "message"),
     [
-        (Config(case="cavity", run_name="test"), "case = 'cavity': unknown; available: kovasznay"),
+        (
+            Config(case="cavity", run_name="test"),
+            "case = 'cavity': unknown; available: ethier_steinman_3d",
+        ),
         (
             Config(case="kovasznay", run_name="test", mesh=MeshOptions(source="gmsh")),
             "case 'kovasznay' supports only builtin meshes",

@@ -3,6 +3,7 @@
 from collections.abc import Callable
 
 from navier_stokes_vms.cases import (
+    ethier_steinman_3d,
     kovasznay,
     manufactured_spatial,
     manufactured_temporal,
@@ -12,6 +13,7 @@ from navier_stokes_vms.config import Config, check_startup_supported
 from navier_stokes_vms.problem.problem_definition import Problem, check_problem
 
 CASES: dict[str, Callable[[Config], Problem]] = {
+    "ethier_steinman_3d": ethier_steinman_3d.build,
     "kovasznay": kovasznay.build,
     "manufactured_spatial": manufactured_spatial.build,
     "manufactured_temporal": manufactured_temporal.build,
