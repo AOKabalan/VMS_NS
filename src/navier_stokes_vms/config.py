@@ -132,23 +132,6 @@ _SECTIONS: dict[str, type] = {
 
 _NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
 
-_PHASE_ADDING = {
-    ("asgs", "static", "linear"): 5,
-    ("asgs", "dynamic", "linear"): 6,
-    ("asgs", "static", "nonlinear"): 7,
-    ("asgs", "dynamic", "nonlinear"): 7,
-    ("oss", "static", "linear"): 8,
-    ("oss", "dynamic", "linear"): 8,
-    ("oss", "static", "nonlinear"): 8,
-    ("oss", "dynamic", "nonlinear"): 8,
-}
-
-_IMPLEMENTED_VMS_CASES = frozenset(
-    ("asgs", dynamics, splitting)
-    for dynamics in ("static", "dynamic")
-    for splitting in ("linear", "nonlinear")
-)
-
 
 def load_config(path: Path) -> Config:
     """Read a TOML file, fill defaults and validate; run_name defaults to the file stem."""
@@ -182,7 +165,10 @@ def _config_from_dict(data: Mapping[str, object], default_run_name: str) -> Conf
 
 
 def validate_config(config: Config) -> None:
-    """Raise ValueError for an illegal option or combination (plan §7, rules 1, 2, 4, 5)."""
+    """Raise ValueError for an illegal option or combination (plan §7, rules 1, 2, 4).
+
+    Rule 5 has nothing left to reject: all eight VMS cases are implemented.
+    """
     for name, value in (("case", config.case), ("run_name", config.run_name)):
         if not _NAME.fullmatch(value):
             raise ValueError(
@@ -379,15 +365,4 @@ def _check_stabilization(config: Config) -> None:
             f"discretization.velocity_degree = {velocity}, "
             f"discretization.pressure_degree = {pressure}: stabilization.method = 'vms' "
             "needs equal orders, velocity_degree = pressure_degree"
-        )
-    switches = (
-        stabilization.subscale_space,
-        stabilization.subscale_dynamics,
-        stabilization.scale_splitting,
-    )
-    if switches not in _IMPLEMENTED_VMS_CASES:
-        raise ValueError(
-            "stabilization.subscale_space, stabilization.subscale_dynamics, "
-            f"stabilization.scale_splitting: {_vms_case_name(*switches)} is not implemented yet; "
-            f"phase {_PHASE_ADDING[switches]} adds it"
         )

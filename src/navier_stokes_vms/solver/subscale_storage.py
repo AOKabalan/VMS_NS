@@ -8,14 +8,17 @@ from firedrake.petsc import PETSc
 from ufl.core.expr import Expr
 
 from navier_stokes_vms.discretization.time_schemes import StepCoefficients
+from navier_stokes_vms.solver.reusable_assembly import reusable_assembler
 
 
 class SubscaleStorage:
     """ũⁿ, ũⁿ⁻¹, … starting from zero, and their combination ũ_hist for the current step."""
 
     def __init__(self, space: WithGeometry, levels: int) -> None:
+        self._space = space
         self._levels = [fd.Function(space) for _ in range(levels)]
         self._solve_level = fd.Function(space)
+        self._sampled: Expr | None = None
         self._endpoint = fd.Function(space)
         self.history = fd.Function(space)
 
@@ -31,7 +34,11 @@ class SubscaleStorage:
 
     def store(self, u_sub: Expr, coefficients: StepCoefficients) -> None:
         """Sample the converged subscale, extrapolate it to t^(n+1) and shift the histories."""
-        self._solve_level.interpolate(u_sub)
+        if u_sub is not self._sampled:
+            # The time stepper passes the same expression every step: preprocess it once.
+            self._sample = reusable_assembler(fd.interpolate(u_sub, self._space))
+            self._sampled = u_sub
+        self._sample.assemble(tensor=self._solve_level)
         self._endpoint.assign(
             coefficients.extrapolation_weight_solve * self._solve_level
             + coefficients.extrapolation_weight_old * self._levels[0]
@@ -62,15 +69,16 @@ class SubscaleIterate:
     ) -> None:
         self.value = value
         self.is_static = is_static
-        self._update = update
         self._rtol = rtol
         self._max_iterations = max_iterations
         self._candidate = fd.Function(value.function_space())
+        # The update is preprocessed once and evaluated every sweep.
+        self._update = reusable_assembler(fd.interpolate(update, value.function_space()))
 
     def update(self) -> LocalUpdateResult:
         """Repeat ũ* ← update(ũ*) until max|change| ≤ rtol · max|ũ*| over all points."""
         for iteration in range(1, self._max_iterations + 1):
-            self._candidate.interpolate(self._update)
+            self._update.assemble(tensor=self._candidate)
             with self._candidate.dat.vec_ro as new, self.value.dat.vec as old:
                 size = new.norm(PETSc.NormType.NORM_INFINITY)
                 old.aypx(-1.0, new)

@@ -19,6 +19,14 @@ Firedrake virtual environment, from the repository root:
 pip install -e ".[dev]"
 ```
 
+The Firedrake version is pinned: the code is tested with Firedrake 2026.10.0 (PETSc 3.26,
+UFL 2026.2). `solver/reusable_assembly.py` relies on Firedrake internals
+(`BaseFormAssembler.preprocess_base_form` and the `is_base_form_preprocessed` flag of
+`get_assembler`) to preprocess repeatedly assembled forms once. After any Firedrake upgrade,
+`pytest tests/unit/test_reusable_assembly.py` must pass, since it checks that these assemblers
+give exactly what `fd.assemble` and `Function.interpolate` give. Every run records the versions
+it used in `run_info.json`.
+
 ## Run
 
 ```bash
@@ -44,7 +52,7 @@ quadrature rule of twice the common degree.
 
 ```bash
 pytest tests/unit                      # seconds
-OMP_NUM_THREADS=1 pytest tests/verification -m slow -n 4  # about 11 minutes: V1–V4
+OMP_NUM_THREADS=1 pytest tests/verification -m slow -n 4  # about 9 minutes: V1–V4
 ruff check . && ruff format --check .
 ```
 

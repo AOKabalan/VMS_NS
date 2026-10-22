@@ -602,3 +602,170 @@ Deviations from spec or plan:
 
 Open questions:
 1. U8 shows that `exact_history` startup gives first-order dynamic subscales in general, because the subscale history at negative times is zero (spec: Initial subscale). V2's BDF3 exact-history rates are third order only because the subscale there comes from the discretization error alone. Should exact-history startup also fill the subscale levels, where a case defines an exact subscale? Nothing in Phase 8 depends on this.
+
+## Phase 8: Orthogonal subscales (2026-10-22)
+Done:
+- First attempt, lagged projections (spec step 4 as first written). I implemented it, measured it, stopped and reported; it was replaced by coupled projections after your decision and the independent review (finding R6). The evidence, from a frozen-advector power-iteration probe of the map (ξ_h, ζ_h) → solve → project on Kovasznay:
+
+  | Pair | Spectral radius of the lagged map |
+  | --- | --- |
+  | P1/P1 | 0.83–0.87 for 12×16 and 24×32, δt from 0.005 to 5, static or dynamic, with or without ζ_h |
+  | P2/P2, static | 1.09–1.60 (divergent) |
+  | P2/P2, dynamic | 0.985 |
+
+  - Projecting the full residual, as Colomés does, gave the same radii (P1 0.852, P2 static 1.165).
+  - The review confirmed the radii independently, including −1.186 for static P2/P2 on 12×16, and found that half relaxation leaves 0.993.
+  - The real V-test configurations matched: V1 P1/P1 mesh 8 took 238 and 210 outer iterations; V2 Dyn-Lin-OSS P1/P1 took 75–87 per step; V1 and V2 P2/P2 did not converge in 300; V3 static P2/P2 diverged (FE residual about 1e87).
+- `formulation/oss_projections.py` has `projection_equations`: (τ_t(ξ_h − X), w_h) + (τ_c(ζ_h − ∇·u_h), r_h), with X = R̂_u + χ_D ũ_hist/δt. It uses consistent mass with the common rule. ζ_h and its equation are omitted when τ_c is off.
+- `formulation/vms.py`:
+  - `subscale_residual` gives X, with R̂_u = f − L_a(u_h, p_h) for OSS (χ_A = 0), so D_t u_h is dropped from both ũ and ξ_h.
+  - `velocity_subscale` and `accelerated_subscale` take ξ_h. `vms_terms` takes ξ_h and ζ_h and gives τ_c(∇·u − ζ_h, ∇·v); OSS has no (D_t ũ, v) term.
+  - ξ_h must be given exactly for OSS, and ζ_h only for OSS.
+- `discretization/function_spaces.py`:
+  - `oss_space` builds V × Q × V̂ (× Q̂), where V̂ and Q̂ have the elements of V and Q. They stay unconstrained because no Dirichlet condition or null space is ever applied to components 2 and 3.
+  - `constant_pressure_null_space` puts the constant on p_h only, for any number of components.
+- `solver/time_stepper.py`: for OSS the unknown is (u_h, p_h, ξ_h, ζ_h), and the residual adds the projection equations.
+  - Newton uses τ(a) in the projection weights; frozen-τ Newton builds the weights on the frozen advector before the replacement, as elsewhere.
+  - Picard uses τ̂ and X(â).
+  - ξ_h and ζ_h start at zero at step 1 (the spec allows it) and then carry over from the previous step's solution. Under Crank–Nicolson they are part of the half-level solution.
+- `solver/nonlinear_solver.py`:
+  - The outer loop exists only when a ũ* iterate exists, so linear OSS takes one pass per step and nonlinear OSS iterates on ũ* alone.
+  - xi_change and zeta_change come from the solution's components. For a linear OSS row they are the change over the step; for nonlinear OSS they enter the convergence test.
+- `config.py`: rule 5 accepts all eight cases. Its check and the phase table are removed, because nothing is left to reject.
+- Profiling finding (V2 Dyn-Nl-OSS P1/P1, N = 160, 641 outer iterations, 81 s):
+  - Of 155 s under the profiler, about 100 s went to UFL preprocessing on every `fd.assemble` and `Function.interpolate` call: `residual_norm` 73 s (1,282 calls), the local-update and storage interpolations 43 s (1,443 calls), `relative_change` 16 s (3,205 calls).
+  - `solver/reusable_assembly.py` has `reusable_assembler`: `fd.assemble`'s own preprocessing (`BaseFormAssembler.preprocess_base_form`), done once, then `get_assembler(..., is_base_form_preprocessed=True)`. It is used by `InnerSolver.residual_norm`, the new `RelativeChange` (the outer changes), `SubscaleIterate.update` and `SubscaleStorage.store`.
+  - A plain `get_assembler` or `get_interpolator` on the interpolation failed inside pyop2 on the OSS subscale expression; only fd.assemble's own preprocessing sequence works.
+  - Result: that run fell from 81 s to 17.6 s, and Dyn-Nl-ASGS from 84 s to 20.9 s. diagnostics.csv and outer_iterations.csv are byte-identical to before.
+- README: the pinned Firedrake version (2026.10.0, PETSc 3.26, UFL 2026.2), why it is pinned, and the slow-suite time.
+- Plan: §1 scope, §3 module tree, §5 module table, §10 U5, U6, U9 (new), V1 and V4, §11 the reusable-assembler note, §13 Phase 8.
+- Spec: your edits for coupled projections (fixed-choices row "OSS projection", the eight-cases paragraph, OSS projections, Inner linearization, Time-step algorithm and its step table) are committed with this phase.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean (53 files).
+- `pytest tests/unit -n 4`: 279 passed in 27 s.
+- `OMP_NUM_THREADS=1 pytest tests/verification -m slow -n 4`: 61 passed in 9 min 11 s (33 min 36 s of CPU time). The previous run, identical apart from V4, took 8 min 57 s.
+- Coupled against fully converged lagged (scratch; Kovasznay 12×16, P1/P1, BDF2, δt = 0.5, 2 steps; lagged code restored from the stash into a scratch worktree, with outer_rtol 1e-13 and inner_rtol 1e-12). Relative ℓ² differences of the final fields:
+
+  | Case | Velocity | Pressure | ξ_h | ζ_h | Lagged outer iterations per step | Coupled outer iterations per step |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Sta-Lin-OSS | 3.6e-13 | 2.6e-11 | 1.9e-10 | 1.5e-10 | 134, 116 | 1, 1 |
+  | Sta-Nl-OSS | 3.1e-13 | 2.4e-11 | 1.8e-10 | 1.2e-10 | 141, 121 | 17, 15 |
+  | Dyn-Lin-OSS | 4.2e-13 | 3.4e-11 | 2.5e-10 | 1.7e-10 | 133, 119 | 1, 1 |
+  | Dyn-Nl-OSS | 3.0e-13 | 2.7e-11 | 2.0e-10 | 1.2e-10 | 139, 125 | 15, 14 |
+
+- An independent steady monolithic probe (scratch) gave static linear OSS errors on 24×32 → 48×64 of P1 1.80e-2 → 4.51e-3 and P2 4.1226e-4 → 5.1235e-5. V3's P2/P2 steady errors agree to four digits.
+- System size and memory (V3 Dyn-Nl-OSS P2/P2, Kovasznay 48×64, the largest coupled case):
+
+  | Case | Unknowns | Max RSS | Wall time |
+  | --- | --- | --- | --- |
+  | Coupled OSS | 75,078 | 754 MB | 15.2 s |
+  | ASGS | 37,539 | 466 MB | 7.2 s |
+
+  On V2's 4×4 mesh the P1/P1 coupled system has 150 unknowns, against 75.
+- U6, `tests/unit/test_oss_projections.py` (new):
+  - Identity: random FE w_h and r_h with values on every node, boundary included, and pointwise-variable τ_t and τ_c from a random advector; the projection returns them to 1e-12, P1/P2, 2D/3D.
+  - Orthogonality after the coupled solve, at step 2 of BDF2 (dynamic ũ_hist non-zero, checked), Kovasznay 12×16: |(ũ, w_h)|/|(τ_t X, w_h)| over all basis functions of V̂_h, for the subscale expression and the stored ũ.
+    - Linear splitting: ≤ 5.5e-16 for P1, ≤ 2.1e-14 for P2.
+    - Nonlinear splitting: 1.7e-11 to 2.5e-11 for P1 and 1.1e-13 for P2. These are higher because the final local update moves ũ*, inside a and τ_t, slightly after the solve.
+- U5, static OSS (`test_static_oss_energy_has_no_negative_eigenvalues`, 12 cases): ξ_h and ζ_h are eliminated by the Schur complement of the coupled bilinear form, which is the column-by-column energy matrix because the projections are linear in (u, p). The worst λ_min/λ_max is −1.4e-16 (P2/P2 crossed, ν = 10: −2.2e-14 against 156), against the bound −1e-12.
+- Finite-difference Jacobian (`test_asgs_solver.py`): now 32 cases, ASGS and coupled OSS × degree × dynamics × splitting × τ option, all within 1e-8. This covers frozen τ in the projection weights.
+- U9, `tests/unit/test_reusable_assembly.py` (new), Dyn-Nl-ASGS and Dyn-Nl-OSS P2/P2:
+  - Compared: the coupled residual, every outer L² change (ξ_h and ζ_h included), one fixed-point sweep of `SubscaleIterate.update` and `SubscaleStorage.store`.
+  - All are byte-identical to `fd.assemble` and `Function.interpolate`, with every input redrawn between two checks.
+- `test_time_stepper.py`:
+  - Nonlinear OSS records xi_change and zeta_change in every outer row, both ≤ 1e-8 at convergence; for ASGS they are empty.
+  - `test_linear_oss_solves_each_step_in_one_pass` (static and dynamic): one converged outer row per step.
+  - Test ids no longer embed config text.
+- `test_config.py`: rule 5 accepts all eight cases × degree × pressure_subscale; the rejection tests are removed.
+- MPI (scratch): Dyn-Lin-OSS and Dyn-Nl-OSS Kovasznay 12×16, P1/P1, 4 BDF2 steps, on 2 ranks give the same outer and local counts as serial. One inner count differs by 1, and the final errors agree to 15–16 digits.
+
+V1, static OSS (manufactured_spatial, two BDF1 steps). Errors on three meshes, then rates:
+
+| Case | Pair | Meshes | ‖u − u_ex‖ | Rates | ‖∇(u − u_ex)‖ | Rates | ‖p − p_ex‖ | Rates |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Sta-Lin-OSS | P1/P1 | 8, 16, 32 | 2.525e-1 / 5.811e-2 / 1.250e-2 | 2.12, **2.22** | 5.031 / 2.486 / 1.233 | 1.02, **1.01** | 7.075e-1 / 1.727e-1 / 3.716e-2 | 2.03, **2.22** |
+| Sta-Lin-OSS | P2/P2 | 8, 16, 32 | 1.290e-2 / 1.551e-3 / 1.880e-4 | 3.06, **3.04** | 7.673e-1 / 1.858e-1 / 4.500e-2 | 2.05, **2.05** | 1.663e-2 / 1.655e-3 / 2.336e-4 | 3.33, **2.82** |
+| Sta-Nl-OSS | P1/P1 | 16, 32, 64 | 5.977e-2 / 1.267e-2 / 2.875e-3 | 2.24, **2.14** | 2.493 / 1.233 / 6.158e-1 | 1.02, **1.00** | 1.770e-1 / 3.755e-2 / 8.428e-3 | 2.24, **2.16** |
+| Sta-Nl-OSS | P2/P2 | 8, 16, 32 | 1.245e-2 / 1.510e-3 / 1.864e-4 | 3.04, **3.02** | 7.503e-1 / 1.815e-1 / 4.461e-2 | 2.05, **2.02** | 1.748e-2 / 1.794e-3 / 2.475e-4 | 3.28, **2.86** |
+
+Sta-Nl-OSS P1/P1 fails on mesh 8 with "local subscale update did not converge in 50 sweeps" at step 1, so it takes the same exception as Sta-Nl-ASGS (spec: The eight cases, the paragraph on static nonlinear subscales). On mesh 16, step 1 takes 22 outer iterations and 137 local sweeps.
+
+V2, dynamic OSS (manufactured_temporal, 4×4, T = 1, N = 20 / 40 / 80 / 160). Rates for each refinement, velocity at T and pressure at the solve level:
+
+| Case | Pair | Scheme | Velocity rates | Pressure rates | Finest ‖u − u_ex‖ | Finest ‖p − p_ex‖ |
+| --- | --- | --- | --- | --- | --- | --- |
+| Dyn-Lin-OSS | P1/P1 | BDF1 | 0.99, 1.00, **1.00** | 1.02, 1.01, **1.00** | 2.701e-4 | 3.530e-4 |
+| Dyn-Lin-OSS | P1/P1 | BDF2 | 1.87, 1.91, **1.95** | 1.98, 1.99, **2.00** | 2.574e-7 | 2.215e-6 |
+| Dyn-Lin-OSS | P1/P1 | BDF3, exact history | 3.03, 3.01, **3.01** | 3.06, 3.03, **3.02** | 5.308e-9 | 6.951e-9 |
+| Dyn-Lin-OSS | P1/P1 | Crank–Nicolson | 2.01, 2.00, **2.00** | 1.98, 1.99, **2.00** | 2.648e-7 | 1.610e-6 |
+| Dyn-Lin-OSS | P1/P1 | BDF3, lower order | 1.96, 1.98, **1.99** | 2.01, 1.99, **1.99** | 6.052e-7 | 1.815e-7 |
+| Dyn-Nl-OSS | P1/P1 | BDF1 | 0.99, 1.00, **1.00** | 1.02, 1.01, **1.00** | 2.718e-4 | 3.543e-4 |
+| Dyn-Nl-OSS | P1/P1 | BDF2 | 1.89, 1.92, **1.95** | 1.98, 1.99, **2.00** | 2.529e-7 | 2.207e-6 |
+| Dyn-Nl-OSS | P1/P1 | BDF3, exact history | 3.03, 3.01, **3.01** | 3.06, 3.03, **3.02** | 5.342e-9 | 6.977e-9 |
+| Dyn-Nl-OSS | P1/P1 | Crank–Nicolson | 2.01, 2.00, **2.00** | 1.98, 1.99, **2.00** | 2.758e-7 | 1.613e-6 |
+| Dyn-Nl-OSS | P1/P1 | BDF3, lower order | 1.96, 1.98, **1.99** | 2.00, 1.99, **1.99** | 6.174e-7 | 1.921e-7 |
+| Dyn-Nl-OSS | P2/P2 | BDF1 | 0.99, 0.99, **1.00** | 1.01, 1.01, **1.00** | 3.965e-4 | 3.698e-4 |
+| Dyn-Nl-OSS | P2/P2 | BDF2 | 2.04, 2.01, **2.01** | 1.98, 1.99, **2.00** | 1.519e-6 | 2.139e-6 |
+| Dyn-Nl-OSS | P2/P2 | BDF3, exact history | 3.02, 3.01, **3.01** | 3.06, 3.03, **3.02** | 7.803e-9 | 7.283e-9 |
+| Dyn-Nl-OSS | P2/P2 | Crank–Nicolson | 2.01, 2.00, **2.00** | 1.99, 2.00, **2.00** | 9.374e-7 | 1.693e-6 |
+| Dyn-Nl-OSS | P2/P2 | BDF3, lower order | 2.00, 2.00, **2.00** | 1.98, 1.99, **1.99** | 1.310e-6 | 4.730e-7 |
+
+V3, OSS on steady Kovasznay (Re = 40, BDF1 δt = 5 to T = 100; every run steady between its last two time levels and every step converged). Differences on mesh 16 (24×32) relative to static Newton, accelerated:
+
+| Splitting | Pair | Static Picard | Dynamic Newton | Dynamic Picard | Static fixed point | Dynamic Newton/Picard |
+| --- | --- | --- | --- | --- | --- | --- |
+| Linear | P1/P1 | 1.5e-12 | 2.3e-14 | 1.5e-12 | – | 1.5e-12 |
+| Linear | P2/P2 | 9.9e-13 | 8.4e-16 | 9.8e-13 | – | 9.8e-13 |
+| Nonlinear | P1/P1 | 2.0e-13 | 2.3e-14 | 2.0e-13 | 1.0e-16 | 2.0e-13 |
+| Nonlinear | P2/P2 | 1.1e-12 | 8.7e-16 | 1.1e-12 | 1.8e-16 | 1.1e-12 |
+
+All are ≤ 1e-8. Steady errors, static and dynamic agreeing to at least 12 digits, drop from mesh 16 to 32 in every case:
+
+| Splitting | Pair | Velocity | Pressure |
+| --- | --- | --- | --- |
+| Linear | P1/P1 | 1.8569e-2 → 4.6640e-3 | 1.4897e-2 → 3.6908e-3 |
+| Linear | P2/P2 | 4.1227e-4 → 5.1236e-5 | 1.2571e-3 → 1.4438e-4 |
+| Nonlinear | P1/P1 | 1.8516e-2 → 4.6565e-3 | 1.4902e-2 → 3.6889e-3 |
+| Nonlinear | P2/P2 | 4.1039e-4 → 5.1174e-5 | 1.2472e-3 → 1.4365e-4 |
+
+Outer iteration counts over the 20 steps (total, with the most in one step):
+
+| Run | Outer | Inner | Local sweeps |
+| --- | --- | --- | --- |
+| Linear OSS, any pair, mesh, dynamics or linearization | 20 (1) | P1 mesh 16: Newton 16, Picard 75–77; P2 mesh 16: Newton 9–14, Picard 44; mesh 32 Newton: P1 12, P2 6 | – |
+| Nonlinear OSS P1/P1, mesh 16, static or dynamic, Newton | 49 (9) | 59 | 113–116 (34) |
+| Nonlinear OSS P1/P1, mesh 16, Picard | 49 (9) | 217–223 | 114–117 (34) |
+| Nonlinear OSS P1/P1, mesh 16, static Newton, fixed point | 49 (9) | 59 | 151 (52) |
+| Nonlinear OSS P1/P1, mesh 32, Newton | 40 (8) | 35 | 81–82 (25) |
+| Nonlinear OSS P2/P2, mesh 16, Newton | 33 (7) | 24 | 58 (19) |
+| Nonlinear OSS P2/P2, mesh 16, Picard | 33 (7) | 92 | 58 (19) |
+| Nonlinear OSS P2/P2, mesh 16, static Newton, fixed point | 33 (7) | 24 | 73 (27) |
+| Nonlinear OSS P2/P2, mesh 32, Newton | 29 (6) | 14–15 | 44–46 (15) |
+
+V4, Taylor–Green (periodic (0, 2π)², ν = 0.01, BDF2 δt = 0.025 to T = 1; exact kinetic energy 9.4826):
+
+| Case | Mesh | ‖u − u_ex‖ | Kinetic energy | Relative energy error |
+| --- | --- | --- | --- | --- |
+| Galerkin P2/P1 | 16 | 7.826e-2 | 9.4710 | 1.2e-3 |
+| Galerkin P2/P1 | 32 | 4.720e-3 | 9.4822 | 4.7e-5 |
+| Dyn-Nl-OSS P1/P1 | 16 | 2.097e-1 | 8.7596 | 7.62e-2 |
+| Dyn-Nl-OSS P1/P1 | 32 | 4.506e-2 | 9.3227 | 1.69e-2 |
+| Dyn-Nl-OSS P1/P1 | 64 | 1.000e-2 | 9.4467 | 3.79e-3 |
+
+- The Dyn-Nl-OSS P1/P1 velocity error drops 4.65× from 16 to 32. Its energy is within 1% on mesh 64, and the energy error drops 4.46× from 32 to 64.
+- The first run, which still had the 1% bound on mesh 32, failed at 1.69%. Other P1/P1 cases on mesh 32 (scratch): Dyn-Lin-OSS −1.68%, Sta-Lin-OSS −1.72%, Dyn-Nl-ASGS and Dyn-Lin-ASGS −2.16%. Dyn-Nl-OSS P2/P2 on mesh 32: −0.002%.
+
+Deviations from spec or plan:
+1. Lagged projections were implemented first, as the spec and your Phase 8 point 3 then said, and replaced by coupled projections on your decision; the spec now prescribes this. The lagging evidence is above.
+2. The projection equations live in `formulation/oss_projections.py`, not `solver/oss_projections.py`, because nothing is solved separately any more. Plan §3, §5 and §13 are updated.
+3. With linear splitting an OSS row's xi_change and zeta_change are the change over the step, like velocity_change for the cases without an outer loop.
+4. Rule 5's check and phase table are removed, because all eight cases are implemented. The old rejection tests are replaced by a test that all eight load.
+5. U5 for OSS uses the Schur complement of the coupled bilinear form instead of assembling column by column; the two give the same matrix.
+6. U6 measures orthogonality relative to |(τ_t X, w_h)| and runs with inner_rtol 1e-12 and inner_atol 1e-14, so the solver tolerance does not dominate the measured value.
+7. V1 adds Sta-Nl-OSS P1/P1 to the meshes 16, 32, 64 exception (plan §10 V1).
+8. V4 (your decision 1): for Dyn-Nl-OSS P1/P1 the energy bound is checked on mesh 64, together with a ≥ 3× drop of the energy error from 32 to 64; Galerkin P2/P1 keeps the 1% bound on mesh 32 (plan §10 V4, with the reason).
+9. `reusable_assembler` and `RelativeChange` are performance changes that use Firedrake internals. The results are unchanged byte for byte; U9 guards them and the README records the pinned version (your decision 3).
+10. The finite-difference Jacobian test and the nonlinear run tests now cover OSS, and U9 is a new row in plan §10.
+
+Open questions: None. Resolved: exact-history startup keeps zero subscale values at negative times (your decision 2). The subscale has no exact history in general, the spec states the first-step defect, and U8 covers BDF3 with a subscale that vanishes smoothly at t = 0.

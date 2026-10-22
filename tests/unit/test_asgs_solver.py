@@ -1,4 +1,4 @@
-"""ASGS Jacobians, true nonlinear residual logging, and the exact-τ singularity."""
+"""VMS Jacobians (ASGS and coupled OSS), true residual logging, and the exact-τ singularity."""
 
 import csv
 import logging
@@ -23,11 +23,12 @@ from navier_stokes_vms.config import (
 )
 from navier_stokes_vms.discretization.time_schemes import step_coefficients
 from navier_stokes_vms.formulation.galerkin import SolveLevel, galerkin_residual
+from navier_stokes_vms.formulation.oss_projections import projection_equations
 from navier_stokes_vms.formulation.stabilization_parameters import (
     dynamic_parameter,
     stabilization_parameters,
 )
-from navier_stokes_vms.formulation.vms import Switches, vms_terms
+from navier_stokes_vms.formulation.vms import Switches, subscale_residual, vms_terms
 from navier_stokes_vms.solver.time_stepper import TimeStepper
 
 LOGGER = logging.getLogger(__name__)
@@ -36,7 +37,11 @@ STATIC_LINEAR = Switches(is_asgs=True, is_dynamic=False, is_nonlinear=False)
 
 
 def asgs_config(
-    degree: int, options: SolverOptions, dynamics: str = "static", splitting: str = "linear"
+    degree: int,
+    options: SolverOptions,
+    dynamics: str = "static",
+    splitting: str = "linear",
+    space: str = "asgs",
 ) -> Config:
     return Config(
         case="manufactured_spatial",
@@ -45,36 +50,38 @@ def asgs_config(
         discretization=DiscretizationOptions(velocity_degree=degree, pressure_degree=degree),
         time=TimeOptions(scheme="bdf1", dt=0.05, t_end=0.05),
         stabilization=StabilizationOptions(
-            subscale_space="asgs", subscale_dynamics=dynamics, scale_splitting=splitting
+            subscale_space=space, subscale_dynamics=dynamics, scale_splitting=splitting
         ),
         solver=options,
         output=OutputOptions(vtk_every=0),
     )
 
 
+@pytest.mark.parametrize("space", ["asgs", "oss"])
 @pytest.mark.parametrize("splitting", ["linear", "nonlinear"])
 @pytest.mark.parametrize("dynamics", ["static", "dynamic"])
 @pytest.mark.parametrize("degree", [1, 2])
 @pytest.mark.parametrize("newton_tau", ["frozen", "exact"])
 def test_newton_jacobian_matches_finite_differences(
-    tmp_path: Path, degree: int, newton_tau: str, dynamics: str, splitting: str
+    tmp_path: Path, degree: int, newton_tau: str, dynamics: str, splitting: str, space: str
 ) -> None:
+    """For OSS the unknown includes ξ_h, ζ_h and the residual their projection equations."""
     options = replace(SolverOptions(), newton_tau=newton_tau)
-    config = asgs_config(degree, options, dynamics, splitting)
+    config = asgs_config(degree, options, dynamics, splitting, space)
     problem = build_problem(config)
     stepper = TimeStepper(config, problem, tmp_path, LOGGER)
     stepper._initialise()
     stepper._set_level(1, step_coefficients("bdf1", "lower_order", 1))
     solution = stepper._solution
-    space = solution.function_space()
-    direction = fd.Function(space)
+    mixed = solution.function_space()
+    direction = fd.Function(mixed)
     rng = np.random.default_rng(56)
     for field in (*solution.subfunctions, *direction.subfunctions):
         field.dat.data[:] = rng.uniform(0.2, 1.0, field.dat.data.shape)
     base = solution.copy(deepcopy=True)
     frozen = base.subfunctions[0]
-    u, p = ufl.split(solution)
-    v, q = fd.TestFunctions(space)
+    u, p, *projections = ufl.split(solution)
+    v, q, *projection_tests = fd.TestFunctions(mixed)
     level = SolveLevel(
         stepper._alpha0,
         fd.Constant(config.time.dt),
@@ -92,11 +99,15 @@ def test_newton_jacobian_matches_finite_differences(
         u_sub_history = stepper._subscales.history
         u_sub_history.dat.data[:] = rng.uniform(-1.0, 1.0, u_sub_history.dat.data.shape)
         tau_m = dynamic_parameter(tau_m, level.alpha0, level.dt)
-    chi = Switches(True, dynamics == "dynamic", splitting == "nonlinear")
-    form = galerkin_residual(u, p, v, q, a, u, problem.viscosity, level, stepper._dx, None)
-    form += vms_terms(
-        u, p, v, q, a, problem.viscosity, level, tau_m, tau_c, stepper._dx, chi, u_sub_history
-    )
+    chi = Switches(space == "asgs", dynamics == "dynamic", splitting == "nonlinear")
+    nu, dx = problem.viscosity, stepper._dx
+    form = galerkin_residual(u, p, v, q, a, u, nu, level, dx, None)
+    form += vms_terms(u, p, v, q, a, nu, level, tau_m, tau_c, dx, chi, u_sub_history, *projections)
+    if space == "oss":
+        xi, zeta = projections
+        w, r = projection_tests
+        residual = subscale_residual(u, p, a, nu, level, chi, u_sub_history)
+        form += projection_equations(xi, zeta, w, r, residual, ufl.div(u), tau_m, tau_c, dx)
     jacobian = stepper._step_solver._inner._newton._problem.J
     action = fd.assemble(ufl.action(jacobian, direction))
     epsilon = 1e-6

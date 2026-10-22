@@ -17,7 +17,7 @@ In scope:
 - Galerkin baseline (Taylor–Hood, no stabilization).
 - The eight VMS cases of the spec: ASGS or OSS × static or dynamic subscales × linear or nonlinear scale splitting.
 - Time schemes BDF1, BDF2, BDF3 and Crank–Nicolson, for both scales.
-- Inner linearization by Newton or Picard; outer fixed point for subscales and projections.
+- Inner linearization by Newton or Picard, with the OSS projections ξ_h, ζ_h as unknowns of the inner solve; outer fixed point for the nonlinear-splitting subscale ũ*.
 - Meshes from Firedrake's built-in constructors or from gmsh `.msh` files, with boundaries referred to by name.
 - 2D and 3D. Nothing in the core may be 2D-specific.
 - Logs of every nonlinear iteration and residual, per-step records, diagnostics and field output.
@@ -66,10 +66,11 @@ navier-stokes-vms/
 │   │   ├── convective_forms.py
 │   │   ├── stabilization_parameters.py
 │   │   ├── galerkin.py
+│   │   ├── oss_projections.py
 │   │   └── vms.py
 │   ├── solver/
 │   │   ├── subscale_storage.py
-│   │   ├── oss_projections.py
+│   │   ├── reusable_assembly.py
 │   │   ├── nonlinear_solver.py
 │   │   └── time_stepper.py
 │   ├── postprocessing/
@@ -108,7 +109,7 @@ navier-stokes-vms/
 | `problem/mesh_loading.py` | Built-in meshes and `.msh` loading; boundary name → tag tables | Know about equations |
 | `problem/boundary_conditions.py` | `Dirichlet(value)`, `Outflow()` descriptions; conversion to Firedrake `DirichletBC` and `ds` measures by name | Know about time schemes |
 | `problem/problem_definition.py` | `Problem` dataclass (section 8); pressure null-space decision | Build forms |
-| `discretization/function_spaces.py` | Mixed space, unconstrained projection spaces, subscale quadrature spaces | Choose degrees (config does) |
+| `discretization/function_spaces.py` | Mixed space, the OSS space V × Q × V̂ (× Q̂) whose projection components stay unconstrained, subscale quadrature spaces | Choose degrees (config does) |
 | `discretization/quadrature.py` | The single quadrature rule: `dx`, `ds`, the matching quadrature element, positivity check | Anything else |
 | `discretization/time_schemes.py` | α₀, history weights, solve level, CN extrapolation, startup sequence, data level | Import Firedrake |
 | `formulation/operators.py` | L_a, L*_a, R_u, R̂_u, R_p, elementwise Laplacian | Store state |
@@ -116,8 +117,9 @@ navier-stokes-vms/
 | `formulation/stabilization_parameters.py` | τ_m, τ_c, τ_t | Anything else |
 | `formulation/galerkin.py` | Galerkin residual form, parameterized by the advection velocity `a` | Know about solvers |
 | `formulation/vms.py` | Subscale expression and VMS terms from the three switches | Know about solvers |
+| `formulation/oss_projections.py` | The τ-weighted projection equations for ξ_h, ζ_h | Know about solvers |
 | `solver/subscale_storage.py` | ũ* and histories at quadrature points; local subscale update; CN extrapolation of ũ | Assemble global systems |
-| `solver/oss_projections.py` | Weighted projections ξ_h, ζ_h | Know about time schemes beyond τ_t |
+| `solver/reusable_assembly.py` | Assemblers preprocessed once for forms evaluated many times | Know about equations |
 | `solver/nonlinear_solver.py` | Inner Newton or Picard solve, outer fixed point, convergence tests, iteration records | Know about specific VMS cases |
 | `solver/time_stepper.py` | One time step as spec steps 1–6, the time loop, data and boundary updates at the solve level | Contain formulas |
 | `postprocessing/diagnostics.py` | Registry of named functionals evaluated per step | Write files |
@@ -279,14 +281,15 @@ Unit tests run in seconds and run in every phase. Verification tests are marked 
 | U2 | `unit/test_quadrature.py` | On the reference triangle and tetrahedron, for q = 3, 6: all weights positive, all monomials of degree ≤ q integrated exactly; a non-polynomial function interpolated into the subscale quadrature space and integrated with `dx` equals the direct `dx` integral to round-off (same points, same weights). The same holds for the production vector factory `subscale_space(mesh, q)` with q = 3k, k = 1, 2, in 2D and 3D, sampling a non-polynomial vector expression and integrated with the production `dx` |
 | U3 | `unit/test_convective_form.py` | c(a; v, v) = 0 to 1e-12 for random FE fields on a periodic mesh (2D and 3D, P1 and P2); with an outflow boundary, c(u, u, u) equals ½∫_{Γ_N}(u·n)\|u\|² |
 | U4 | `unit/test_asgs_equals_supg.py` | Static linear ASGS residual assembled from `galerkin.py` + `vms.py` equals an independently written classical form, Galerkin + Σ_K τ_m(D_t u + a·∇u − νΔ_h u + ∇p − f, a·∇v + νΔ_h v + ∇q)_K + Σ_K τ_c(∇·u, ∇·v)_K, to relative 1e-12, for random fields, P1/P1 and P2/P2. The reference is written in the test from this formula, never by calling `vms.py`. This checks the adjoint-sign erratum. Dynamic ASGS: the time stepper's own residual at a BDF2 step and at a Crank–Nicolson step (P1/P1 and P2/P2, linear and nonlinear splitting, random velocity and subscale levels) equals a classical reference whose u_hist, ũ_hist, τ_t and (D_t ũ, v) use coefficients written as literals in the test (BDF2: 3/2; 2, −1/2. Crank–Nicolson: 2; 2gⁿ, with averaged data), never taken from `time_schemes.py` |
-| U5 | `unit/test_dissipation_sign.py` | Freeze a random advection field a and assemble E(u,p; v,q) = ν(∇u,∇v) + Σ_K (−τ_m L_a(u,p), L*_a(v,q))_K + Σ_K (τ_c ∇·u, ∇·v)_K, with f = 0 and no time terms. Restrict to unconstrained dofs after homogeneous velocity Dirichlet conditions; the symmetric part must have λ_min ≥ −1e-12 λ_max. Check P1/P1 and P2/P2 on 4×4 squares with diagonals `left` and `crossed` and a 2×2×2 box, at viscosities in the viscous and convective regimes. Retain the P2 cell-diameter counterexample as a regression that must detect negative energy. Static ASGS from phase 5, static OSS added in phase 8 |
-| U6 | `unit/test_oss_projections.py` | Π_τ(w_h) = w_h for random FE w_h and variable τ > 0, including nonzero boundary values; after computing ξ_h with variable τ_t, the assembled vector (ũ, w_h) for all basis functions has relative norm ≤ 1e-10 |
+| U5 | `unit/test_dissipation_sign.py` | Freeze a random advection field a and assemble E(u,p; v,q) = ν(∇u,∇v) + Σ_K (−τ_m L_a(u,p), L*_a(v,q))_K + Σ_K (τ_c ∇·u, ∇·v)_K, with f = 0 and no time terms. Restrict to unconstrained dofs after homogeneous velocity Dirichlet conditions; the symmetric part must have λ_min ≥ −1e-12 λ_max. Check P1/P1 and P2/P2 on 4×4 squares with diagonals `left` and `crossed` and a 2×2×2 box, at viscosities in the viscous and convective regimes. Retain the P2 cell-diameter counterexample as a regression that must detect negative energy. Static ASGS from phase 5, static OSS added in phase 8, with ξ_h and ζ_h eliminated by the Schur complement of the coupled bilinear form |
+| U6 | `unit/test_oss_projections.py` | Π_τ(w_h) = w_h for random FE w_h and variable τ > 0, including nonzero boundary values; after the coupled solve, the assembled vector (ũ, w_h) for all basis functions w_h of V̂_h has norm ≤ 1e-10 times that of (τ_t X, w_h), for the subscale expression and the stored ũ, static and dynamic subscales, linear and nonlinear splitting, P1/P1 and P2/P2, at a BDF2 step with non-zero ũ_hist |
 | U7 | `unit/test_meshes_and_boundaries.py` | Built-in rectangle and box: each name maps to the boundary its coordinate says (checked by integrating x over `ds(tag)`); a small `.msh` in `tests/data/` with physical names loads with the right name table; a `DirichletBC` by name changes only that boundary's values |
 | U8 | `unit/test_subscale_time_integration.py` | The time stepper's dynamic subscale path (step coefficients, histories, τ_t, storage, Crank–Nicolson extrapolation) with prescribed FE fields u_h = U and p_h, so that τ is constant and R = g(t)F(x): ũ at T against the exact y(T)F of ∂t ũ + ũ/τ = gF, ũ(0) = 0, for N = 10, 20, 40, 80, rates within 0.2 of: BDF1 1, BDF2 2, BDF3 with `lower_order` 2, Crank–Nicolson 2. BDF3 with `exact_history` is first order for generic data, because the stored subscale is zero at negative times (spec: Initial subscale) while the smooth extension of the solution is not, an O(δt) defect in the first step's history; it is third order when y vanishes to third order at t = 0 |
-| V1 | `verification/test_spatial_convergence.py` | Case `manufactured_spatial`: exact solution linear in time, so every time scheme is exact and only the spatial error remains. Unit square, ν = 0.01, meshes 8, 16, 32, two BDF1 steps from the exact initial state. Expected rates (‖u‖_L2, ‖∇u‖_L2, ‖p‖_L2): Taylor–Hood P2/P1 (3, 2, 2); VMS P1/P1 (2, 1, 1); VMS P2/P2 (3, 2, 2). Variants: Galerkin and all static VMS cases. Exception: Sta-Nl-ASGS P1/P1 uses meshes 16, 32, 64, with rates on 32 → 64, because static nonlinear subscales can be ill-posed on coarse meshes and its local update does not converge on mesh 8 (spec: The eight cases, the paragraph after the table) |
+| U9 | `unit/test_reusable_assembly.py` | `reusable_assembler` and the classes built on it give results identical to `fd.assemble` and `Function.interpolate`, for Dyn-Nl-ASGS and Dyn-Nl-OSS P2/P2: the time stepper's coupled residual, every outer L² change (ξ_h, ζ_h included), the local subscale update and the stored subscale, with all inputs redrawn between checks. It guards the Firedrake internals the helper uses |
+| V1 | `verification/test_spatial_convergence.py` | Case `manufactured_spatial`: exact solution linear in time, so every time scheme is exact and only the spatial error remains. Unit square, ν = 0.01, meshes 8, 16, 32, two BDF1 steps from the exact initial state. Expected rates (‖u‖_L2, ‖∇u‖_L2, ‖p‖_L2): Taylor–Hood P2/P1 (3, 2, 2); VMS P1/P1 (2, 1, 1); VMS P2/P2 (3, 2, 2). Variants: Galerkin and all static VMS cases. Exception: Sta-Nl-ASGS and Sta-Nl-OSS P1/P1 use meshes 16, 32, 64, with rates on 32 → 64, because static nonlinear subscales can be ill-posed on coarse meshes and their local update does not converge on mesh 8 (spec: The eight cases, the paragraph after the table) |
 | V2 | `verification/test_temporal_convergence.py` | Case `manufactured_temporal`: u = g(t)(y, −x), p = 0, which lies in every velocity space used, so only the temporal error remains. The field must have nonzero vorticity; a gradient field's time error is absorbed by the pressure and leaves the velocity exact. 4×4 mesh, T = 1, N = 20, 40, 80, 160, error ‖u − u_ex‖_L2 at T, and the pressure error against the exact pressure at the time it is computed (t^(n+1) for BDF, t^(n+½) for Crank–Nicolson), with zero-mean normalization; both must show the expected orders. Expected orders: BDF1 1, BDF2 2, BDF3 3 (`exact_history`), CN 2. Variants: Galerkin and all dynamic VMS cases. BDF3 with `lower_order` startup is logged and must show at least 1.8 |
 | V3 | `verification/test_steady_equivalence.py` | Case `kovasznay` (Re = 40) marched with BDF1 to steady state: the relative change between the last two time levels of the velocity, and of the stored subscale for dynamic cases, is below 1e-10. That every step's outer iteration converged is checked separately. Static and dynamic subscales reach the same velocity (relative difference ≤ 1e-8) for each implemented space and splitting; Newton and Picard reach the same velocity (≤ 1e-8); the error against the exact solution drops from mesh 16 to 32 |
-| V4 | `verification/test_taylor_green.py` | Case `taylor_green_2d` on a periodic (0, 2π)² mesh, ν = 0.01, BDF2 to T = 1. The velocity error drops by at least a factor 3 from mesh 16 to 32 for P1/P1; the kinetic energy at T is within 1 % of the exact value on mesh 32. Variants: Galerkin and Dyn-Nl-OSS |
+| V4 | `verification/test_taylor_green.py` | Case `taylor_green_2d` on a periodic (0, 2π)² mesh, ν = 0.01, BDF2 with δt = 0.025 to T = 1. Galerkin P2/P1: the velocity error drops by at least a factor 3 from mesh 16 to 32, and the kinetic energy at T is within 1 % of the exact value on mesh 32. Dyn-Nl-OSS P1/P1: the velocity error drops by at least a factor 3 from mesh 16 to 32; the kinetic energy at T is within 1 % of the exact value on mesh 64, and its relative error drops by at least a factor 3 from mesh 32 to 64. P1/P1 is not accurate enough for the 1 % bound on mesh 32: every P1/P1 VMS case is 1.7–2.2 % low there (phase 8), with an error that decreases at second order |
 
 V1 covers the static cases only on purpose. Dynamic subscales start at zero and relax on the time scale τ, so a short run would not exercise them; their spatial accuracy follows from V3 (dynamic and static reach the same steady state), and V2 checks their time integration.
 
@@ -296,6 +299,7 @@ Check each of these against the installed Firedrake version; the API changes bet
 
 - Quadrature consistency: build the subscale space from a `Quadrature` element of degree q with the same scheme that `dx` uses, and pass the degree explicitly to every measure (`dx(degree=q)` or metadata). τ is not polynomial, so automatic degree estimation must never be used. Test U2 guards this.
 - Pointwise subscale updates are interpolations of UFL expressions into the quadrature space. The accelerated update solves (I + τ_t∇u)ũ = rhs pointwise; `ufl.inv` of a d×d matrix is acceptable.
+- `fd.assemble` and `Function.interpolate` preprocess the UFL form on every call, which dominated small runs with many outer iterations. Forms evaluated repeatedly (the residual norm, the outer changes, the local update and the stored subscale) use `reusable_assembler`, the same preprocessing done once (phase 8; results unchanged to the last digit).
 - ‖a‖ = `sqrt(dot(a, a))`. With `newton_tau = "exact"` the derivative is infinite at a = 0; if a NaN appears, raise an error that names this option.
 - Time: one `Constant` for the time at the solve level, plus one each for t^n and t^(n+1) where CN averaging needs them. Dirichlet values and forcing are UFL expressions in these constants, updated before each solve.
 - Pressure null space: `MixedVectorSpaceBasis` with a constant `VectorSpaceBasis` on the pressure. With MUMPS a null-pivot option may also be needed; V3 and V4 confirm the treatment. The solver fixes a zero coefficient mean, not the zero spatial mean of the spec, so after each step's solve the time stepper subtracts ∫p dx/|Ω| (phase 7b, R4).
@@ -379,8 +383,9 @@ Open questions: <none, or list>
 
 ### Phase 8: Orthogonal subscales
 
-- Spec: OSS projections, Master formulation (χ_A = 0), The eight cases (OSS rows), Time-step algorithm step 4.
-- Files: `solver/oss_projections.py`, extensions to `function_spaces.py` (unconstrained spaces), `vms.py` (reduced residual, ξ, ζ) and `nonlinear_solver.py` (projection changes in the outer loop); tests U5 (OSS), U6.
+- Spec: OSS projections, Master formulation (χ_A = 0), The eight cases (OSS rows), Time-step algorithm steps 2 and 4, Inner linearization.
+- ξ_h and ζ_h (ζ_h only when τ_c is active) are unknowns of the inner solve, with their projection equations; the pressure null space acts on p_h only and no Dirichlet condition applies to ξ_h, ζ_h. Linear OSS cases have no outer loop; nonlinear OSS cases iterate on ũ* only, and the ξ_h, ζ_h changes enter their convergence test.
+- Files: `formulation/oss_projections.py` (projection equations), extensions to `function_spaces.py` (the OSS space), `vms.py` (reduced residual, ξ, ζ), `time_stepper.py` (the coupled forms) and `nonlinear_solver.py` (ξ_h, ζ_h changes in the outer records); tests U5 (OSS), U6.
 - Acceptance: U5, U6; V1 for Sta-Lin-OSS and Sta-Nl-OSS; V2 for Dyn-Lin-OSS and Dyn-Nl-OSS; V3 for all OSS pairs; V4 for Dyn-Nl-OSS. All eight cases are now accepted by validation.
 
 ### Phase 9: Diagnostics and 3D check

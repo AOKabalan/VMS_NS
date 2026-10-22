@@ -191,7 +191,9 @@ def test_inner_solve_failure_exits_nonzero_and_writes_the_last_state(
 
 
 @pytest.mark.parametrize(
-    "solver", ['linearization = "picard"', "picard_iterations_before_newton = 2"]
+    "solver",
+    ['linearization = "picard"', "picard_iterations_before_newton = 2"],
+    ids=["picard", "newton_after_picard_warm_up"],
 )
 def test_a_failed_picard_linear_solve_fails_the_step_at_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, solver: str
@@ -337,23 +339,29 @@ def test_newton_logs_updates_and_linear_iterations() -> None:
     assert norms[-1] < 1e-10 * norms[0]
 
 
-def nonlinear_asgs_text(dynamics: str, solver: str = "") -> str:
+def nonlinear_asgs_text(
+    dynamics: str, solver: str = "", space: str = "asgs", splitting: str = "nonlinear"
+) -> str:
     return (
         'case = "kovasznay"\n\n[mesh]\ncells = [12, 16]\n\n[discretization]\n'
         'velocity_degree = 1\npressure_degree = 1\n\n[time]\nscheme = "bdf2"\ndt = 0.5\n'
-        't_end = 1.0\n\n[stabilization]\nmethod = "vms"\nsubscale_space = "asgs"\n'
-        f'subscale_dynamics = "{dynamics}"\nscale_splitting = "nonlinear"\n\n'
+        f't_end = 1.0\n\n[stabilization]\nmethod = "vms"\nsubscale_space = "{space}"\n'
+        f'subscale_dynamics = "{dynamics}"\nscale_splitting = "{splitting}"\n\n'
         f'[solver]\n{solver}\n\n[output]\nvtk_every = 0\ndiagnostics = ["velocity_error_l2"]\n'
     )
 
 
+@pytest.mark.parametrize("space", ["asgs", "oss"])
 @pytest.mark.parametrize("dynamics", ["static", "dynamic"])
-def test_nonlinear_asgs_records_every_outer_iteration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dynamics: str
+def test_nonlinear_vms_records_every_outer_iteration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dynamics: str, space: str
 ) -> None:
-    status, folder = run(tmp_path, monkeypatch, nonlinear_asgs_text(dynamics))
+    status, folder = run(tmp_path, monkeypatch, nonlinear_asgs_text(dynamics, space=space))
     assert status == 0
     outer, inner = rows(folder / "outer_iterations.csv"), rows(folder / "inner_iterations.csv")
+    checked = ["velocity_change", "pressure_change", "subscale_change"]
+    if space == "oss":
+        checked += ["xi_change", "zeta_change"]
     for step_row in rows(folder / "time_steps.csv"):
         step = step_row["step"]
         iterations = [row for row in outer if row["step"] == step]
@@ -363,8 +371,9 @@ def test_nonlinear_asgs_records_every_outer_iteration(
             "True"
         ]
         assert all(row["subscale_change"] != "" for row in iterations)
+        assert all((row["xi_change"] != "") == (space == "oss") for row in iterations)
         last = iterations[-1]
-        for name in ("velocity_change", "pressure_change", "subscale_change"):
+        for name in checked:
             assert float(last[name]) <= 1e-8
         steps_inner = [row for row in inner if row["step"] == step]
         assert {row["outer_iteration"] for row in steps_inner} == {
@@ -382,6 +391,20 @@ COARSE_MESH_HINT = (
 LOCAL_FAILURE = "local subscale update did not converge in 1 sweeps"
 
 
+@pytest.mark.parametrize("dynamics", ["static", "dynamic"])
+def test_linear_oss_solves_each_step_in_one_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dynamics: str
+) -> None:
+    text = nonlinear_asgs_text(dynamics, space="oss", splitting="linear")
+    status, folder = run(tmp_path, monkeypatch, text)
+    assert status == 0
+    outer = rows(folder / "outer_iterations.csv")
+    assert [row["outer_iteration"] for row in outer] == ["1", "1"]
+    assert all(row["converged"] == "True" for row in outer)
+    assert all(row["subscale_change"] == "" for row in outer)
+    assert all(float(row["xi_change"]) > 0 and float(row["zeta_change"]) > 0 for row in outer)
+
+
 @pytest.mark.parametrize(
     ("dynamics", "setting", "reason"),
     [
@@ -389,6 +412,7 @@ LOCAL_FAILURE = "local subscale update did not converge in 1 sweeps"
         ("static", "subscale_max_iterations = 1", f"{LOCAL_FAILURE}; {COARSE_MESH_HINT}"),
         ("dynamic", "subscale_max_iterations = 1", f"{LOCAL_FAILURE}. Iteration history"),
     ],
+    ids=["outer_limit", "static_local_limit", "dynamic_local_limit"],
 )
 def test_nonlinear_asgs_failures_write_the_last_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dynamics: str, setting: str, reason: str

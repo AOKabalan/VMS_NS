@@ -82,13 +82,6 @@ SHORT_RUN = (
     + "\n[mesh]\ncells = [2, 2]\n\n[time]\ndt = 0.1\nt_end = 0.1\n\n[output]\nvtk_every = 0\n"
 )
 
-VMS_CASES = [
-    ("oss", "static", "linear", "Sta-Lin-OSS", 8),
-    ("oss", "dynamic", "linear", "Dyn-Lin-OSS", 8),
-    ("oss", "static", "nonlinear", "Sta-Nl-OSS", 8),
-    ("oss", "dynamic", "nonlinear", "Dyn-Nl-OSS", 8),
-]
-
 STATIC_ASGS = """case = "kovasznay"
 [stabilization]
 method = "vms"
@@ -206,19 +199,6 @@ def test_rule4_picard_warmup_needs_newton(tmp_path: Path) -> None:
         load_text(tmp_path, text)
 
 
-@pytest.mark.parametrize(("space", "dynamics", "splitting", "name", "phase"), VMS_CASES)
-def test_rule5_unimplemented_vms_case_names_its_phase(
-    tmp_path: Path, space: str, dynamics: str, splitting: str, name: str, phase: int
-) -> None:
-    text = (
-        'case = "kovasznay"\n[stabilization]\nmethod = "vms"\n'
-        f'subscale_space = "{space}"\nsubscale_dynamics = "{dynamics}"\n'
-        f'scale_splitting = "{splitting}"\n'
-    )
-    with pytest.raises(ValueError, match=f"{name} is not implemented yet; phase {phase} adds it"):
-        load_text(tmp_path, text)
-
-
 def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
     config = load_text(tmp_path, GALERKIN)
     with pytest.raises(ValueError, match="output.diagnostics: unknown divergence_l2"):
@@ -228,24 +208,28 @@ def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("degree", [1, 2])
 @pytest.mark.parametrize("pressure_subscale", ["true", "false"])
+@pytest.mark.parametrize("space", ["asgs", "oss"])
 @pytest.mark.parametrize(("dynamics", "name"), [("static", "Sta"), ("dynamic", "Dyn")])
 @pytest.mark.parametrize(("splitting", "label"), [("linear", "Lin"), ("nonlinear", "Nl")])
-def test_rule5_accepts_every_asgs_case(
+def test_rule5_accepts_all_eight_cases(
     tmp_path: Path,
     degree: int,
     pressure_subscale: str,
+    space: str,
     dynamics: str,
     name: str,
     splitting: str,
     label: str,
 ) -> None:
     text = (
-        STATIC_ASGS.replace('"static"', f'"{dynamics}"').replace('"linear"', f'"{splitting}"')
+        STATIC_ASGS.replace('"asgs"', f'"{space}"')
+        .replace('"static"', f'"{dynamics}"')
+        .replace('"linear"', f'"{splitting}"')
         + f"pressure_subscale = {pressure_subscale}\n[discretization]\n"
         f"velocity_degree = {degree}\npressure_degree = {degree}\n"
     )
     config = load_text(tmp_path, text)
-    assert method_name(config.stabilization) == f"{name}-{label}-ASGS"
+    assert method_name(config.stabilization) == f"{name}-{label}-{space.upper()}"
     assert config.discretization.velocity_degree == degree
 
 
@@ -345,14 +329,13 @@ def test_run_script_refuses_an_existing_results_folder(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ('case = "kovasznay"\n', "Dyn-Nl-OSS is not implemented yet; phase 8 adds it"),
         (
             SHORT_RUN.replace("vtk_every = 0", "vtk_every = 0\ndiagnostics = ['vorticity']"),
             "output.diagnostics: unknown vorticity; available: divergence_l2",
         ),
         (SHORT_RUN.replace("manufactured_spatial", "cavity"), "case = 'cavity': unknown"),
     ],
-    ids=["rule-5", "rule-6", "unknown-case"],
+    ids=["rule-6", "unknown-case"],
 )
 def test_run_script_rejects_an_invalid_setup_before_writing(
     tmp_path: Path, text: str, message: str

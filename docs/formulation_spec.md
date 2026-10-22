@@ -23,7 +23,7 @@ Every modelling decision is fixed once; "Ours" marks a choice that goes beyond w
 | τ evaluation | Pointwise \|a\| at quadrature points, h = shortest edge of the cell, no 1/δt inside τ\_m | Pointwise: ours (VMS chapter eq. 60 and Codina 2008 use the element maximum speed). h: Colomés §7.1.2 (minimum element length); the cell diameter violates the stability condition for k ≥ 2 in Operators and parameters. No δt: Colomés §9 |
 | Time scheme | BDF1, BDF2, BDF3 or Crank–Nicolson on a uniform δt, the same scheme for u\_h and ũ; BDF2 and BDF3 start with lower orders, or from exact histories when the case has an exact solution; Crank–Nicolson always starts with one BDF1 step | Same-scheme principle: Codina et al. 2007 §3.1. Crank–Nicolson: 2007 eqs. 22–23 with θ = ½. BDF2 and BDF3 for both scales and the startup: ours |
 | Quadrature | One rule of degree q = 3k, k the velocity degree, with all weights positive, for every volume integral, projection and stored subscale | Ours; makes orthogonality exact in the inner product actually computed |
-| OSS projection | τ-weighted (τ\_t when dynamic), onto unconstrained spaces, consistent mass | Weights: Colomés eqs. 33, 53. Unconstrained spaces: Codina 2008 eq. 18 and Remark 1 |
+| OSS projection | τ-weighted (τ\_t when dynamic), onto unconstrained spaces, consistent mass; ξ\_h and ζ\_h are unknowns of the inner solve, not lagged | Weights: Colomés eqs. 33, 53. Unconstrained spaces: Codina 2008 eq. 18 and Remark 1. Coupled solve: Codina 2008 §2.3, Colomés §5.2.2; lagging rejected, see OSS projections |
 | Force | Kept in the residual and the projection; requires f in L² | Colomés eq. 17 and §2.2.3 |
 | Initial subscale | ũ⁰ = 0 | Ours; admissible per Castillo & Codina 2019 §3.1 |
 
@@ -169,7 +169,7 @@ Each case is the master formulation with the switch values in its row; R̂\_u = 
 | Sta-Nl-OSS | u\_h + ũ | τ\_m(a) (R̂\_u(a) − ξ\_h) | No | Weight τ\_m, τ\_c | Current iterate of ũ |
 | Dyn-Nl-OSS | u\_h + ũ | τ\_t(a) (R̂\_u(a) + ũ\_hist/δt − ξ\_h) | No | Weight τ\_t, τ\_c | Current iterate and the subscale history |
 
-Only the two linear-splitting ASGS cases are fully explicit in u\_h and p\_h, so the inner solve alone completes the time step. Every OSS case also needs the outer loop because ξ\_h and ζ\_h are lagged, and every nonlinear-splitting case because ũ sits inside a, τ\_m and τ\_c. Colomés et al. report the linear ASGS cases diverging on coarse turbulent meshes and dynamic OSS as robust and cheapest, with no significant cost difference between its linear and nonlinear forms (§5.2.2). Dyn-Nl-OSS is the target because it is the most complete model, not because the evidence ranks it above Dyn-Lin-OSS.
+The four linear-splitting cases complete a time step with the inner solve alone: their subscale is an explicit expression in u\_h and p\_h, and for OSS the projections ξ\_h, ζ\_h are unknowns of the same solve. The four nonlinear-splitting cases need the outer loop, because ũ sits inside a, τ\_m and τ\_c. Colomés et al. report the linear ASGS cases diverging on coarse turbulent meshes and dynamic OSS as robust and cheapest, with no significant cost difference between its linear and nonlinear forms (§5.2.2). Dyn-Nl-OSS is the target because it is the most complete model, not because the evidence ranks it above Dyn-Lin-OSS.
 
 Static nonlinear subscales can be ill-posed on coarse meshes. With a = u\_h + ũ the pointwise problem is (I + τ ∇u\_h) ũ = τ R, with τ depending on |u\_h + ũ|. Where the flow is nearly at rest, τ\_m approaches its viscous limit h²/(c1·k⁴·ν); when τ\_m times an eigenvalue of −∇u\_h approaches 1, the matrix is nearly singular, the problem may have no well-behaved solution, and no local iteration converges. Dynamic subscales avoid this while δt|∇u\_h| is moderate, because τ\_t ≤ δt/α0, and finer meshes or higher degrees shrink τ\_m. This matches the sources: Colomés et al. leave static nonlinear cases out of their comparison (Table 1) and report static nonlinear ASGS diverging in their small-time-step study (Table 4). A failed local update is therefore reported as a property of the case and mesh, not repaired by relaxation or a different local solver.
 
@@ -209,8 +209,8 @@ Implementation rules:
 
 - Project onto V̂\_h and Q̂\_h, the spaces without Dirichlet or zero-mean constraints. Projecting onto the constrained spaces creates spurious numerical boundary layers (Codina 2008, Remark 1). The unconstrained space also reproduces time-dependent Dirichlet values in D\_t u\_h.
 - Use the consistent mass matrix and the common quadrature rule. Lumping, or a different rule for the projection, breaks exact orthogonality.
-- ξ\_h, ζ\_h are lagged by one outer iteration, as in Colomés §4.2. This changes the iterates but not the converged solution. Alternatively, solve them monolithically as extra unknowns (Codina 2008 §2.3).
-- This ξ\_h is not the same field as Colomés' ξ\_m, which projects the full residual: ξ\_m = ξ\_h − D\_t u\_h. The converged solutions agree; lagged iterates differ before convergence, so iteration counts are not directly comparable with the paper.
+- ξ\_h and ζ\_h are unknowns of the inner solve, together with u\_h and p\_h (Codina 2008 §2.3; Colomés §5.2.2). The pressure null space applies only to p\_h; the projections stay unconstrained, and ζ\_h with its equation is absent when τ\_c is off. Lagging them by one outer iteration, as in Colomés §4.2, has the same fixed point but was measured to fail here: with a frozen Kovasznay advector, the error contraction per outer iteration was 0.85–0.97 for P1/P1, and for static P2/P2 reached 1.19 in magnitude (divergent); half relaxation and lagging the full residual did not fix it (implementation probe and independent review, 22 October 2026). Shrinking δt does not help, because the pressure has no time-derivative term.
+- This ξ\_h is not the same field as Colomés' ξ\_m, which projects the full residual: ξ\_m = ξ\_h − D\_t u\_h. The converged solutions agree; iteration counts are not comparable with the paper's lagged algorithm.
 - R̂\_u keeps f and the elementwise viscous term νΔ\_h u\_h. Both cancel or vanish in common cases (f in the FE space; P1 elements), and dropping νΔ\_h does not reduce the convergence order, but keeping them is what makes the formulation exactly residual based.
 - ζ\_h only matters when τ\_c is active. With τ\_c = 0 (turbulence settings) the pressure subscale, its projection and the grad-div term disappear.
 
@@ -218,7 +218,7 @@ Implementation rules:
 
 Both solve the same discrete equation F(u\_h, p\_h) = 0 at fixed outer data, so when both converge to the same solution the time step is identical; they differ only in how the advection velocity and τ are treated during the inner iterations.
 
-F is the left side minus the right side of the master FE equation, with ũ substituted. Frozen during the inner solve: u\_hist, ũ\_hist, the stored ũ\* inside a (nonlinear splitting), and ξ\_h, ζ\_h (OSS). The unknowns (u\_h, p\_h) enter nonlinearly in two ways: through a = u\_h (+ ũ\*) in c, L\_a and L\*\_a, and through τ\_m, τ\_c and τ\_t, which depend on |a|.
+F is the left side minus the right side of the master FE equation, with ũ substituted. Frozen during the inner solve: u\_hist, ũ\_hist, and the stored ũ\* inside a (nonlinear splitting). For OSS, ξ\_h and ζ\_h are unknowns of F together with (u\_h, p\_h), through their projection equations. The unknowns (u\_h, p\_h) enter nonlinearly in two ways: through a = u\_h (+ ũ\*) in c, L\_a and L\*\_a, and through τ\_m, τ\_c and τ\_t, which depend on |a|.
 
 Newton: iteration j solves J δ = −F(u\_h^(j−1), p\_h^(j−1)) and updates (u\_h, p\_h) += δ, where J is the exact Gateaux derivative of F with respect to (u\_h, p\_h), including every occurrence of a and of τ. Under the usual assumptions (smooth F, nonsingular Jacobian) convergence is quadratic near the solution; it can fail from a poor initial guess at high Reynolds number, and the exact derivative of |a| is undefined at a = 0. A permitted variant freezes τ at the previous iterate, dropping its derivative. This is an inexact Newton method: it targets the same equations and avoids the non-smoothness of |a|, but does not guarantee quadratic convergence.
 
@@ -232,20 +232,20 @@ Picard: iteration j evaluates every advection velocity and every τ at â = u\_h
 \end{aligned}
 ```
 
-The factor χ\_A removes D\_t u\_h for OSS (reduced residual). In c, the outflow term uses û\_h = u\_h^(j−1). Convergence is typically linear and more robust from poor initial guesses; neither method is guaranteed to converge.
+The factor χ\_A removes D\_t u\_h for OSS (reduced residual). In c, the outflow term uses û\_h = u\_h^(j−1). For OSS the projection equations join the system with weights τ̂\_t and τ̂\_c, and are linear in (u\_h, p\_h, ξ\_h, ζ\_h). Convergence is typically linear and more robust from poor initial guesses; neither method is guaranteed to converge.
 
-Recommended use: a few Picard iterations, then Newton once the residual has dropped (thesis §3.2.2). Picard with one inner iteration per outer iteration has the same structure as the Colomés §4 algorithm (one linearized solve, then the local subscale update and the projection update), but not identical OSS iterates: their lagged projection is of the full residual, so with otherwise matched inputs the reduced minus the full subscale is τ\_t (α0/δt)(u\_h^i − u\_h^(i−1)) before convergence. The fixed points agree. The thesis found Picard converging poorly with EMAC; that belongs to the later convective-term study (Charnyi et al. 2019 analyse the EMAC linearizations), not to this baseline.
+Recommended use: a few Picard iterations, then Newton once the residual has dropped (thesis §3.2.2). Picard with one inner iteration per outer iteration has the same structure as the Colomés §4 algorithm (one linearized solve, then the local subscale update and the projection update), but for OSS the iterates differ, because Colomés lag the projections while this spec solves them with the FE unknowns. The fixed points agree. The thesis found Picard converging poorly with EMAC; that belongs to the later convective-term study (Charnyi et al. 2019 analyse the EMAC linearizations), not to this baseline.
 
 ## Time-step algorithm
 
-One time step is an inner solve for (u\_h, p\_h), Newton or Picard, inside an outer fixed point on the stored subscale and the projections; the two linear-splitting ASGS cases need only the inner solve.
+One time step is an inner solve for (u\_h, p\_h), Newton or Picard, inside an outer fixed point on the stored subscale; the four linear-splitting cases need only the inner solve.
 
 Given the velocity and subscale histories the scheme needs (back to level n−2 for BDF3), and ξ\_hⁿ, ζ\_hⁿ:
 
 1. Form u\_hist and ũ\_hist from the Time schemes table. Initialise (u\_h, p\_h) from the previous step, the stored subscale ũ\* ← ũⁿ, and ξ\_h, ζ\_h ← their previous values.
-2. Inner solve: Newton or Picard on the master FE equation with ũ substituted, as in the linearization section. Frozen: ũ\* inside a (nonlinear splitting), ξ\_h and ζ\_h (OSS), ũ\_hist. In Picard mode, a single inner iteration per outer iteration is allowed only in cases that run step 5; the two linear-splitting ASGS cases have no outer loop, so step 2 itself must iterate until the FE residual is below tolerance.
+2. Inner solve: Newton or Picard on the master FE equation with ũ substituted, as in the linearization section. Frozen: ũ\* inside a (nonlinear splitting) and ũ\_hist. For OSS, ξ\_h and ζ\_h are unknowns of this solve, with their projection equations. In Picard mode, a single inner iteration per outer iteration is allowed only in cases that run step 5; the two linear-splitting ASGS cases have no outer loop, so step 2 itself must iterate until the FE residual is below tolerance.
 3. Subscale update (nonlinear splitting only): at each quadrature point iterate ũ\* ← τ\_t(a) (R + χ\_D ũ\_hist/δt − ξ\_h) with a = u\_h + ũ\*, where R = R\_u for ASGS and R = R̂\_u for OSS, until the pointwise change is below tolerance. The accelerated form below is equivalent.
-4. Projections (OSS only): recompute ξ\_h and ζ\_h with the current u\_h, p\_h and a.
+4. Projections (OSS only): nothing to compute, since ξ\_h and ζ\_h come out of step 2; in nonlinear-splitting OSS cases their changes still enter the convergence test of step 5.
 5. Convergence: stop when the relative changes of u\_h, p\_h, ũ\*, ξ\_h and ζ\_h (when τ\_c is active) and the FE residual are all below tolerance; otherwise return to step 2.
 6. Store: for dynamic subscales, ũ^(n+1) is the subscale expression evaluated at the converged state; shift the histories of u\_h, ũ, ξ\_h and ζ\_h.
 
@@ -265,10 +265,10 @@ Which steps each case runs:
 | Dyn-Lin-ASGS | 2, 6 |
 | Sta-Nl-ASGS | 2, 3, 5 |
 | Dyn-Nl-ASGS | 2, 3, 5, 6 |
-| Sta-Lin-OSS | 2, 4, 5 |
-| Dyn-Lin-OSS | 2, 4, 5, 6 |
-| Sta-Nl-OSS | 2, 3, 4, 5 |
-| Dyn-Nl-OSS | 2, 3, 4, 5, 6 |
+| Sta-Lin-OSS | 2 |
+| Dyn-Lin-OSS | 2, 6 |
+| Sta-Nl-OSS | 2, 3, 5 |
+| Dyn-Nl-OSS | 2, 3, 5, 6 |
 
 Initial data: ũ⁰ = 0, which also satisfies the initial orthogonality OSS needs, and ξ\_h⁰, ζ\_h⁰ from projecting the initial residuals (or zero).
 

@@ -1,4 +1,4 @@
-"""Kovasznay marched to steady state with BDF1: Newton = Picard, mesh convergence (plan V3)."""
+"""Kovasznay marched to steady state with BDF1: equivalences and mesh convergence (plan V3)."""
 
 import csv
 import logging
@@ -108,21 +108,22 @@ def test_galerkin_steady_error_drops_from_mesh_16_to_32(tmp_path: Path) -> None:
         assert errors[1][name] < errors[0][name], name
 
 
-def asgs(
+def vms(
     cells: tuple[int, int],
     degree: int,
     dynamics: str,
     splitting: str,
     linearization: str,
     update: str = "accelerated",
+    space: str = "asgs",
 ) -> Config:
     base = galerkin(cells, linearization)
     config = replace(
         base,
-        run_name=f"asgs_p{degree}_{dynamics}_{splitting}_{linearization}_{update}_{cells[0]}",
+        run_name=(f"{space}_p{degree}_{dynamics}_{splitting}_{linearization}_{update}_{cells[0]}"),
         discretization=DiscretizationOptions(velocity_degree=degree, pressure_degree=degree),
         stabilization=StabilizationOptions(
-            subscale_space="asgs", subscale_dynamics=dynamics, scale_splitting=splitting
+            subscale_space=space, subscale_dynamics=dynamics, scale_splitting=splitting
         ),
         solver=replace(base.solver, subscale_update=update),
     )
@@ -137,11 +138,13 @@ def iteration_totals(folder: Path) -> tuple[int, int, int]:
     return sum(outer), max(outer), sum(int(row["inner_iterations_total"]) for row in steps)
 
 
+@pytest.mark.parametrize("space", ["asgs", "oss"])
 @pytest.mark.parametrize("splitting", ["linear", "nonlinear"])
 @pytest.mark.parametrize("degree", [1, 2])
-def test_asgs_steady_state_is_independent_of_dynamics_linearization_and_update(
-    tmp_path: Path, degree: int, splitting: str
+def test_vms_steady_state_is_independent_of_dynamics_linearization_and_update(
+    tmp_path: Path, degree: int, splitting: str, space: str
 ) -> None:
+    label = f"{splitting} {space.upper()} P{degree}/P{degree}"
     runs = [
         (dynamics, linearization, "accelerated")
         for dynamics in ("static", "dynamic")
@@ -150,12 +153,12 @@ def test_asgs_steady_state_is_independent_of_dynamics_linearization_and_update(
     if splitting == "nonlinear":
         runs.append(("static", "newton", "fixed_point"))
     errors: dict[str, list[dict[str, float]]] = {"static": [], "dynamic": []}
-    problem = build_problem(asgs(MESH_16, degree, "static", splitting, "newton"))
+    problem = build_problem(vms(MESH_16, degree, "static", splitting, "newton", space=space))
     dx = volume_measure(problem.mesh, 3 * degree)
     velocities = {}
     for run in runs:
         dynamics, linearization, update = run
-        config = asgs(MESH_16, degree, dynamics, splitting, linearization, update)
+        config = vms(MESH_16, degree, dynamics, splitting, linearization, update, space)
         folder = tmp_path / config.run_name
         velocities[run] = march(config, problem, folder).velocity
         LOGGER.info(
@@ -168,31 +171,18 @@ def test_asgs_steady_state_is_independent_of_dynamics_linearization_and_update(
     reference = velocities["static", "newton", "accelerated"]
     for run, velocity in velocities.items():
         difference = relative_change(velocity, reference, dx)
-        LOGGER.info(
-            "V3 %s ASGS P%d/P%d mesh 16: %s vs static newton accelerated %.3e",
-            splitting,
-            degree,
-            degree,
-            run,
-            difference,
-        )
+        LOGGER.info("V3 %s mesh 16: %s vs static newton accelerated %.3e", label, run, difference)
         assert difference <= 1e-8, run
     newton_picard = relative_change(
         velocities["dynamic", "picard", "accelerated"],
         velocities["dynamic", "newton", "accelerated"],
         dx,
     )
-    LOGGER.info(
-        "V3 dynamic %s ASGS P%d/P%d mesh 16: Newton/Picard %.3e",
-        splitting,
-        degree,
-        degree,
-        newton_picard,
-    )
+    LOGGER.info("V3 dynamic %s mesh 16: Newton/Picard %.3e", label, newton_picard)
     assert newton_picard <= 1e-8
-    problem = build_problem(asgs(MESH_32, degree, "static", splitting, "newton"))
+    problem = build_problem(vms(MESH_32, degree, "static", splitting, "newton", space=space))
     for dynamics in errors:
-        config = asgs(MESH_32, degree, dynamics, splitting, "newton")
+        config = vms(MESH_32, degree, dynamics, splitting, "newton", space=space)
         folder = tmp_path / config.run_name
         march(config, problem, folder)
         LOGGER.info(
@@ -202,8 +192,6 @@ def test_asgs_steady_state_is_independent_of_dynamics_linearization_and_update(
         )
         errors[dynamics].append(final_diagnostics(folder))
     for dynamics, pair in errors.items():
-        LOGGER.info(
-            "V3 %s %s ASGS P%d/P%d steady errors: %s", dynamics, splitting, degree, degree, pair
-        )
+        LOGGER.info("V3 %s %s steady errors: %s", dynamics, label, pair)
         for name in ("velocity_error_l2", "pressure_error_l2"):
             assert pair[1][name] < pair[0][name], (dynamics, name)

@@ -30,6 +30,29 @@ def switches(stabilization: StabilizationOptions) -> Switches:
     )
 
 
+def subscale_residual(
+    u: Expr,
+    p: Expr,
+    a: Expr,
+    nu: float,
+    level: SolveLevel,
+    chi: Switches,
+    u_sub_history: Expr | None,
+) -> Expr:
+    """X = R + χ_D ũ_hist/δt, with R = R_u for ASGS and R̂_u = f − L_a(u, p) for OSS (χ_A = 0)."""
+    if chi.is_dynamic != (u_sub_history is not None):
+        raise ValueError("ũ_hist must be given exactly for dynamic subscales (χ_D = 1)")
+    dt_u = (
+        time_derivative(u, level.history, level.alpha0, level.dt)
+        if chi.is_asgs
+        else ufl.zero(u.ufl_shape)
+    )
+    residual = momentum_residual(a, u, p, nu, dt_u, level.forcing)
+    if chi.is_dynamic:
+        residual = residual + u_sub_history / level.dt
+    return residual
+
+
 def velocity_subscale(
     u: Expr,
     p: Expr,
@@ -39,14 +62,14 @@ def velocity_subscale(
     tau_t: Expr,
     chi: Switches,
     u_sub_history: Expr | None,
+    xi: Expr | None = None,
 ) -> Expr:
-    """ũ = τ_t (R_u + χ_D ũ_hist/δt) for ASGS (spec: Master formulation)."""
-    if chi.is_dynamic != (u_sub_history is not None):
-        raise ValueError("ũ_hist must be given exactly for dynamic subscales (χ_D = 1)")
-    dt_u = time_derivative(u, level.history, level.alpha0, level.dt)
-    residual = momentum_residual(a, u, p, nu, dt_u, level.forcing)
-    if chi.is_dynamic:
-        residual = residual + u_sub_history / level.dt
+    """ũ = τ_t (X − ξ_h), with ξ_h = 0 for ASGS (spec: Master formulation)."""
+    if chi.is_asgs != (xi is None):
+        raise ValueError("ξ_h must be given exactly for orthogonal subscales (χ_A = 0)")
+    residual = subscale_residual(u, p, a, nu, level, chi, u_sub_history)
+    if xi is not None:
+        residual = residual - xi
     return tau_t * residual
 
 
@@ -58,9 +81,10 @@ def accelerated_subscale(
     tau_t: Expr,
     chi: Switches,
     u_sub_history: Expr | None,
+    xi: Expr | None = None,
 ) -> Expr:
-    """ũ solving (I + τ_t ∇u) ũ = τ_t (R_u with a = u, + χ_D ũ_hist/δt) pointwise (spec step 3)."""
-    right_side = velocity_subscale(u, p, u, nu, level, tau_t, chi, u_sub_history)
+    """ũ solving (I + τ_t ∇u) ũ = τ_t (X with a = u, − ξ_h) pointwise (spec step 3)."""
+    right_side = velocity_subscale(u, p, u, nu, level, tau_t, chi, u_sub_history, xi)
     identity = ufl.Identity(u.ufl_shape[0])
     return ufl.dot(ufl.inv(identity + tau_t * ufl.grad(u)), right_side)
 
@@ -78,11 +102,19 @@ def vms_terms(
     dx: Measure,
     chi: Switches,
     u_sub_history: Expr | None,
+    xi: Expr | None = None,
+    zeta: Expr | None = None,
 ) -> Form:
-    """χ_A χ_D (D_t ũ, v) + (ũ, L*_a(v, q)) + (τ_c ∇·u, ∇·v) with ũ substituted (spec: Master)."""
-    u_sub = velocity_subscale(u, p, a, nu, level, tau_t, chi, u_sub_history)
+    """χ_A χ_D (D_t ũ, v) + (ũ, L*_a(v, q)) + (τ_c (∇·u − ζ_h), ∇·v) with ũ substituted.
+
+    ζ_h is None for ASGS and for OSS without the pressure subscale, where τ_c = 0.
+    """
+    if chi.is_asgs and zeta is not None:
+        raise ValueError("ζ_h is only defined for orthogonal subscales (χ_A = 0)")
+    u_sub = velocity_subscale(u, p, a, nu, level, tau_t, chi, u_sub_history, xi)
+    divergence = ufl.div(u) if zeta is None else ufl.div(u) - zeta
     form = (
-        ufl.inner(u_sub, adjoint_operator(a, v, q, nu)) * dx + tau_c * ufl.div(u) * ufl.div(v) * dx
+        ufl.inner(u_sub, adjoint_operator(a, v, q, nu)) * dx + tau_c * divergence * ufl.div(v) * dx
     )
     if chi.is_asgs and chi.is_dynamic:
         dt_u_sub = time_derivative(u_sub, u_sub_history, level.alpha0, level.dt)

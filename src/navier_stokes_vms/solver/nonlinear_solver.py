@@ -13,6 +13,7 @@ from ufl.form import Form
 from ufl.measure import Measure
 
 from navier_stokes_vms.config import SolverOptions
+from navier_stokes_vms.solver.reusable_assembly import reusable_assembler
 from navier_stokes_vms.solver.subscale_storage import LocalUpdateResult, SubscaleIterate
 
 _REASON = PETSc.SNES.ConvergedReason
@@ -55,6 +56,9 @@ class InnerSolver:
     ) -> None:
         self._solution = solution
         self._newton_residual = newton_residual
+        # Preprocessing the form once keeps repeated residual norms cheap.
+        self._residual_assembler = reusable_assembler(newton_residual)
+        self._residual = fd.Cofunction(solution.function_space().dual())
         self._frozen_advector = frozen_advector
         self._bcs = list(bcs)
         self._options = options
@@ -109,7 +113,7 @@ class InnerSolver:
 
     def residual_norm(self) -> float:
         """ℓ² norm of the full nonlinear residual vector with the Dirichlet rows excluded."""
-        residual = fd.assemble(self._newton_residual)
+        residual = self._residual_assembler.assemble(tensor=self._residual)
         for bc in self._bcs:
             bc.zero(residual)
         with residual.dat.vec_ro as vector:
@@ -214,11 +218,25 @@ class InnerSolver:
         return len(self._rows) - 1
 
 
+class RelativeChange:
+    """‖new − old‖ / ‖new‖ in L² with the common rule; the absolute change when new is zero.
+
+    Both forms are preprocessed once, for fields compared again and again.
+    """
+
+    def __init__(self, new: Expr, old: Expr, dx: Measure) -> None:
+        self._change = reusable_assembler(ufl.inner(new - old, new - old) * dx)
+        self._size = reusable_assembler(ufl.inner(new, new) * dx)
+
+    def __call__(self) -> float:
+        change = math.sqrt(self._change.assemble())
+        size = math.sqrt(self._size.assemble())
+        return change / size if size > 0 else change
+
+
 def relative_change(new: Expr, old: Expr, dx: Measure) -> float:
     """‖new − old‖ / ‖new‖ in L² with the common rule; the absolute change when new is zero."""
-    change = math.sqrt(fd.assemble(ufl.inner(new - old, new - old) * dx))
-    size = math.sqrt(fd.assemble(ufl.inner(new, new) * dx))
-    return change / size if size > 0 else change
+    return RelativeChange(new, old, dx)()
 
 
 @dataclass(frozen=True)
@@ -231,6 +249,8 @@ class OuterIteration:
     velocity_change: float
     pressure_change: float
     subscale_change: float | None
+    xi_change: float | None
+    zeta_change: float | None
     fe_residual_norm: float
     converged: bool
 
@@ -245,7 +265,11 @@ class StepSolveResult:
 
 
 class StepSolver:
-    """Outer fixed point around the inner solve (spec: Time-step algorithm steps 2, 3, 5)."""
+    """Outer fixed point on ũ* around the inner solve (spec: Time-step algorithm steps 2, 3, 5).
+
+    For OSS the solution also holds ξ_h and, with τ_c, ζ_h; their changes are reported and, with
+    nonlinear splitting, enter the convergence test.
+    """
 
     def __init__(
         self,
@@ -261,9 +285,15 @@ class StepSolver:
         self._dx = dx
         self._options = options
         self._previous = fd.Function(solution.function_space())
-        self._previous_subscale = (
-            fd.Function(subscale.value.function_space()) if subscale is not None else None
-        )
+        # Components: u_h, p_h, then ξ_h and ζ_h when present.
+        self._changes = [
+            RelativeChange(new, old, dx)
+            for new, old in zip(solution.subfunctions, self._previous.subfunctions, strict=True)
+        ]
+        self._previous_subscale = None
+        if subscale is not None:
+            self._previous_subscale = fd.Function(subscale.value.function_space())
+            self._subscale_change = RelativeChange(subscale.value, self._previous_subscale, dx)
 
     def solve(self) -> StepSolveResult:
         """Iterate until every change and the FE residual meet the outer tolerance."""
@@ -284,30 +314,39 @@ class StepSolver:
                 return StepSolveResult(True, tuple(rows), None)
             self._previous_subscale.assign(self._subscale.value)
             local = self._subscale.update()
-            subscale_change = relative_change(
-                self._subscale.value, self._previous_subscale, self._dx
-            )
+            subscale_change = self._subscale_change()
             row = self._row(iteration, inner, local, subscale_change, False)
+            if not local.converged:
+                rows.append(row)
+                return StepSolveResult(False, tuple(rows), self._local_failure(local))
+            changes = (
+                row.velocity_change,
+                row.pressure_change,
+                subscale_change,
+                row.xi_change,
+                row.zeta_change,
+            )
             tolerance = self._options.outer_rtol
-            converged = (
-                local.converged
-                and max(row.velocity_change, row.pressure_change, subscale_change) <= tolerance
-                and row.fe_residual_norm <= max(self._options.inner_atol, tolerance * reference)
+            converged = max(
+                change for change in changes if change is not None
+            ) <= tolerance and row.fe_residual_norm <= max(
+                self._options.inner_atol, tolerance * reference
             )
             rows.append(replace(row, converged=converged))
-            if not local.converged:
-                reason = f"local subscale update did not converge in {local.iterations} sweeps"
-                if self._subscale.is_static:
-                    reason += (
-                        "; static nonlinear subscales on a coarse mesh can make (I + τ∇u) nearly"
-                        " singular; use dynamic subscales or a finer mesh"
-                    )
-                return StepSolveResult(False, tuple(rows), reason)
             if converged:
                 return StepSolveResult(True, tuple(rows), None)
         return StepSolveResult(
             False, tuple(rows), f"outer iteration did not converge in {limit} iterations"
         )
+
+    def _local_failure(self, local: LocalUpdateResult) -> str:
+        reason = f"local subscale update did not converge in {local.iterations} sweeps"
+        if self._subscale.is_static:
+            reason += (
+                "; static nonlinear subscales on a coarse mesh can make (I + τ∇u) nearly"
+                " singular; use dynamic subscales or a finer mesh"
+            )
+        return reason
 
     def _row(
         self,
@@ -317,8 +356,9 @@ class StepSolver:
         subscale_change: float | None,
         converged: bool,
     ) -> OuterIteration:
-        velocity, pressure = self._solution.subfunctions
-        previous_velocity, previous_pressure = self._previous.subfunctions
+        changes = [change() for change in self._changes]
+        projections = changes[2:] + [None] * (4 - len(changes))
+        # After the local update the stored ũ* has changed: reassemble the FE residual.
         residual = (
             inner.iterations[-1].residual_norm if local is None else self._inner.residual_norm()
         )
@@ -326,9 +366,11 @@ class StepSolver:
             iteration=iteration,
             inner=inner,
             local=local,
-            velocity_change=relative_change(velocity, previous_velocity, self._dx),
-            pressure_change=relative_change(pressure, previous_pressure, self._dx),
+            velocity_change=changes[0],
+            pressure_change=changes[1],
             subscale_change=subscale_change,
+            xi_change=projections[0],
+            zeta_change=projections[1],
             fe_residual_norm=residual,
             converged=converged,
         )

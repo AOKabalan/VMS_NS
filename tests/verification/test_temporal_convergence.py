@@ -13,16 +13,19 @@ LOGGER = logging.getLogger(__name__)
 STEPS = ("--steps", "20", "40", "80", "160")
 ERRORS = ("velocity_error_l2", "pressure_error_l2")
 
-DYNAMIC_ASGS = (
-    'method = "vms"\nsubscale_space = "asgs"\nsubscale_dynamics = "dynamic"\n'
+DYNAMIC_VMS = (
+    'method = "vms"\nsubscale_space = "{space}"\nsubscale_dynamics = "dynamic"\n'
     'scale_splitting = "{splitting}"'
 )
 VARIANTS = {
     "galerkin": (2, 1, 'method = "none"'),
-    "dyn_lin_asgs_p1": (1, 1, DYNAMIC_ASGS.format(splitting="linear")),
-    "dyn_lin_asgs_p2": (2, 2, DYNAMIC_ASGS.format(splitting="linear")),
-    "dyn_nl_asgs_p1": (1, 1, DYNAMIC_ASGS.format(splitting="nonlinear")),
-    "dyn_nl_asgs_p2": (2, 2, DYNAMIC_ASGS.format(splitting="nonlinear")),
+    "dyn_lin_asgs_p1": (1, 1, DYNAMIC_VMS.format(space="asgs", splitting="linear")),
+    "dyn_lin_asgs_p2": (2, 2, DYNAMIC_VMS.format(space="asgs", splitting="linear")),
+    "dyn_nl_asgs_p1": (1, 1, DYNAMIC_VMS.format(space="asgs", splitting="nonlinear")),
+    "dyn_nl_asgs_p2": (2, 2, DYNAMIC_VMS.format(space="asgs", splitting="nonlinear")),
+    "dyn_lin_oss_p1": (1, 1, DYNAMIC_VMS.format(space="oss", splitting="linear")),
+    "dyn_nl_oss_p1": (1, 1, DYNAMIC_VMS.format(space="oss", splitting="nonlinear")),
+    "dyn_nl_oss_p2": (2, 2, DYNAMIC_VMS.format(space="oss", splitting="nonlinear")),
 }
 
 

@@ -13,6 +13,7 @@ from navier_stokes_vms.config import Config, method_name
 from navier_stokes_vms.discretization.function_spaces import (
     constant_pressure_null_space,
     mixed_space,
+    oss_space,
     subscale_space,
 )
 from navier_stokes_vms.discretization.quadrature import (
@@ -22,6 +23,7 @@ from navier_stokes_vms.discretization.quadrature import (
 )
 from navier_stokes_vms.discretization.time_schemes import StepCoefficients, step_coefficients
 from navier_stokes_vms.formulation.galerkin import SolveLevel, galerkin_residual
+from navier_stokes_vms.formulation.oss_projections import projection_equations
 from navier_stokes_vms.formulation.stabilization_parameters import (
     dynamic_parameter,
     stabilization_parameters,
@@ -29,6 +31,7 @@ from navier_stokes_vms.formulation.stabilization_parameters import (
 from navier_stokes_vms.formulation.vms import (
     Switches,
     accelerated_subscale,
+    subscale_residual,
     switches,
     velocity_subscale,
     vms_terms,
@@ -63,12 +66,16 @@ class TimeStepper:
         mesh = problem.mesh
         degree = quadrature_degree(config.discretization.velocity_degree)
         self._dx = volume_measure(mesh, degree)
-        space = mixed_space(
-            mesh, config.discretization.velocity_degree, config.discretization.pressure_degree
-        )
+        stabilization = config.stabilization
+        k = config.discretization.velocity_degree
+        if stabilization.method == "vms" and stabilization.subscale_space == "oss":
+            # ξ_h, ζ_h are unknowns of the inner solve; they start at zero and then carry over.
+            space = oss_space(mesh, k, stabilization.pressure_subscale)
+        else:
+            space = mixed_space(mesh, k, config.discretization.pressure_degree)
         velocity_space = space.sub(0).collapse()
         self._solution = fd.Function(space)
-        self._velocity, self._pressure = self._solution.subfunctions
+        self._velocity, self._pressure = self._solution.subfunctions[:2]
         self._pressure.rename("pressure")
         self._history = [
             fd.Function(velocity_space, name="velocity") for _ in range(self._history_levels())
@@ -96,15 +103,14 @@ class TimeStepper:
             outflow_ds = named_boundary_measure(
                 boundary_measure(mesh, degree), outflow, problem.boundary_tags
             )
-        u, p = ufl.split(self._solution)
-        v, q = fd.TestFunctions(space)
+        u, p, *projections = ufl.split(self._solution)
+        v, q, *projection_tests = fd.TestFunctions(space)
         nu = problem.viscosity
         frozen = self._frozen
         jacobian = None
         self._subscales: SubscaleStorage | None = None
         self._u_sub: Expr | None = None
         self._iterate: SubscaleIterate | None = None
-        stabilization = config.stabilization
         if stabilization.method == "none":
             newton = galerkin_residual(u, p, v, q, u, u, nu, level, self._dx, outflow_ds)
             picard = galerkin_residual(u, p, v, q, frozen, frozen, nu, level, self._dx, outflow_ds)
@@ -122,28 +128,35 @@ class TimeStepper:
                 a, a_hat = u + u_sub_iterate, frozen + u_sub_iterate
             tau_t, tau_c = self._parameters(a, nu, level, chi)
             tau_t_hat, tau_c_hat = self._parameters(a_hat, nu, level, chi)
+            xi, zeta = (projections + [None, None])[:2]
+            w, r = (projection_tests + [None, None])[:2]
+
+            def stabilized(a: Expr, tau_t: Expr, tau_c: Expr) -> ufl.Form:
+                form = vms_terms(
+                    u, p, v, q, a, nu, level, tau_t, tau_c, self._dx, chi, u_sub_history, xi, zeta
+                )
+                if not chi.is_asgs:
+                    residual = subscale_residual(u, p, a, nu, level, chi, u_sub_history)
+                    form += projection_equations(
+                        xi, zeta, w, r, residual, ufl.div(u), tau_t, tau_c, self._dx
+                    )
+                return form
+
             newton = galerkin_residual(u, p, v, q, a, u, nu, level, self._dx, outflow_ds)
             picard = galerkin_residual(u, p, v, q, a_hat, frozen, nu, level, self._dx, outflow_ds)
             if config.solver.linearization == "newton" and config.solver.newton_tau == "frozen":
-                frozen_tau = newton + vms_terms(
-                    u, p, v, q, a, nu, level, tau_t_hat, tau_c_hat, self._dx, chi, u_sub_history
-                )
-                # replace expands the derivative before restoring the current advector in τ.
+                # τ on the frozen advector, then restored after differentiating: J has no τ′,
+                # in the projection weights as elsewhere.
+                frozen_tau = newton + stabilized(a, tau_t_hat, tau_c_hat)
                 jacobian = ufl.replace(fd.derivative(frozen_tau, self._solution), {frozen: u})
-            newton += vms_terms(
-                u, p, v, q, a, nu, level, tau_t, tau_c, self._dx, chi, u_sub_history
-            )
-            picard += vms_terms(
-                u, p, v, q, a_hat, nu, level, tau_t_hat, tau_c_hat, self._dx, chi, u_sub_history
-            )
-            u_sub = velocity_subscale(u, p, a, nu, level, tau_t, chi, u_sub_history)
-            if chi.is_dynamic:
-                self._u_sub = u_sub
+            newton += stabilized(a, tau_t, tau_c)
+            picard += stabilized(a_hat, tau_t_hat, tau_c_hat)
+            self._u_sub = velocity_subscale(u, p, a, nu, level, tau_t, chi, u_sub_history, xi)
             if chi.is_nonlinear:
                 update = (
-                    u_sub
+                    self._u_sub
                     if config.solver.subscale_update == "fixed_point"
-                    else accelerated_subscale(u, p, nu, level, tau_t, chi, u_sub_history)
+                    else accelerated_subscale(u, p, nu, level, tau_t, chi, u_sub_history, xi)
                 )
                 self._iterate = SubscaleIterate(
                     u_sub_iterate,
@@ -262,8 +275,8 @@ class TimeStepper:
                 velocity_change=outer.velocity_change,
                 pressure_change=outer.pressure_change,
                 subscale_change=outer.subscale_change,
-                xi_change=None,
-                zeta_change=None,
+                xi_change=outer.xi_change,
+                zeta_change=outer.zeta_change,
                 fe_residual_norm=outer.fe_residual_norm,
                 converged=outer.converged,
             )
@@ -349,12 +362,14 @@ class TimeStepper:
         for outer in result.iterations:
             self._logger.error(
                 "  outer iteration %d: velocity change %.3e, pressure change %.3e, subscale "
-                "change %s, local sweeps %s, FE residual %.6e",
+                "change %s, local sweeps %s, ξ change %s, ζ change %s, FE residual %.6e",
                 outer.iteration,
                 outer.velocity_change,
                 outer.pressure_change,
-                "-" if outer.subscale_change is None else f"{outer.subscale_change:.3e}",
+                _optional(outer.subscale_change),
                 "-" if outer.local is None else outer.local.iterations,
+                _optional(outer.xi_change),
+                _optional(outer.zeta_change),
                 outer.fe_residual_norm,
             )
             for row in outer.inner.iterations:
@@ -392,3 +407,7 @@ class TimeStepper:
 
     def _at_solve_level(self, data: SpaceTimeExpression, x: Expr) -> Expr:
         return self._weight_new * data(x, self._t_new) + self._weight_old * data(x, self._t_old)
+
+
+def _optional(change: float | None) -> str:
+    return "-" if change is None else f"{change:.3e}"

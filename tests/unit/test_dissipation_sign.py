@@ -1,4 +1,4 @@
-"""Eigenvalue checks of static ASGS dissipation and the cell-diameter regression (plan U5)."""
+"""Eigenvalue checks of static ASGS and OSS dissipation, and the cell-diameter regression (U5)."""
 
 import logging
 
@@ -8,15 +8,17 @@ import pytest
 import ufl
 from ufl.form import Form
 
-from navier_stokes_vms.discretization.function_spaces import mixed_space
+from navier_stokes_vms.discretization.function_spaces import mixed_space, oss_space
 from navier_stokes_vms.discretization.quadrature import volume_measure
 from navier_stokes_vms.formulation.galerkin import SolveLevel
+from navier_stokes_vms.formulation.oss_projections import projection_equations
 from navier_stokes_vms.formulation.stabilization_parameters import stabilization_parameters
-from navier_stokes_vms.formulation.vms import Switches, vms_terms
+from navier_stokes_vms.formulation.vms import Switches, subscale_residual, vms_terms
 
 LOGGER = logging.getLogger(__name__)
 
 STATIC_LINEAR = Switches(is_asgs=True, is_dynamic=False, is_nonlinear=False)
+STATIC_LINEAR_OSS = Switches(is_asgs=False, is_dynamic=False, is_nonlinear=False)
 
 
 def free_matrix(
@@ -61,6 +63,60 @@ def test_static_asgs_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, 
     eigenvalues = np.linalg.eigvalsh(matrix)
     smallest, largest = eigenvalues[0], eigenvalues[-1]
     LOGGER.info("U5 P%d/P%d %s ν=%g: λ_min=%g, λ_max=%g", k, k, mesh_kind, nu, smallest, largest)
+    assert largest > 0
+    assert smallest >= -1e-12 * largest
+
+
+@pytest.mark.parametrize("k", [1, 2])
+@pytest.mark.parametrize("mesh_kind", ["left", "crossed", "box"])
+@pytest.mark.parametrize("nu", [10.0, 1e-4], ids=["viscous", "convective"])
+def test_static_oss_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, nu: float) -> None:
+    """E(u, p; v, q) with (ξ_h, ζ_h) eliminated: the Schur complement of the coupled form.
+
+    The projections are linear in (u, p), so eliminating them from the coupled bilinear form gives
+    the same matrix as assembling E column by column with each column's projections.
+    """
+    mesh = (
+        fd.UnitCubeMesh(2, 2, 2)
+        if mesh_kind == "box"
+        else fd.UnitSquareMesh(4, 4, diagonal=mesh_kind)
+    )
+    space = oss_space(mesh, k, pressure_projection=True)
+    a = fd.Function(space.sub(0).collapse())
+    rng = np.random.default_rng(51)
+    a.dat.data[:] = rng.uniform(0.5, 1.5, a.dat.data.shape)
+    u, p, xi, zeta = fd.TrialFunctions(space)
+    v, q, w, r = fd.TestFunctions(space)
+    dx = volume_measure(mesh, 3 * k)
+    level = SolveLevel(
+        fd.Constant(0.0),
+        fd.Constant(1.0),
+        fd.Function(a.function_space()),
+        ufl.zero(mesh.geometric_dimension),
+    )
+    tau_m, tau_c = stabilization_parameters(a, nu, k, 4.0, 2.0)
+    chi = STATIC_LINEAR_OSS
+    residual = subscale_residual(u, p, a, nu, level, chi, None)
+    form = nu * ufl.inner(ufl.grad(u), ufl.grad(v)) * dx
+    form += vms_terms(u, p, v, q, a, nu, level, tau_m, tau_c, dx, chi, None, xi, zeta)
+    form += projection_equations(xi, zeta, w, r, residual, ufl.div(u), tau_m, tau_c, dx)
+    marker = fd.Function(space).assign(1.0)
+    fd.DirichletBC(space.sub(0), 0, "on_boundary").zero(marker)
+    physical = space.sub(0).dim() + space.sub(1).dim()
+    with marker.dat.vec_ro as vector:
+        free = np.flatnonzero(vector.getArray(readonly=True)[:physical])
+    projected = np.arange(physical, space.dim())
+    matrix = fd.assemble(fd.lhs(form)).petscmat.convert("dense").getDenseArray()
+    coupled = matrix[np.ix_(free, projected)]
+    mass = matrix[np.ix_(projected, projected)]
+    schur = matrix[np.ix_(free, free)] - coupled @ np.linalg.solve(
+        mass, matrix[np.ix_(projected, free)]
+    )
+    eigenvalues = np.linalg.eigvalsh((schur + schur.T) / 2)
+    smallest, largest = eigenvalues[0], eigenvalues[-1]
+    LOGGER.info(
+        "U5 OSS P%d/P%d %s ν=%g: λ_min=%g, λ_max=%g", k, k, mesh_kind, nu, smallest, largest
+    )
     assert largest > 0
     assert smallest >= -1e-12 * largest
 
