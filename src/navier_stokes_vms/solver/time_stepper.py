@@ -162,6 +162,10 @@ class TimeStepper:
         null_space = (
             constant_pressure_null_space(space) if uses_pressure_null_space(problem) else None
         )
+        # With the null space the pressure is fixed by its zero spatial mean (spec: Boundary
+        # conditions and quadrature), not by the solver's zero coefficient mean.
+        self._zero_mean_pressure = null_space is not None
+        self._area = fd.assemble(fd.Constant(1.0) * self._dx)
         inner = InnerSolver(
             self._solution, newton, picard, frozen, bcs, null_space, config.solver, jacobian
         )
@@ -236,6 +240,7 @@ class TimeStepper:
         self._set_level(step, coefficients)
         t = self._time(step)
         result = self._step_solver.solve()
+        self._remove_pressure_mean()
         for outer in result.iterations:
             for row in outer.inner.iterations:
                 logs.inner.write(
@@ -305,6 +310,11 @@ class TimeStepper:
         vtk_every = self._config.output.vtk_every
         if vtk_every and (step % vtk_every == 0 or last):
             self._fields.write(self._history[0], self._pressure, t, float(self._pressure_time))
+
+    def _remove_pressure_mean(self) -> None:
+        if self._zero_mean_pressure:
+            mean = fd.assemble(self._pressure * self._dx) / self._area
+            self._pressure.assign(self._pressure - mean)
 
     def _set_level(self, step: int, coefficients: StepCoefficients) -> None:
         self._t_old.assign(self._time(step - 1))

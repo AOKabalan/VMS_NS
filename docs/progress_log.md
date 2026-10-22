@@ -532,3 +532,73 @@ Deviations from spec or plan:
 9. The slow suite is meant to run in parallel with pytest-xdist: `pytest tests/verification -m slow -n 4`. Four workers were chosen for the 15 GB of memory on this machine. The ten V2 Dyn-Nl-ASGS studies take 100–235 s each and set the wall time.
 
 Open questions: None.
+
+## Phase 7b: Review fixes (2026-10-22)
+Done: Fixes for findings R1–R5 of the independent review `docs/reviews/review_phases_0-7.md`, committed with this phase; R6 is Phase 8. The uncommitted lagged Phase 8 work was stashed first, so this phase starts from dad7b55.
+- R1, `solver/nonlinear_solver.py`:
+  - A Picard linear solve that raises `ConvergenceError` sets the reason "Picard iteration N: <error>", and `InnerSolver.solve` returns failure at once, through the existing failure path. Before, the loop retried without recording a row and never ended.
+  - A non-finite residual after a Picard iteration also fails at once, with the existing non-finite message.
+  - The Picard warm-up runs at most min(picard_iterations_before_newton, inner_max_iterations) iterations, and Newton gets what is left of inner_max_iterations.
+- R3, V3 (`tests/verification/test_steady_equivalence.py`): `march` records the endpoint velocity, and the stored subscale for dynamic cases, before the last step. Steady means both changed by less than 1e-10 (relative L², common rule) in that step. That every step converged is checked separately from time_steps.csv.
+- R4, `solver/time_stepper.py`: with the pressure null space active, p ← p − ∫p dx/|Ω| (common rule) right after each step's solve. This comes before the diagnostics, the VTK output, the failure path's last state and the next step's initial guess. Outflow problems are untouched.
+- R2 and R5: new and extended tests, below.
+- Plan: §10 U2, U4, U8 (new) and V3; §11 pressure null space; §13 Phase 7b.
+- README: OMP_NUM_THREADS=1 in the parallel slow-suite command, as you asked after Phase 7.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean (49 files).
+- `pytest tests/unit`: 222 passed, in 70 s serially (while the slow suite ran) and 23 s with `-n 4`.
+- `OMP_NUM_THREADS=1 pytest tests/verification -m slow -n 4`: 37 passed in 11 min 56 s, while the unit and mutation runs shared the machine. The V1 and V2 tables are identical to Phase 7.
+- R1, `test_time_stepper.py`:
+  - `test_a_failed_picard_linear_solve_fails_the_step_at_once`, for Picard and for Newton with a Picard warm-up: a patched Picard linear solve raises `ConvergenceError`.
+    - There is exactly one attempt, inner_iterations.csv holds only row 0, the last state is written, and the log reads "Step 1: Picard iteration 1: synthetic linear solver failure".
+    - A guard raises after three attempts, so the old endless retry fails the test instead of hanging it.
+  - `test_the_picard_warm_up_counts_toward_the_inner_iteration_limit`: a warm-up of 5 with inner_max_iterations = 2 gives exactly 2 Picard rows. The old code gave 5.
+- R4, `test_pressure_has_zero_spatial_mean_exactly_with_the_null_space` (Galerkin P2/P1 and static linear ASGS P1/P1, two BDF1 steps on manufactured_spatial 4×4):
+  - With the null space, |∫p dx|/|Ω| ≤ 1e-13 ‖p‖.
+  - With x_max made an outflow, the mean stays above 1e-6 ‖p‖, so it was not touched. The review measured a mean of 0.0368 before the fix.
+- R2(a), U4 (`test_dynamic_asgs_step_equals_independent_classical_form`, 8 cases: BDF2 and Crank–Nicolson; P1/P1 and P2/P2; linear and nonlinear splitting):
+  - What is compared: the time stepper's own Newton residual at step 2, after `_set_level`, with random velocity levels, stored subscale levels and state, against a classical reference written in the test. The nonlinear cases use a = u + ũⁿ.
+  - The reference's coefficients are literals: BDF2 α₀ = 3/2 with u_hist = 2uⁿ − ½uⁿ⁻¹ and ũ_hist = 2ũⁿ − ½ũⁿ⁻¹; Crank–Nicolson α₀ = 2 with 2uⁿ, 2ũⁿ and averaged forcing. The reference also has τ_t = (α₀/δt + 1/τ_m)⁻¹, the closure ũ = τ_t(R_u + ũ_hist/δt) and (D_t ũ, v) = ((α₀ũ − ũ_hist)/δt, v).
+  - The two agree to 1e-12 relative.
+- R2(b), U8 (`tests/unit/test_subscale_time_integration.py`, new):
+  - What it runs: the time stepper's `_set_level` and `_advance`, without solving, with u_h = (0.2, 0) and p_h = xy (P1) prescribed at every step on manufactured_spatial 2×2.
+  - Then τ_m = (4ν/h² + 2|U|/h)⁻¹ = 1/0.96 is the same at every point, D_t u_h = 0, and the forcing g(t)F(x) + ∇p_h gives R = g(t)F(x).
+  - Exact solution: ũ = y(t)F, with y′ + y/τ = g and y(0) = 0. The error is max |ũ^N − y(1)F| / max |y(1)F| at the quadrature points, for N = 10, 20, 40, 80.
+  - Data "generic" is g = cos 2t. Data "smooth start" is y = sin³ t, which vanishes with y′ and y″ at t = 0.
+
+    | Scheme | Startup | Data | Errors | Rates |
+    | --- | --- | --- | --- | --- |
+    | BDF1 | lower order | generic | 2.388e-1 / 1.212e-1 / 6.105e-2 / 3.064e-2 | 0.98, 0.99, **0.99** |
+    | BDF2 | lower order | generic | 1.579e-2 / 3.290e-3 / 7.391e-4 / 1.743e-4 | 2.26, 2.15, **2.08** |
+    | BDF3 | lower order | generic | 1.164e-2 / 2.799e-3 / 6.916e-4 / 1.722e-4 | 2.06, 2.02, **2.01** |
+    | BDF3 | exact history | generic | 8.732e-2 / 4.468e-2 / 2.243e-2 / 1.122e-2 | 0.97, 0.99, **1.00** |
+    | BDF3 | exact history | smooth start | 2.551e-3 / 3.267e-4 / 4.072e-5 / 5.063e-6 | 2.96, 3.00, **3.01** |
+    | Crank–Nicolson | lower order | generic | 9.355e-3 / 2.170e-3 / 5.213e-4 / 1.277e-4 | 2.11, 2.06, **2.03** |
+
+  - Each rate is asserted within 0.2 of the expected order.
+  - Expected BDF3 order with exact history (asked for): 1 for generic data. The stored subscale is zero at negative times, while the smooth extension of y has y(−jδt) ≈ −j y′(0) δt. The first step's history is therefore wrong by O(δt), so ũ¹ carries an O(δt) error, about (5/11) y′(0) δt, and the stable recursion carries it to T.
+  - The order is 3 when y vanishes to third order at t = 0. That case is included, so BDF3's subscale weights are also checked at third order.
+- R2(c), the review's mutations, in scratch git worktrees of HEAD plus the Phase 7b changes, unit suite with `-n 4`:
+
+  | Mutation | Unit result | Failing tests |
+  | --- | --- | --- |
+  | Backward Euler for the subscale under BDF2 (the review's `bdf2_be.patch`: α₀ = 1 in τ_t, ũ_hist = ũⁿ and α₀ = 1 in (D_t ũ, v)) | 8 failed, 214 passed | U4 dynamic BDF2, all 4 cases (relative residual difference 0.22–0.32 against 1e-12); U8 BDF2 (rate 0.99 instead of 2); the storage-history tests bdf2-lower_order, bdf2-exact_history and bdf3-lower_order, which already failed in the review |
+  | No Crank–Nicolson extrapolation of ũ (`cn_subscale.patch`) | 3 failed, 219 passed | U8 Crank–Nicolson (rate −0.09); the storage-history tests for Crank–Nicolson with both startups (already failing in the review) |
+
+- R5, U2 (`test_production_subscale_space_samples_the_production_dx`, 2D and 3D, k = 1, 2):
+  - What it checks: a non-polynomial vector field sampled into `subscale_space(mesh, 3k)` and tested against a non-polynomial weight with `volume_measure(mesh, 3k)` integrates to the direct value to 1e-14 relative. A rule of degree 3k + 4 differs.
+  - The review's q + 2 mutation now fails this test as well, because the mismatched quadrature points raise an error.
+- R3, V3: the change over the last step is 0.0 for the velocity in every run, because the inner solve is converged at its initial residual. For the stored subscale it is ≤ 4.6e-15.
+  - A one-step march (Dyn-Nl-ASGS P1/P1, 24×32, δt = 5) is now rejected, with a velocity change of 9.374e-3, the review's number, and a subscale change of 1.0.
+  - Under the old check it passed with a last-outer change of 6.9e-11.
+
+Deviations from spec or plan:
+1. R1: the failure reason carries a "Picard iteration N:" prefix. A non-finite Picard residual is now a failure too, matching the Newton path.
+2. U8 drives the time stepper's private `_set_level` and `_advance` with prescribed fields, so it covers the production subscale path apart from the FE solve. The smooth-start case is an addition, so that BDF3's subscale coefficients are checked at third order.
+3. U4 dynamic uses step 2 with `lower_order` startup, where BDF2 and Crank–Nicolson are the step's own schemes. The velocity and subscale levels are set directly instead of being marched.
+4. R4 uses the common rule for ∫p dx and |Ω|. The normalization also applies to the state written by the failure path.
+5. V3's 1e-10 tolerance applies to the relative change of the stored subscale as well as the velocity.
+
+Open questions:
+1. U8 shows that `exact_history` startup gives first-order dynamic subscales in general, because the subscale history at negative times is zero (spec: Initial subscale). V2's BDF3 exact-history rates are third order only because the subscale there comes from the discretization error alone. Should exact-history startup also fill the subscale levels, where a case defines an exact subscale? Nothing in Phase 8 depends on this.

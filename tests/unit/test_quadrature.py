@@ -10,6 +10,7 @@ import pytest
 import ufl
 
 from navier_stokes_vms.discretization import quadrature
+from navier_stokes_vms.discretization.function_spaces import subscale_space
 from navier_stokes_vms.discretization.quadrature import (
     boundary_measure,
     check_positive_weights,
@@ -54,6 +55,26 @@ def test_quadrature_space_samples_the_dx_rule(dimension: int, degree: int) -> No
     assert fd.assemble(sampled * dx) == pytest.approx(direct, rel=1e-14, abs=1e-15)
     other_rule = fd.assemble(f * fd.dx(domain=mesh, degree=degree + 4))
     assert abs(other_rule - direct) > 1e-9
+
+
+@pytest.mark.parametrize("velocity_degree", [1, 2])
+@pytest.mark.parametrize("dimension", [2, 3])
+def test_production_subscale_space_samples_the_production_dx(
+    dimension: int, velocity_degree: int
+) -> None:
+    mesh = fd.UnitSquareMesh(2, 2) if dimension == 2 else fd.UnitCubeMesh(1, 1, 1)
+    x = fd.SpatialCoordinate(mesh)
+    q = quadrature_degree(velocity_degree)
+    stored = ufl.as_vector(
+        [ufl.exp(x[i]) * ufl.sin(3 * x[(i + 1) % dimension] + i) for i in range(dimension)]
+    )
+    weight = ufl.as_vector([1 / (1 + x[i] ** 2 + x[(i + 1) % dimension]) for i in range(dimension)])
+    sampled = fd.Function(subscale_space(mesh, q)).interpolate(stored)
+    dx = volume_measure(mesh, q)
+    direct = fd.assemble(ufl.inner(stored, weight) * dx)
+    assert fd.assemble(ufl.inner(sampled, weight) * dx) == pytest.approx(direct, rel=1e-14)
+    other_rule = fd.assemble(ufl.inner(stored, weight) * fd.dx(domain=mesh, degree=q + 4))
+    assert abs(other_rule - direct) > 1e-9 * abs(direct)
 
 
 def test_measures_carry_an_explicit_degree_and_scheme() -> None:

@@ -3,6 +3,7 @@
 import csv
 import importlib.util
 import json
+import logging
 import math
 import re
 from dataclasses import replace
@@ -11,9 +12,19 @@ from pathlib import Path
 import firedrake as fd
 import pytest
 import ufl
+from firedrake.exceptions import ConvergenceError
 
 from navier_stokes_vms.cases import build_problem
-from navier_stokes_vms.config import Config, MeshOptions, SolverOptions, load_config
+from navier_stokes_vms.config import (
+    Config,
+    DiscretizationOptions,
+    MeshOptions,
+    OutputOptions,
+    SolverOptions,
+    StabilizationOptions,
+    TimeOptions,
+    load_config,
+)
 from navier_stokes_vms.discretization.function_spaces import (
     constant_pressure_null_space,
     mixed_space,
@@ -21,9 +32,10 @@ from navier_stokes_vms.discretization.function_spaces import (
 from navier_stokes_vms.discretization.quadrature import volume_measure
 from navier_stokes_vms.discretization.time_schemes import scheme_at_step
 from navier_stokes_vms.formulation.galerkin import SolveLevel, galerkin_residual
-from navier_stokes_vms.problem.boundary_conditions import dirichlet_bc
+from navier_stokes_vms.problem.boundary_conditions import Outflow, dirichlet_bc
 from navier_stokes_vms.problem.problem_definition import Problem
 from navier_stokes_vms.solver.nonlinear_solver import InnerSolver, InnerSolveResult
+from navier_stokes_vms.solver.time_stepper import TimeStepper
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "run_simulation.py"
 _SPEC = importlib.util.spec_from_file_location("run_simulation", SCRIPT)
@@ -178,6 +190,35 @@ def test_inner_solve_failure_exits_nonzero_and_writes_the_last_state(
     assert "iteration 1 (picard)" in log
 
 
+@pytest.mark.parametrize(
+    "solver", ['linearization = "picard"', "picard_iterations_before_newton = 2"]
+)
+def test_a_failed_picard_linear_solve_fails_the_step_at_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, solver: str
+) -> None:
+    text = config_text("kovasznay").replace("picard_iterations_before_newton = 2", solver)
+    solve = fd.NonlinearVariationalSolver.solve
+    attempts = []
+
+    def failing_linear_solve(self: fd.NonlinearVariationalSolver) -> None:
+        if self.snes.getType() != "ksponly":
+            return solve(self)
+        attempts.append(1)
+        if len(attempts) > 3:
+            raise RuntimeError("the failed linear solve was retried")
+        raise ConvergenceError("synthetic linear solver failure")
+
+    monkeypatch.setattr(fd.NonlinearVariationalSolver, "solve", failing_linear_solve)
+    status, folder = run(tmp_path, monkeypatch, text)
+    assert status == 1
+    assert attempts == [1]
+    assert pvd_times(folder / "fields" / "velocity.pvd") == [0.5]
+    assert rows(folder / "time_steps.csv")[-1]["converged"] == "False"
+    assert [row["inner_iteration"] for row in rows(folder / "inner_iterations.csv")] == ["0"]
+    log = (folder / "run.log").read_text(encoding="utf-8")
+    assert "Step 1: Picard iteration 1: synthetic linear solver failure" in log
+
+
 def steady_kovasznay_solve(
     problem: Problem, options: SolverOptions
 ) -> tuple[InnerSolver, fd.Function, InnerSolveResult]:
@@ -234,6 +275,57 @@ def test_newton_picard_and_warm_started_newton_reach_the_same_solution() -> None
     for other in (picard, warm):
         difference = fd.norm(other.subfunctions[0] - reference) / fd.norm(reference)
         assert difference < 1e-8
+
+
+def test_the_picard_warm_up_counts_toward_the_inner_iteration_limit() -> None:
+    options = replace(SolverOptions(), inner_max_iterations=2, picard_iterations_before_newton=5)
+    _, _, result = steady_kovasznay_solve(kovasznay(), options)
+    assert not result.converged
+    assert [row.method for row in result.iterations[1:]] == ["picard", "picard"]
+
+
+@pytest.mark.parametrize(
+    ("degrees", "stabilization"),
+    [
+        ((2, 1), StabilizationOptions(method="none")),
+        (
+            (1, 1),
+            StabilizationOptions(
+                subscale_space="asgs", subscale_dynamics="static", scale_splitting="linear"
+            ),
+        ),
+    ],
+    ids=["galerkin", "asgs"],
+)
+@pytest.mark.parametrize("outflow", [False, True])
+def test_pressure_has_zero_spatial_mean_exactly_with_the_null_space(
+    tmp_path: Path,
+    degrees: tuple[int, int],
+    stabilization: StabilizationOptions,
+    outflow: bool,
+) -> None:
+    config = Config(
+        case="manufactured_spatial",
+        run_name="mean",
+        mesh=MeshOptions(cells=(4, 4)),
+        discretization=DiscretizationOptions(*degrees),
+        time=TimeOptions(scheme="bdf1", dt=0.05, t_end=0.1),
+        stabilization=stabilization,
+        output=OutputOptions(vtk_every=0),
+    )
+    problem = build_problem(config)
+    if outflow:
+        conditions = {**problem.boundary_conditions, "x_max": Outflow()}
+        problem = replace(problem, boundary_conditions=conditions)
+    stepper = TimeStepper(config, problem, tmp_path, logging.getLogger(__name__))
+    stepper.run()
+    pressure = stepper.pressure
+    mean = fd.assemble(pressure * stepper._dx) / fd.assemble(fd.Constant(1.0) * stepper._dx)
+    size = fd.norm(pressure)
+    if outflow:
+        assert abs(mean) > 1e-6 * size
+    else:
+        assert abs(mean) <= 1e-13 * size
 
 
 def test_newton_logs_updates_and_linear_iterations() -> None:

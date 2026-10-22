@@ -20,6 +20,7 @@ from navier_stokes_vms.config import (
     validate_config,
 )
 from navier_stokes_vms.discretization.quadrature import volume_measure
+from navier_stokes_vms.discretization.time_schemes import StepCoefficients
 from navier_stokes_vms.problem.problem_definition import Problem
 from navier_stokes_vms.solver.nonlinear_solver import relative_change
 from navier_stokes_vms.solver.time_stepper import TimeStepper
@@ -49,12 +50,34 @@ def galerkin(cells: tuple[int, int], linearization: str) -> Config:
 
 
 def march(config: Config, problem: Problem, folder: Path) -> TimeStepper:
+    """Run to t_end and require a steady state between the last two time levels.
+
+    Steady means the endpoint velocity, and for dynamic subscales the stored ũ, changed by less
+    than STEADY_TOLERANCE in the last step. Every step's outer convergence is a separate check.
+    """
     folder.mkdir()
     stepper = TimeStepper(config, problem, folder, LOGGER)
+    levels = {"velocity": lambda: stepper.velocity}
+    if stepper._subscales is not None:
+        levels["subscale"] = lambda: stepper._subscales.latest
+    previous = {name: fd.Function(level().function_space()) for name, level in levels.items()}
+    advance = stepper._advance
+
+    def recording_advance(coefficients: StepCoefficients) -> None:
+        for name, level in levels.items():
+            previous[name].assign(level())
+        advance(coefficients)
+
+    stepper._advance = recording_advance
     stepper.run()
-    with (folder / "outer_iterations.csv").open(encoding="utf-8") as stream:
-        last_change = float(list(csv.DictReader(stream))[-1]["velocity_change"])
-    assert last_change < STEADY_TOLERANCE, config.run_name
+    with (folder / "time_steps.csv").open(encoding="utf-8") as stream:
+        assert all(row["converged"] == "True" for row in csv.DictReader(stream)), config.run_name
+    changes = {
+        name: relative_change(level(), previous[name], stepper._dx)
+        for name, level in levels.items()
+    }
+    LOGGER.info("V3 %s: change over the last step %s", config.run_name, changes)
+    assert max(changes.values()) < STEADY_TOLERANCE, (config.run_name, changes)
     return stepper
 
 

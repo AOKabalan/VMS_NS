@@ -44,7 +44,7 @@ quadrature rule of twice the common degree.
 
 ```bash
 pytest tests/unit                      # seconds
-pytest tests/verification -m slow -n 4 # about 11 minutes: convergence and validation tests V1–V4
+OMP_NUM_THREADS=1 pytest tests/verification -m slow -n 4  # about 11 minutes: V1–V4
 ruff check . && ruff format --check .
 ```
 

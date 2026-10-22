@@ -96,8 +96,12 @@ class InnerSolver:
             return InnerSolveResult(False, tuple(self._rows), self._nonfinite_message("residual"))
         converged = self._initial_norm <= self._tolerance
         if self._picard is not None:
-            while not converged and self._iteration() < self._picard_iterations:
+            # The warm-up counts toward inner_max_iterations.
+            limit = min(self._picard_iterations, self._options.inner_max_iterations)
+            while not converged and self._iteration() < limit:
                 converged = self._picard_iteration(self._picard)
+                if self._failure_reason is not None:
+                    return InnerSolveResult(False, tuple(self._rows), self._failure_reason)
         remaining = self._options.inner_max_iterations - self._iteration()
         if not converged and self._newton is not None and remaining > 0:
             converged = self._newton_iterations(self._newton, remaining)
@@ -117,9 +121,11 @@ class InnerSolver:
         try:
             solver.solve()
         except ConvergenceError as error:
-            self._failure_reason = str(error)
+            self._failure_reason = f"Picard iteration {self._iteration() + 1}: {error}"
             return False
         residual = self.residual_norm()
+        if not math.isfinite(residual):
+            self._failure_reason = self._nonfinite_message("residual")
         with self._solution.dat.vec_ro as new, self._previous.dat.vec as update:
             update.aypx(-1.0, new)
             update_norm = update.norm()
