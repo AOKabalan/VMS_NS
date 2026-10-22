@@ -9,7 +9,9 @@ from navier_stokes_vms.discretization.function_spaces import mixed_space
 from navier_stokes_vms.discretization.quadrature import volume_measure
 from navier_stokes_vms.formulation.galerkin import SolveLevel, galerkin_residual
 from navier_stokes_vms.formulation.stabilization_parameters import stabilization_parameters
-from navier_stokes_vms.formulation.vms import vms_terms
+from navier_stokes_vms.formulation.vms import Switches, vms_terms
+
+STATIC_LINEAR = Switches(is_asgs=True, is_dynamic=False, is_nonlinear=False)
 
 
 @pytest.mark.parametrize("k", [1, 2])
@@ -33,7 +35,18 @@ def test_asgs_equals_independent_classical_form(
     level = SolveLevel(fd.Constant(alpha0), fd.Constant(dt), history, force)
     tau_m, tau_c = stabilization_parameters(u, nu, k, 4.0, 2.0)
     actual = galerkin_residual(u, p, v, q, u, u, nu, level, dx, None) + vms_terms(
-        u, p, v, q, u, nu, level, tau_m, tau_c if pressure_subscale else ufl.zero(), dx
+        u,
+        p,
+        v,
+        q,
+        u,
+        nu,
+        level,
+        tau_m,
+        tau_c if pressure_subscale else ufl.zero(),
+        dx,
+        STATIC_LINEAR,
+        None,
     )
 
     h = ufl.MinCellEdgeLength(mesh)

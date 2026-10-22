@@ -85,56 +85,102 @@ def test_galerkin_steady_error_drops_from_mesh_16_to_32(tmp_path: Path) -> None:
         assert errors[1][name] < errors[0][name], name
 
 
-def linear_asgs(cells: tuple[int, int], degree: int, dynamics: str, linearization: str) -> Config:
+def asgs(
+    cells: tuple[int, int],
+    degree: int,
+    dynamics: str,
+    splitting: str,
+    linearization: str,
+    update: str = "accelerated",
+) -> Config:
+    base = galerkin(cells, linearization)
     config = replace(
-        galerkin(cells, linearization),
-        run_name=f"asgs_p{degree}_{dynamics}_{linearization}_{cells[0]}x{cells[1]}",
+        base,
+        run_name=f"asgs_p{degree}_{dynamics}_{splitting}_{linearization}_{update}_{cells[0]}",
         discretization=DiscretizationOptions(velocity_degree=degree, pressure_degree=degree),
         stabilization=StabilizationOptions(
-            subscale_space="asgs", subscale_dynamics=dynamics, scale_splitting="linear"
+            subscale_space="asgs", subscale_dynamics=dynamics, scale_splitting=splitting
         ),
+        solver=replace(base.solver, subscale_update=update),
     )
     validate_config(config)
     return config
 
 
+def iteration_totals(folder: Path) -> tuple[int, int, int]:
+    with (folder / "time_steps.csv").open(encoding="utf-8") as stream:
+        steps = list(csv.DictReader(stream))
+    outer = [int(row["outer_iterations"]) for row in steps]
+    return sum(outer), max(outer), sum(int(row["inner_iterations_total"]) for row in steps)
+
+
+@pytest.mark.parametrize("splitting", ["linear", "nonlinear"])
 @pytest.mark.parametrize("degree", [1, 2])
-def test_linear_asgs_steady_state_is_independent_of_dynamics_and_linearization(
-    tmp_path: Path, degree: int
+def test_asgs_steady_state_is_independent_of_dynamics_linearization_and_update(
+    tmp_path: Path, degree: int, splitting: str
 ) -> None:
+    runs = [
+        (dynamics, linearization, "accelerated")
+        for dynamics in ("static", "dynamic")
+        for linearization in ("newton", "picard")
+    ]
+    if splitting == "nonlinear":
+        runs.append(("static", "newton", "fixed_point"))
     errors: dict[str, list[dict[str, float]]] = {"static": [], "dynamic": []}
-    for cells in (MESH_16, MESH_32):
-        problem = build_problem(linear_asgs(cells, degree, "static", "newton"))
-        dx = volume_measure(problem.mesh, 3 * degree)
-        velocities = {}
-        for dynamics in ("static", "dynamic"):
-            for linearization in ("newton", "picard"):
-                config = linear_asgs(cells, degree, dynamics, linearization)
-                folder = tmp_path / config.run_name
-                velocities[dynamics, linearization] = march(config, problem, folder).velocity
-                if linearization == "newton":
-                    errors[dynamics].append(final_diagnostics(folder))
-        reference = velocities["static", "newton"]
-        for (dynamics, linearization), velocity in velocities.items():
-            difference = relative_change(velocity, reference, dx)
-            LOGGER.info(
-                "V3 linear ASGS P%d/P%d %s: %s %s vs static newton %.3e",
-                degree,
-                degree,
-                cells,
-                dynamics,
-                linearization,
-                difference,
-            )
-            assert difference <= 1e-8, (dynamics, linearization)
-        newton_picard = relative_change(
-            velocities["dynamic", "picard"], velocities["dynamic", "newton"], dx
-        )
+    problem = build_problem(asgs(MESH_16, degree, "static", splitting, "newton"))
+    dx = volume_measure(problem.mesh, 3 * degree)
+    velocities = {}
+    for run in runs:
+        dynamics, linearization, update = run
+        config = asgs(MESH_16, degree, dynamics, splitting, linearization, update)
+        folder = tmp_path / config.run_name
+        velocities[run] = march(config, problem, folder).velocity
         LOGGER.info(
-            "V3 Dyn-Lin-ASGS P%d/P%d %s: Newton/Picard %.3e", degree, degree, cells, newton_picard
+            "V3 iterations %s: outer total %d (max per step %d), inner total %d",
+            config.run_name,
+            *iteration_totals(folder),
         )
-        assert newton_picard <= 1e-8
+        if linearization == "newton" and update == "accelerated":
+            errors[dynamics].append(final_diagnostics(folder))
+    reference = velocities["static", "newton", "accelerated"]
+    for run, velocity in velocities.items():
+        difference = relative_change(velocity, reference, dx)
+        LOGGER.info(
+            "V3 %s ASGS P%d/P%d mesh 16: %s vs static newton accelerated %.3e",
+            splitting,
+            degree,
+            degree,
+            run,
+            difference,
+        )
+        assert difference <= 1e-8, run
+    newton_picard = relative_change(
+        velocities["dynamic", "picard", "accelerated"],
+        velocities["dynamic", "newton", "accelerated"],
+        dx,
+    )
+    LOGGER.info(
+        "V3 dynamic %s ASGS P%d/P%d mesh 16: Newton/Picard %.3e",
+        splitting,
+        degree,
+        degree,
+        newton_picard,
+    )
+    assert newton_picard <= 1e-8
+    problem = build_problem(asgs(MESH_32, degree, "static", splitting, "newton"))
+    for dynamics in errors:
+        config = asgs(MESH_32, degree, dynamics, splitting, "newton")
+        folder = tmp_path / config.run_name
+        march(config, problem, folder)
+        LOGGER.info(
+            "V3 iterations %s: outer total %d (max per step %d), inner total %d",
+            config.run_name,
+            *iteration_totals(folder),
+        )
+        errors[dynamics].append(final_diagnostics(folder))
     for dynamics, pair in errors.items():
-        LOGGER.info("V3 %s linear ASGS P%d/P%d steady errors: %s", dynamics, degree, degree, pair)
+        LOGGER.info(
+            "V3 %s %s ASGS P%d/P%d steady errors: %s", dynamics, splitting, degree, degree, pair
+        )
         for name in ("velocity_error_l2", "pressure_error_l2"):
             assert pair[1][name] < pair[0][name], (dynamics, name)

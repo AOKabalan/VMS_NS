@@ -143,7 +143,11 @@ _PHASE_ADDING = {
     ("oss", "dynamic", "nonlinear"): 8,
 }
 
-_IMPLEMENTED_VMS_CASES = frozenset({("asgs", "static", "linear"), ("asgs", "dynamic", "linear")})
+_IMPLEMENTED_VMS_CASES = frozenset(
+    ("asgs", dynamics, splitting)
+    for dynamics in ("static", "dynamic")
+    for splitting in ("linear", "nonlinear")
+)
 
 
 def load_config(path: Path) -> Config:

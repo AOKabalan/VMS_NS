@@ -243,3 +243,68 @@ def test_newton_logs_updates_and_linear_iterations() -> None:
     assert later and all(row.update_norm > 0 and row.linear_iterations == 1 for row in later)
     norms = [row.residual_norm for row in result.iterations]
     assert norms[-1] < 1e-10 * norms[0]
+
+
+def nonlinear_asgs_text(dynamics: str, solver: str = "") -> str:
+    return (
+        'case = "kovasznay"\n\n[mesh]\ncells = [12, 16]\n\n[discretization]\n'
+        'velocity_degree = 1\npressure_degree = 1\n\n[time]\nscheme = "bdf2"\ndt = 0.5\n'
+        't_end = 1.0\n\n[stabilization]\nmethod = "vms"\nsubscale_space = "asgs"\n'
+        f'subscale_dynamics = "{dynamics}"\nscale_splitting = "nonlinear"\n\n'
+        f'[solver]\n{solver}\n\n[output]\nvtk_every = 0\ndiagnostics = ["velocity_error_l2"]\n'
+    )
+
+
+@pytest.mark.parametrize("dynamics", ["static", "dynamic"])
+def test_nonlinear_asgs_records_every_outer_iteration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dynamics: str
+) -> None:
+    status, folder = run(tmp_path, monkeypatch, nonlinear_asgs_text(dynamics))
+    assert status == 0
+    outer, inner = rows(folder / "outer_iterations.csv"), rows(folder / "inner_iterations.csv")
+    for step_row in rows(folder / "time_steps.csv"):
+        step = step_row["step"]
+        iterations = [row for row in outer if row["step"] == step]
+        assert len(iterations) >= 2
+        assert step_row["outer_iterations"] == str(len(iterations))
+        assert [row["converged"] for row in iterations] == ["False"] * (len(iterations) - 1) + [
+            "True"
+        ]
+        assert all(row["subscale_change"] != "" for row in iterations)
+        last = iterations[-1]
+        for name in ("velocity_change", "pressure_change", "subscale_change"):
+            assert float(last[name]) <= 1e-8
+        steps_inner = [row for row in inner if row["step"] == step]
+        assert {row["outer_iteration"] for row in steps_inner} == {
+            row["outer_iteration"] for row in iterations
+        }
+        assert int(step_row["inner_iterations_total"]) == sum(
+            int(row["inner_iterations"]) for row in iterations
+        )
+
+
+COARSE_MESH_HINT = (
+    "static nonlinear subscales on a coarse mesh can make (I + τ∇u) nearly singular; "
+    "use dynamic subscales or a finer mesh"
+)
+LOCAL_FAILURE = "local subscale update did not converge in 1 sweeps"
+
+
+@pytest.mark.parametrize(
+    ("dynamics", "setting", "reason"),
+    [
+        ("static", "outer_max_iterations = 1", "outer iteration did not converge in 1 iterations"),
+        ("static", "subscale_max_iterations = 1", f"{LOCAL_FAILURE}; {COARSE_MESH_HINT}"),
+        ("dynamic", "subscale_max_iterations = 1", f"{LOCAL_FAILURE}. Iteration history"),
+    ],
+)
+def test_nonlinear_asgs_failures_write_the_last_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dynamics: str, setting: str, reason: str
+) -> None:
+    status, folder = run(tmp_path, monkeypatch, nonlinear_asgs_text(dynamics, setting))
+    assert status == 1
+    assert pvd_times(folder / "fields" / "velocity.pvd") == [0.5]
+    assert rows(folder / "time_steps.csv")[-1]["converged"] == "False"
+    log = (folder / "run.log").read_text(encoding="utf-8")
+    assert f"Step 1: {reason}" in log
+    assert "outer iteration 1:" in log

@@ -2,7 +2,7 @@
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import firedrake as fd
 import ufl
@@ -13,6 +13,7 @@ from ufl.form import Form
 from ufl.measure import Measure
 
 from navier_stokes_vms.config import SolverOptions
+from navier_stokes_vms.solver.subscale_storage import LocalUpdateResult, SubscaleIterate
 
 _REASON = PETSc.SNES.ConvergedReason
 
@@ -212,3 +213,116 @@ def relative_change(new: Expr, old: Expr, dx: Measure) -> float:
     change = math.sqrt(fd.assemble(ufl.inner(new - old, new - old) * dx))
     size = math.sqrt(fd.assemble(ufl.inner(new, new) * dx))
     return change / size if size > 0 else change
+
+
+@dataclass(frozen=True)
+class OuterIteration:
+    """One outer iteration: its inner solve, local update, changes and FE residual."""
+
+    iteration: int
+    inner: InnerSolveResult
+    local: LocalUpdateResult | None
+    velocity_change: float
+    pressure_change: float
+    subscale_change: float | None
+    fe_residual_norm: float
+    converged: bool
+
+
+@dataclass(frozen=True)
+class StepSolveResult:
+    """The outer iterations of one time step, whether they converged and why not."""
+
+    converged: bool
+    iterations: tuple[OuterIteration, ...]
+    failure_reason: str | None
+
+
+class StepSolver:
+    """Outer fixed point around the inner solve (spec: Time-step algorithm steps 2, 3, 5)."""
+
+    def __init__(
+        self,
+        inner: InnerSolver,
+        solution: fd.Function,
+        subscale: SubscaleIterate | None,
+        dx: Measure,
+        options: SolverOptions,
+    ) -> None:
+        self._inner = inner
+        self._solution = solution
+        self._subscale = subscale
+        self._dx = dx
+        self._options = options
+        self._previous = fd.Function(solution.function_space())
+        self._previous_subscale = (
+            fd.Function(subscale.value.function_space()) if subscale is not None else None
+        )
+
+    def solve(self) -> StepSolveResult:
+        """Iterate until every change and the FE residual meet the outer tolerance."""
+        rows: list[OuterIteration] = []
+        limit = self._options.outer_max_iterations if self._subscale is not None else 1
+        reference = 0.0
+        for iteration in range(1, limit + 1):
+            self._previous.assign(self._solution)
+            inner = self._inner.solve()
+            if iteration == 1:
+                reference = inner.iterations[0].residual_norm
+            if not inner.converged:
+                rows.append(self._row(iteration, inner, None, None, False))
+                reason = inner.failure_reason or "the inner solve did not converge"
+                return StepSolveResult(False, tuple(rows), reason)
+            if self._subscale is None:
+                rows.append(self._row(iteration, inner, None, None, True))
+                return StepSolveResult(True, tuple(rows), None)
+            self._previous_subscale.assign(self._subscale.value)
+            local = self._subscale.update()
+            subscale_change = relative_change(
+                self._subscale.value, self._previous_subscale, self._dx
+            )
+            row = self._row(iteration, inner, local, subscale_change, False)
+            tolerance = self._options.outer_rtol
+            converged = (
+                local.converged
+                and max(row.velocity_change, row.pressure_change, subscale_change) <= tolerance
+                and row.fe_residual_norm <= max(self._options.inner_atol, tolerance * reference)
+            )
+            rows.append(replace(row, converged=converged))
+            if not local.converged:
+                reason = f"local subscale update did not converge in {local.iterations} sweeps"
+                if self._subscale.is_static:
+                    reason += (
+                        "; static nonlinear subscales on a coarse mesh can make (I + τ∇u) nearly"
+                        " singular; use dynamic subscales or a finer mesh"
+                    )
+                return StepSolveResult(False, tuple(rows), reason)
+            if converged:
+                return StepSolveResult(True, tuple(rows), None)
+        return StepSolveResult(
+            False, tuple(rows), f"outer iteration did not converge in {limit} iterations"
+        )
+
+    def _row(
+        self,
+        iteration: int,
+        inner: InnerSolveResult,
+        local: LocalUpdateResult | None,
+        subscale_change: float | None,
+        converged: bool,
+    ) -> OuterIteration:
+        velocity, pressure = self._solution.subfunctions
+        previous_velocity, previous_pressure = self._previous.subfunctions
+        residual = (
+            inner.iterations[-1].residual_norm if local is None else self._inner.residual_norm()
+        )
+        return OuterIteration(
+            iteration=iteration,
+            inner=inner,
+            local=local,
+            velocity_change=relative_change(velocity, previous_velocity, self._dx),
+            pressure_change=relative_change(pressure, previous_pressure, self._dx),
+            subscale_change=subscale_change,
+            fe_residual_norm=residual,
+            converged=converged,
+        )

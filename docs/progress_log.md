@@ -403,3 +403,132 @@ Deviations from spec or plan:
 4. V2 and V3 tests were restructured to run over variants. V2 runs Galerkin, Dyn-Lin-ASGS P1/P1 and P2/P2 (P2/P2 is cheap on the 4×4 mesh). V3 runs a single ASGS test per degree covering static and dynamic, Newton and Picard, on both meshes. The test names changed accordingly.
 
 Open questions: None.
+
+## Phase 7: Nonlinear scale splitting (2026-10-22)
+Done:
+- Design change, made first: `formulation/vms.py` has `Switches(is_asgs, is_dynamic, is_nonlinear)` and `switches(stabilization)`.
+  - `velocity_subscale` and `vms_terms` receive the switches explicitly, instead of inferring "static" from a missing history.
+  - A history given without χ_D = 1, or χ_D = 1 without a history, raises `ValueError`.
+- a = u_h + ũ*. ũ* is a Function in the quadrature space `subscale_space(mesh, q)`, frozen during the inner solve.
+  - It enters c, L_a in R_u, L*_a and τ_m, τ_c, τ_t. The outflow term keeps u_h.
+  - ũ* is a coefficient, never part of the unknown, so no derivative is taken with respect to it.
+  - Picard uses â = u^(j−1) + ũ*. The frozen-τ Newton Jacobian builds τ on frozen + ũ* and then replaces frozen with u, as in Phase 6.
+- `formulation/vms.py` has `accelerated_subscale`. It gives (I + τ_t∇u_h)⁻¹ τ_t(f − D_t u_h − u_h·∇u_h + νΔ_h u_h − ∇p_h + χ_D ũ_hist/δt), with τ_t from the previous ũ* and `ufl.inv` of the d×d matrix.
+- `solver/subscale_storage.py`:
+  - `SubscaleIterate` holds ũ* and its update expression, either fixed point ũ* ← τ_t(a)(R_u(a) + χ_D ũ_hist/δt) or accelerated. `update()` interpolates the update into the quadrature space until max|Δũ| ≤ subscale_rtol · max|ũ| over all points.
+  - Both maxima are PETSc infinity norms, so they are global over MPI ranks.
+  - `SubscaleStorage.latest` returns ũⁿ.
+- `solver/nonlinear_solver.py` has `StepSolver`, the outer loop of spec step 5:
+  - Each outer iteration runs the inner solve, then the local update. It converges when the relative L² changes of u_h, p_h and ũ* (common rule) are ≤ outer_rtol and the FE residual is ≤ max(inner_atol, outer_rtol · r0), with r0 the initial residual of the step's first inner solve. The limit is outer_max_iterations.
+  - Galerkin and linear splitting take one pass, as before.
+  - Failures take the existing path: last state written, iteration history logged, `ConvergenceError`, exit status 1. The reasons are the inner solve's own reason, "local subscale update did not converge in N sweeps" and "outer iteration did not converge in N iterations".
+  - For static subscales the local-update reason adds "static nonlinear subscales on a coarse mesh can make (I + τ∇u) nearly singular; use dynamic subscales or a finer mesh", as the NaN message names its likely cause.
+- `solver/time_stepper.py`:
+  - Writes the inner rows of every outer iteration and one real outer_iterations.csv row per outer iteration, with subscale_change filled. time_steps.csv has the outer count and the summed inner count.
+  - The step log line gives the outer, inner and local counts.
+  - ũ* ← ũⁿ at step 1 of the spec algorithm. For dynamic subscales ũⁿ is the stored level. For static subscales nothing else is stored, so ũⁿ is the previous step's converged iterate, zero at step 1.
+  - ũ^(n+1) is stored as in Phase 6: the subscale expression at the converged state, at the half level and then extrapolated for Crank–Nicolson.
+- `config.py`: rule 5 accepts Sta-Nl-ASGS and Dyn-Nl-ASGS (all four ASGS cases).
+- Spec paragraph "Static nonlinear subscales can be ill-posed on coarse meshes" (after the eight-cases table) is your edit; it is included in this commit, as the Phase 5 spec edit was.
+- Plan §10 V1 notes the exception for Sta-Nl-ASGS P1/P1 and cites that paragraph.
+- `pyproject.toml`: pytest-xdist added to the dev extras. The README gives the parallel command for the slow suite.
+
+Coarse-mesh finding (V1 Sta-Nl-ASGS P1/P1 on mesh 8, the reason for the plan exception):
+- At step 1 the inner Newton solve converges, but the local update does not converge in 50 sweeps, accelerated or fixed point.
+- At points where u_h ≈ 0, τ_m is at its viscous limit h²/(c1·k⁴·ν) = (1/8)²/(4 · 0.01) ≈ 0.39. With an eigenvalue of ∇u_h near −2.6, 1 + τ·λ ≈ 0, so (I + τ∇u_h) is nearly singular.
+- The update then cycles with period 2: at those points |ũ| jumps between about 0 and about 84, against a converged |ũ| of about 1 elsewhere. After 60 sweeps 77 of 768 points were still changing (scratch probe).
+- Under-relaxation by ½, tried in scratch only and not kept, still left a change of 2.4 after 60 sweeps.
+- Mesh 16 passes but is near the edge: step 1 takes 25 outer iterations and 264 local sweeps, against 7 and 24 on mesh 64.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean (47 files).
+- `pytest tests/unit`: 197 passed in 40 s.
+- `pytest tests/verification -m slow -n 4`: 37 passed, in 10 min 48 s and 11 min 0 s on two runs, with identical numbers (sum of per-test durations about 41 min). The serial run before the V3 trim took 38 min 11 s.
+- `test_subscale_storage.py`, fixed point against accelerated (P1, P2; static, dynamic):
+  - Data: a velocity bounded away from zero, (1 + sin(3x)y/4, 1 + xy/2), and pressure xy − sin y.
+  - History 1.5·velocity, so D_t u_h = 0 with α₀ = 1.5. ũ_hist = 0.01·(sin x, y); ν = 0.01; local rtol 1e-13.
+  - Results: both reach the same ũ (≤ 1e-10 relative), and ũ − τ_t(a)(R_u(a) + χ_D ũ_hist/δt) ≤ 1e-13 relative at every point.
+  - Sweeps, fixed point / accelerated: P1 static 13 / 13, P1 dynamic 9 / 9, P2 static 10 / 9, P2 dynamic 8 / 8.
+- `test_asgs_solver.py`: the finite-difference Jacobian check now also runs with nonlinear splitting, with a random ũ* in [−0.5, 0.5], a = u + ũ* and τ on (frozen or u) + ũ*. It covers frozen and exact τ, static and dynamic, P1 and P2.
+- `test_time_stepper.py`:
+  - A static and a dynamic Kovasznay run (12×16, P1/P1, BDF2, 2 steps) write at least 2 outer rows per step, with only the last one converged, subscale_change filled, final changes ≤ 1e-8 and consistent totals.
+  - `outer_max_iterations = 1` and `subscale_max_iterations = 1` take the failure path with the expected reasons, including the static hint and its absence for dynamic subscales.
+- `test_config.py`: rule 5 accepts all four ASGS cases (P1/P1, P2/P2, τ_c on and off), and `method_name` gives their names.
+- MPI (scratch, not a test): static and dynamic nonlinear Kovasznay runs (12×16, P1/P1, BDF2, 4 steps) on 2 ranks have the same outer and local counts as serial at every step, and final errors equal to about 16 digits. Inner counts differ by up to 3 per step through rounding of the parallel direct solve near the tolerance.
+
+V1, Sta-Nl-ASGS (manufactured_spatial, two BDF1 steps). Errors on three meshes, then rates for each refinement:
+
+| Pair | Meshes | ‖u − u_ex‖ | Rates | ‖∇(u − u_ex)‖ | Rates | ‖p − p_ex‖ | Rates |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P1/P1 | 16, 32, 64 | 6.056e-2 / 1.327e-2 / 3.173e-3 | 2.19, **2.06** | 2.473 / 1.231 / 6.155e-1 | 1.01, **1.00** | 1.344e-1 / 2.111e-2 / 2.141e-3 | 2.67, **3.30** |
+| P2/P2 | 8, 16, 32 | 1.187e-2 / 1.487e-3 / 1.857e-4 | 3.00, **3.00** | 7.318e-1 / 1.819e-1 / 4.474e-2 | 2.01, **2.02** | 8.273e-3 / 9.470e-4 / 1.767e-4 | 3.13, **2.42** |
+
+V2, Dyn-Nl-ASGS (manufactured_temporal, 4×4, T = 1, N = 20 / 40 / 80 / 160). Velocity at T; pressure at the solve level, zero mean:
+
+| Pair | Scheme | ‖u − u_ex‖ | Rates | ‖p − p_ex‖ | Rates |
+| --- | --- | --- | --- | --- | --- |
+| P1/P1 | BDF1 | 1.574e-3 / 7.895e-4 / 3.953e-4 / 1.978e-4 | 1.00, 1.00, **1.00** | 2.787e-3 / 1.377e-3 / 6.843e-4 / 3.411e-4 | 1.02, 1.01, **1.00** |
+| P1/P1 | BDF2 | 2.739e-5 / 7.118e-6 / 1.818e-6 / 4.597e-7 | 1.94, 1.97, **1.98** | 1.343e-4 / 3.403e-5 / 8.561e-6 / 2.147e-6 | 1.98, 1.99, **2.00** |
+| P1/P1 | BDF3, exact history | 2.063e-6 / 2.527e-7 / 3.126e-8 / 3.887e-9 | 3.03, 3.02, **3.01** | 3.703e-6 / 4.442e-7 / 5.434e-8 / 6.717e-9 | 3.06, 3.03, **3.02** |
+| P1/P1 | Crank–Nicolson | 1.340e-5 / 3.326e-6 / 8.299e-7 / 2.074e-7 | 2.01, 2.00, **2.00** | 1.016e-4 / 2.566e-5 / 6.450e-6 / 1.617e-6 | 1.98, 1.99, **2.00** |
+| P1/P1 | BDF3, lower order (logged) | 2.288e-5 / 5.855e-6 / 1.480e-6 / 3.720e-7 | 1.97, 1.98, **1.99** (≥ 1.8) | 1.245e-5 / 3.104e-6 / 7.814e-7 / 1.964e-7 | 2.00, 1.99, **1.99** (≥ 1.8) |
+| P2/P2 | BDF1 | 2.902e-3 / 1.464e-3 / 7.352e-4 / 3.685e-4 | 0.99, 0.99, **1.00** | 2.985e-3 / 1.478e-3 / 7.354e-4 / 3.668e-4 | 1.01, 1.01, **1.00** |
+| P2/P2 | BDF2 | 9.417e-5 / 2.327e-5 / 5.797e-6 / 1.448e-6 | 2.02, 2.01, **2.00** | 1.332e-4 / 3.367e-5 / 8.465e-6 / 2.123e-6 | 1.98, 1.99, **2.00** |
+| P2/P2 | BDF3, exact history | 3.840e-6 / 4.710e-7 / 5.831e-8 / 7.252e-9 | 3.03, 3.01, **3.01** | 3.966e-6 / 4.768e-7 / 5.839e-8 / 7.223e-9 | 3.06, 3.03, **3.02** |
+| P2/P2 | Crank–Nicolson | 5.116e-5 / 1.272e-5 / 3.175e-6 / 7.935e-7 | 2.01, 2.00, **2.00** | 1.062e-4 / 2.671e-5 / 6.701e-6 / 1.678e-6 | 1.99, 2.00, **2.00** |
+| P2/P2 | BDF3, lower order (logged) | 6.831e-5 / 1.692e-5 / 4.226e-6 / 1.056e-6 | 2.01, 2.00, **2.00** (≥ 1.8) | 2.726e-5 / 6.904e-6 / 1.743e-6 / 4.381e-7 | 1.98, 1.99, **1.99** (≥ 1.8) |
+
+V3, nonlinear ASGS on steady Kovasznay (Re = 40, BDF1 dt = 5 to T = 100; final relative step change < 1e-10 in every run). The equivalences are checked on mesh 16 (24×32). Differences are ‖u − u_static,Newton,accelerated‖/‖u_static,Newton,accelerated‖ in L² with the common rule:
+
+| Pair | Static Picard | Dynamic Newton | Dynamic Picard | Static fixed point | Dynamic Newton/Picard |
+| --- | --- | --- | --- | --- | --- |
+| P1/P1 | 1.2e-13 | 2.9e-13 | 3.9e-13 | 8.7e-17 | 2.7e-13 |
+| P2/P2 | 6.3e-13 | 3.9e-13 | 8.2e-13 | 1.5e-16 | 7.9e-13 |
+
+All are ≤ 1e-8. The linear cases on mesh 16 give the Phase 6 values again: at most 3.7e-12.
+
+Iteration counts over the 20 steps:
+
+| Run | Outer total (max per step) | Inner total | Local sweeps total (max per step) |
+| --- | --- | --- | --- |
+| P1/P1, mesh 16, static Newton | 54 (9) | 93 | 152 (45) |
+| P1/P1, mesh 16, static Picard | 54 (9) | 261 | 152 (45) |
+| P1/P1, mesh 16, dynamic Newton | 52 (9) | 89 | 142 (45) |
+| P1/P1, mesh 16, dynamic Picard | 52 (9) | 247 | 142 (45) |
+| P1/P1, mesh 16, static Newton, fixed point | 54 (9) | 92 | 182 (56) |
+| P1/P1, mesh 32, static Newton | 42 (8) | 50 | 96 (30) |
+| P1/P1, mesh 32, dynamic Newton | 42 (8) | 50 | 93 (30) |
+| P2/P2, mesh 16, static Newton | 32 (7) | 24 | 57 (20) |
+| P2/P2, mesh 16, static Picard | 32 (7) | 100 | 57 (20) |
+| P2/P2, mesh 16, dynamic Newton | 34 (7) | 25 | 60 (20) |
+| P2/P2, mesh 16, dynamic Picard | 34 (7) | 107 | 60 (20) |
+| P2/P2, mesh 16, static Newton, fixed point | 32 (7) | 24 | 71 (27) |
+| P2/P2, mesh 32, static Newton | 29 (6) | 13 | 44 (15) |
+| P2/P2, mesh 32, dynamic Newton | 29 (6) | 15 | 46 (15) |
+
+Runs are accelerated unless marked fixed point. Steady errors, static and dynamic agreeing to about 10 digits, drop from mesh 16 to 32 in every case:
+
+| Pair | Velocity | Pressure |
+| --- | --- | --- |
+| P1/P1 | 3.2942e-2 → 9.7145e-3 | 1.8403e-2 → 5.8394e-3 |
+| P2/P2 | 4.0945e-4 → 5.1126e-5 | 1.0847e-4 → 2.5020e-5 |
+
+Deviations from spec or plan:
+1. Explicit switches, as you asked: `vms_terms` and `velocity_subscale` take a `Switches` value and the history, instead of Phase 6's "None means static".
+   - χ_A gates the (D_t ũ, v) term. Its other role, dropping D_t u_h from R_u for OSS, comes with R̂_u and ξ_h in Phase 8.
+2. FE-residual part of the outer test: ‖r‖ ≤ max(inner_atol, outer_rtol · r0), with r0 the initial residual of the step's first inner solve. The spec says only "below tolerance".
+3. Local-update test: max-norm change ≤ subscale_rtol · max|ũ| over all quadrature points. The subscale_change reported in outer_iterations.csv is the relative L² change, like the u and p changes.
+4. Every inner solve iterates to its tolerance. The single Picard iteration per outer iteration that spec step 2 allows is not offered (your decision 4).
+5. The coarse-mesh hint in the local-update failure appears for static subscales only, because its advice is to use dynamic subscales.
+6. Test meshes, accepted by you:
+   - The nonlinear run tests use Kovasznay 12×16, because 6×8 hits the same local-update cycling.
+   - The local-update unit test uses a velocity bounded away from zero and consistent history data, for the same reason.
+7. V1 Sta-Nl-ASGS P1/P1 uses meshes 16, 32, 64, with rates on 32 → 64 (plan §10 V1 updated, your decision 1).
+8. V3 runtime (your decision 3):
+   - static = dynamic, Newton = Picard and fixed point = accelerated are checked on mesh 16 only, for every ASGS case.
+   - Mesh 32 runs only static and dynamic Newton for the error-drop check, so each case keeps its 16 → 32 drop.
+   - fixed point = accelerated is checked for static Newton runs.
+   - No variant or time scheme was dropped.
+9. The slow suite is meant to run in parallel with pytest-xdist: `pytest tests/verification -m slow -n 4`. Four workers were chosen for the 15 GB of memory on this machine. The ten V2 Dyn-Nl-ASGS studies take 100–235 s each and set the wall time.
+
+Open questions: None.

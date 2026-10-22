@@ -26,7 +26,13 @@ from navier_stokes_vms.formulation.stabilization_parameters import (
     dynamic_parameter,
     stabilization_parameters,
 )
-from navier_stokes_vms.formulation.vms import velocity_subscale, vms_terms
+from navier_stokes_vms.formulation.vms import (
+    Switches,
+    accelerated_subscale,
+    switches,
+    velocity_subscale,
+    vms_terms,
+)
 from navier_stokes_vms.postprocessing.diagnostics import DiagnosticState, evaluate_diagnostics
 from navier_stokes_vms.postprocessing.output import CsvWriter, FieldWriter, open_diagnostics_csv
 from navier_stokes_vms.postprocessing.run_logging import IterationLogs, open_iteration_logs
@@ -41,12 +47,8 @@ from navier_stokes_vms.problem.problem_definition import (
     SpaceTimeExpression,
     uses_pressure_null_space,
 )
-from navier_stokes_vms.solver.nonlinear_solver import (
-    InnerSolver,
-    InnerSolveResult,
-    relative_change,
-)
-from navier_stokes_vms.solver.subscale_storage import SubscaleStorage
+from navier_stokes_vms.solver.nonlinear_solver import InnerSolver, StepSolver, StepSolveResult
+from navier_stokes_vms.solver.subscale_storage import SubscaleIterate, SubscaleStorage
 
 
 class TimeStepper:
@@ -68,7 +70,6 @@ class TimeStepper:
         self._solution = fd.Function(space)
         self._velocity, self._pressure = self._solution.subfunctions
         self._pressure.rename("pressure")
-        self._guess = fd.Function(space)
         self._history = [
             fd.Function(velocity_space, name="velocity") for _ in range(self._history_levels())
         ]
@@ -98,38 +99,59 @@ class TimeStepper:
         u, p = ufl.split(self._solution)
         v, q = fd.TestFunctions(space)
         nu = problem.viscosity
-        newton = galerkin_residual(u, p, v, q, u, u, nu, level, self._dx, outflow_ds)
         frozen = self._frozen
-        picard = galerkin_residual(u, p, v, q, frozen, frozen, nu, level, self._dx, outflow_ds)
         jacobian = None
         self._subscales: SubscaleStorage | None = None
         self._u_sub: Expr | None = None
+        self._iterate: SubscaleIterate | None = None
         stabilization = config.stabilization
-        if stabilization.method == "vms":
-            k = config.discretization.velocity_degree
-            tau_m, tau_c = stabilization_parameters(u, nu, k, stabilization.c1, stabilization.c2)
-            tau_m_hat, tau_c_hat = stabilization_parameters(
-                frozen, nu, k, stabilization.c1, stabilization.c2
-            )
-            if not stabilization.pressure_subscale:
-                tau_c = tau_c_hat = ufl.zero()
-            tau_t, tau_t_hat, u_sub_history = tau_m, tau_m_hat, None
-            if stabilization.subscale_dynamics == "dynamic":
-                self._subscales = SubscaleStorage(subscale_space(mesh, degree), len(self._history))
+        if stabilization.method == "none":
+            newton = galerkin_residual(u, p, v, q, u, u, nu, level, self._dx, outflow_ds)
+            picard = galerkin_residual(u, p, v, q, frozen, frozen, nu, level, self._dx, outflow_ds)
+        else:
+            chi = switches(stabilization)
+            if chi.is_dynamic or chi.is_nonlinear:
+                quadrature_space = subscale_space(mesh, degree)
+            u_sub_history = None
+            if chi.is_dynamic:
+                self._subscales = SubscaleStorage(quadrature_space, len(self._history))
                 u_sub_history = self._subscales.history
-                tau_t = dynamic_parameter(tau_m, level.alpha0, level.dt)
-                tau_t_hat = dynamic_parameter(tau_m_hat, level.alpha0, level.dt)
-                self._u_sub = velocity_subscale(u, p, u, nu, level, tau_t, u_sub_history)
+            a, a_hat = u, frozen
+            if chi.is_nonlinear:
+                u_sub_iterate = fd.Function(quadrature_space)
+                a, a_hat = u + u_sub_iterate, frozen + u_sub_iterate
+            tau_t, tau_c = self._parameters(a, nu, level, chi)
+            tau_t_hat, tau_c_hat = self._parameters(a_hat, nu, level, chi)
+            newton = galerkin_residual(u, p, v, q, a, u, nu, level, self._dx, outflow_ds)
+            picard = galerkin_residual(u, p, v, q, a_hat, frozen, nu, level, self._dx, outflow_ds)
             if config.solver.linearization == "newton" and config.solver.newton_tau == "frozen":
                 frozen_tau = newton + vms_terms(
-                    u, p, v, q, u, nu, level, tau_t_hat, tau_c_hat, self._dx, u_sub_history
+                    u, p, v, q, a, nu, level, tau_t_hat, tau_c_hat, self._dx, chi, u_sub_history
                 )
                 # replace expands the derivative before restoring the current advector in τ.
                 jacobian = ufl.replace(fd.derivative(frozen_tau, self._solution), {frozen: u})
-            newton += vms_terms(u, p, v, q, u, nu, level, tau_t, tau_c, self._dx, u_sub_history)
-            picard += vms_terms(
-                u, p, v, q, frozen, nu, level, tau_t_hat, tau_c_hat, self._dx, u_sub_history
+            newton += vms_terms(
+                u, p, v, q, a, nu, level, tau_t, tau_c, self._dx, chi, u_sub_history
             )
+            picard += vms_terms(
+                u, p, v, q, a_hat, nu, level, tau_t_hat, tau_c_hat, self._dx, chi, u_sub_history
+            )
+            u_sub = velocity_subscale(u, p, a, nu, level, tau_t, chi, u_sub_history)
+            if chi.is_dynamic:
+                self._u_sub = u_sub
+            if chi.is_nonlinear:
+                update = (
+                    u_sub
+                    if config.solver.subscale_update == "fixed_point"
+                    else accelerated_subscale(u, p, nu, level, tau_t, chi, u_sub_history)
+                )
+                self._iterate = SubscaleIterate(
+                    u_sub_iterate,
+                    update,
+                    config.solver.subscale_rtol,
+                    config.solver.subscale_max_iterations,
+                    is_static=not chi.is_dynamic,
+                )
         bcs = [
             dirichlet_bc(
                 space.sub(0), name, self._at_solve_level(bc.value, x), problem.boundary_tags
@@ -140,8 +162,11 @@ class TimeStepper:
         null_space = (
             constant_pressure_null_space(space) if uses_pressure_null_space(problem) else None
         )
-        self._inner = InnerSolver(
+        inner = InnerSolver(
             self._solution, newton, picard, frozen, bcs, null_space, config.solver, jacobian
+        )
+        self._step_solver = StepSolver(
+            inner, self._solution, self._iterate, self._dx, config.solver
         )
         self._diagnostic_state = DiagnosticState(
             problem=problem,
@@ -210,41 +235,43 @@ class TimeStepper:
         coefficients = step_coefficients(timing.scheme, timing.startup, step)
         self._set_level(step, coefficients)
         t = self._time(step)
-        self._guess.assign(self._solution)
-        result = self._inner.solve()
-        for row in result.iterations:
-            logs.inner.write(
+        result = self._step_solver.solve()
+        for outer in result.iterations:
+            for row in outer.inner.iterations:
+                logs.inner.write(
+                    step=step,
+                    time=t,
+                    outer_iteration=outer.iteration,
+                    inner_iteration=row.iteration,
+                    method=row.method,
+                    residual_norm=row.residual_norm,
+                    relative_residual=row.relative_residual,
+                    update_norm=row.update_norm,
+                    linear_iterations=row.linear_iterations,
+                )
+            logs.outer.write(
                 step=step,
                 time=t,
-                outer_iteration=1,
-                inner_iteration=row.iteration,
-                method=row.method,
-                residual_norm=row.residual_norm,
-                relative_residual=row.relative_residual,
-                update_norm=row.update_norm,
-                linear_iterations=row.linear_iterations,
+                outer_iteration=outer.iteration,
+                inner_iterations=len(outer.inner.iterations) - 1,
+                velocity_change=outer.velocity_change,
+                pressure_change=outer.pressure_change,
+                subscale_change=outer.subscale_change,
+                xi_change=None,
+                zeta_change=None,
+                fe_residual_norm=outer.fe_residual_norm,
+                converged=outer.converged,
             )
-        inner_iterations = len(result.iterations) - 1
-        logs.outer.write(
-            step=step,
-            time=t,
-            outer_iteration=1,
-            inner_iterations=inner_iterations,
-            velocity_change=relative_change(self._velocity, self._guess.subfunctions[0], self._dx),
-            pressure_change=relative_change(self._pressure, self._guess.subfunctions[1], self._dx),
-            subscale_change=None,
-            xi_change=None,
-            zeta_change=None,
-            fe_residual_norm=result.iterations[-1].residual_norm,
-            converged=result.converged,
-        )
+        outer_iterations = len(result.iterations)
+        inner_iterations = sum(len(outer.inner.iterations) - 1 for outer in result.iterations)
+        local_iterations = sum(outer.local.iterations for outer in result.iterations if outer.local)
         if not result.converged:
             logs.time_steps.write(
                 step=step,
                 time=t,
                 scheme_used=coefficients.scheme,
                 dt=timing.dt,
-                outer_iterations=1,
+                outer_iterations=outer_iterations,
                 inner_iterations_total=inner_iterations,
                 converged=False,
                 wall_time=time.perf_counter() - started,
@@ -258,19 +285,21 @@ class TimeStepper:
             time=t,
             scheme_used=coefficients.scheme,
             dt=timing.dt,
-            outer_iterations=1,
+            outer_iterations=outer_iterations,
             inner_iterations_total=inner_iterations,
             converged=True,
             wall_time=time.perf_counter() - started,
         )
         summary = "".join(f", {name} {value:.6e}" for name, value in values.items())
         self._logger.info(
-            "step %d, t = %.6g, %s: %d inner iteration(s), residual %.3e%s",
+            "step %d, t = %.6g, %s: %d outer, %d inner, %d local iteration(s), residual %.3e%s",
             step,
             t,
             coefficients.scheme,
+            outer_iterations,
             inner_iterations,
-            result.iterations[-1].residual_norm,
+            local_iterations,
+            result.iterations[-1].fe_residual_norm,
             summary,
         )
         vtk_every = self._config.output.vtk_every
@@ -288,6 +317,8 @@ class TimeStepper:
         self._velocity_history.assign(sum(weight * velocity for weight, velocity in weighted))
         if self._subscales is not None:
             self._subscales.form_history(coefficients)
+            if self._iterate is not None:
+                self._iterate.value.assign(self._subscales.latest)
 
     def _advance(self, coefficients: StepCoefficients) -> None:
         if self._subscales is not None:
@@ -300,25 +331,44 @@ class TimeStepper:
             self._history[level].assign(self._history[level - 1])
         self._history[0].assign(self._endpoint)
 
-    def _fail(self, step: int, result: InnerSolveResult) -> None:
+    def _fail(self, step: int, result: StepSolveResult) -> None:
         solve_time = float(self._pressure_time)
         self._endpoint.assign(self._velocity)
         self._fields.write(self._endpoint, self._pressure, solve_time, solve_time)
-        self._logger.error("Step %d: the inner solve did not converge. Iteration history:", step)
-        for row in result.iterations:
+        self._logger.error("Step %d: %s. Iteration history:", step, result.failure_reason)
+        for outer in result.iterations:
             self._logger.error(
-                "  iteration %d (%s): residual %.6e, relative %.3e, update %s",
-                row.iteration,
-                row.method,
-                row.residual_norm,
-                row.relative_residual,
-                "-" if row.update_norm is None else f"{row.update_norm:.3e}",
+                "  outer iteration %d: velocity change %.3e, pressure change %.3e, subscale "
+                "change %s, local sweeps %s, FE residual %.6e",
+                outer.iteration,
+                outer.velocity_change,
+                outer.pressure_change,
+                "-" if outer.subscale_change is None else f"{outer.subscale_change:.3e}",
+                "-" if outer.local is None else outer.local.iterations,
+                outer.fe_residual_norm,
             )
-        detail = f"; {result.failure_reason}" if result.failure_reason else ""
+            for row in outer.inner.iterations:
+                self._logger.error(
+                    "    iteration %d (%s): residual %.6e, relative %.3e, update %s",
+                    row.iteration,
+                    row.method,
+                    row.residual_norm,
+                    row.relative_residual,
+                    "-" if row.update_norm is None else f"{row.update_norm:.3e}",
+                )
         raise ConvergenceError(
-            f"inner solve did not converge at step {step}; last state written to "
-            f"{self._folder / 'fields'} at t = {solve_time:g}{detail}"
+            f"step {step} did not converge: {result.failure_reason}; last state written to "
+            f"{self._folder / 'fields'} at t = {solve_time:g}"
         )
+
+    def _parameters(
+        self, a: Expr, nu: float, level: SolveLevel, chi: Switches
+    ) -> tuple[Expr, Expr]:
+        stabilization = self._config.stabilization
+        k = self._config.discretization.velocity_degree
+        tau_m, tau_c = stabilization_parameters(a, nu, k, stabilization.c1, stabilization.c2)
+        tau_t = dynamic_parameter(tau_m, level.alpha0, level.dt) if chi.is_dynamic else tau_m
+        return tau_t, tau_c if stabilization.pressure_subscale else ufl.zero()
 
     def _time(self, steps: float) -> float:
         return float(f"{steps * self._config.time.dt:.15g}")

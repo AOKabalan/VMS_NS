@@ -15,12 +15,14 @@ ERRORS = ("velocity_error_l2", "pressure_error_l2")
 
 DYNAMIC_ASGS = (
     'method = "vms"\nsubscale_space = "asgs"\nsubscale_dynamics = "dynamic"\n'
-    'scale_splitting = "linear"'
+    'scale_splitting = "{splitting}"'
 )
 VARIANTS = {
     "galerkin": (2, 1, 'method = "none"'),
-    "dyn_lin_asgs_p1": (1, 1, DYNAMIC_ASGS),
-    "dyn_lin_asgs_p2": (2, 2, DYNAMIC_ASGS),
+    "dyn_lin_asgs_p1": (1, 1, DYNAMIC_ASGS.format(splitting="linear")),
+    "dyn_lin_asgs_p2": (2, 2, DYNAMIC_ASGS.format(splitting="linear")),
+    "dyn_nl_asgs_p1": (1, 1, DYNAMIC_ASGS.format(splitting="nonlinear")),
+    "dyn_nl_asgs_p2": (2, 2, DYNAMIC_ASGS.format(splitting="nonlinear")),
 }
 
 

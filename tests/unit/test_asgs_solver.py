@@ -27,13 +27,17 @@ from navier_stokes_vms.formulation.stabilization_parameters import (
     dynamic_parameter,
     stabilization_parameters,
 )
-from navier_stokes_vms.formulation.vms import vms_terms
+from navier_stokes_vms.formulation.vms import Switches, vms_terms
 from navier_stokes_vms.solver.time_stepper import TimeStepper
 
 LOGGER = logging.getLogger(__name__)
 
+STATIC_LINEAR = Switches(is_asgs=True, is_dynamic=False, is_nonlinear=False)
 
-def asgs_config(degree: int, options: SolverOptions, dynamics: str = "static") -> Config:
+
+def asgs_config(
+    degree: int, options: SolverOptions, dynamics: str = "static", splitting: str = "linear"
+) -> Config:
     return Config(
         case="manufactured_spatial",
         run_name="asgs",
@@ -41,20 +45,22 @@ def asgs_config(degree: int, options: SolverOptions, dynamics: str = "static") -
         discretization=DiscretizationOptions(velocity_degree=degree, pressure_degree=degree),
         time=TimeOptions(scheme="bdf1", dt=0.05, t_end=0.05),
         stabilization=StabilizationOptions(
-            subscale_space="asgs", subscale_dynamics=dynamics, scale_splitting="linear"
+            subscale_space="asgs", subscale_dynamics=dynamics, scale_splitting=splitting
         ),
         solver=options,
         output=OutputOptions(vtk_every=0),
     )
 
 
+@pytest.mark.parametrize("splitting", ["linear", "nonlinear"])
 @pytest.mark.parametrize("dynamics", ["static", "dynamic"])
 @pytest.mark.parametrize("degree", [1, 2])
 @pytest.mark.parametrize("newton_tau", ["frozen", "exact"])
 def test_newton_jacobian_matches_finite_differences(
-    tmp_path: Path, degree: int, newton_tau: str, dynamics: str
+    tmp_path: Path, degree: int, newton_tau: str, dynamics: str, splitting: str
 ) -> None:
-    config = asgs_config(degree, replace(SolverOptions(), newton_tau=newton_tau), dynamics)
+    options = replace(SolverOptions(), newton_tau=newton_tau)
+    config = asgs_config(degree, options, dynamics, splitting)
     problem = build_problem(config)
     stepper = TimeStepper(config, problem, tmp_path, LOGGER)
     stepper._initialise()
@@ -75,19 +81,23 @@ def test_newton_jacobian_matches_finite_differences(
         stepper._velocity_history,
         problem.forcing(fd.SpatialCoordinate(problem.mesh), stepper._t_new),
     )
-    tau_m, tau_c = stabilization_parameters(
-        frozen if newton_tau == "frozen" else u, problem.viscosity, degree, 4.0, 2.0
-    )
+    a, a_tau = u, frozen if newton_tau == "frozen" else u
+    if splitting == "nonlinear":
+        u_sub_iterate = stepper._iterate.value
+        u_sub_iterate.dat.data[:] = rng.uniform(-0.5, 0.5, u_sub_iterate.dat.data.shape)
+        a, a_tau = a + u_sub_iterate, a_tau + u_sub_iterate
+    tau_m, tau_c = stabilization_parameters(a_tau, problem.viscosity, degree, 4.0, 2.0)
     u_sub_history = None
     if dynamics == "dynamic":
         u_sub_history = stepper._subscales.history
         u_sub_history.dat.data[:] = rng.uniform(-1.0, 1.0, u_sub_history.dat.data.shape)
         tau_m = dynamic_parameter(tau_m, level.alpha0, level.dt)
-    form = galerkin_residual(u, p, v, q, u, u, problem.viscosity, level, stepper._dx, None)
+    chi = Switches(True, dynamics == "dynamic", splitting == "nonlinear")
+    form = galerkin_residual(u, p, v, q, a, u, problem.viscosity, level, stepper._dx, None)
     form += vms_terms(
-        u, p, v, q, u, problem.viscosity, level, tau_m, tau_c, stepper._dx, u_sub_history
+        u, p, v, q, a, problem.viscosity, level, tau_m, tau_c, stepper._dx, chi, u_sub_history
     )
-    jacobian = stepper._inner._newton._problem.J
+    jacobian = stepper._step_solver._inner._newton._problem.J
     action = fd.assemble(ufl.action(jacobian, direction))
     epsilon = 1e-6
     solution.assign(base + epsilon * direction)
@@ -126,7 +136,7 @@ def test_each_iteration_logs_the_true_asgs_residual(
     )
     config = asgs_config(1, options)
     stepper = TimeStepper(config, build_problem(config), tmp_path, LOGGER)
-    solver = stepper._inner
+    solver = stepper._step_solver._inner
     u, p = ufl.split(stepper._solution)
     v, q = fd.TestFunctions(stepper._solution.function_space())
     problem = stepper._problem
@@ -138,7 +148,9 @@ def test_each_iteration_logs_the_true_asgs_residual(
     )
     tau_m, tau_c = stabilization_parameters(u, problem.viscosity, 1, 4.0, 2.0)
     reference = galerkin_residual(u, p, v, q, u, u, problem.viscosity, level, stepper._dx, None)
-    reference += vms_terms(u, p, v, q, u, problem.viscosity, level, tau_m, tau_c, stepper._dx)
+    reference += vms_terms(
+        u, p, v, q, u, problem.viscosity, level, tau_m, tau_c, stepper._dx, STATIC_LINEAR, None
+    )
     measured = []
     append = solver._append
 
@@ -171,7 +183,7 @@ def test_start_from_rest_handles_the_tau_derivative(tmp_path: Path, newton_tau: 
     stepper = TimeStepper(config, problem, tmp_path, LOGGER)
     if newton_tau == "frozen":
         stepper.run()
-        assert np.isfinite(stepper._inner.residual_norm())
+        assert np.isfinite(stepper._step_solver._inner.residual_norm())
     else:
         with pytest.raises(ConvergenceError, match="solver.newton_tau = 'exact'"):
             stepper.run()

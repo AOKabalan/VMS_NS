@@ -12,9 +12,11 @@ from navier_stokes_vms.discretization.function_spaces import mixed_space
 from navier_stokes_vms.discretization.quadrature import volume_measure
 from navier_stokes_vms.formulation.galerkin import SolveLevel
 from navier_stokes_vms.formulation.stabilization_parameters import stabilization_parameters
-from navier_stokes_vms.formulation.vms import vms_terms
+from navier_stokes_vms.formulation.vms import Switches, vms_terms
 
 LOGGER = logging.getLogger(__name__)
+
+STATIC_LINEAR = Switches(is_asgs=True, is_dynamic=False, is_nonlinear=False)
 
 
 def free_matrix(
@@ -54,7 +56,7 @@ def test_static_asgs_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, 
     )
     tau_m, tau_c = stabilization_parameters(a, nu, k, 4.0, 2.0)
     energy = nu * ufl.inner(ufl.grad(u), ufl.grad(v)) * dx
-    energy += vms_terms(u, p, v, q, a, nu, level, tau_m, tau_c, dx)
+    energy += vms_terms(u, p, v, q, a, nu, level, tau_m, tau_c, dx, STATIC_LINEAR, None)
     matrix, _ = free_matrix(fd.lhs(energy), state, fd.DirichletBC(space.sub(0), 0, "on_boundary"))
     eigenvalues = np.linalg.eigvalsh(matrix)
     smallest, largest = eigenvalues[0], eigenvalues[-1]
@@ -89,7 +91,18 @@ def test_cell_diameter_detects_the_p2_counterexample() -> None:
     energies = []
     for momentum, continuity in ((diameter_tau_m, diameter_tau_c), (tau_m, tau_c)):
         stabilization = vms_terms(
-            velocity, pressure, velocity, pressure, velocity, 1.0, level, momentum, continuity, dx
+            velocity,
+            pressure,
+            velocity,
+            pressure,
+            velocity,
+            1.0,
+            level,
+            momentum,
+            continuity,
+            dx,
+            STATIC_LINEAR,
+            None,
         )
         energies.append(fd.assemble(viscous + stabilization))
     LOGGER.info("U5 P2 counterexample: diameter energy=%g, shortest-edge energy=%g", *energies)

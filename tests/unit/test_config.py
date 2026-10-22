@@ -83,8 +83,6 @@ SHORT_RUN = (
 )
 
 VMS_CASES = [
-    ("asgs", "static", "nonlinear", "Sta-Nl-ASGS", 7),
-    ("asgs", "dynamic", "nonlinear", "Dyn-Nl-ASGS", 7),
     ("oss", "static", "linear", "Sta-Lin-OSS", 8),
     ("oss", "dynamic", "linear", "Dyn-Lin-OSS", 8),
     ("oss", "static", "nonlinear", "Sta-Nl-OSS", 8),
@@ -231,16 +229,23 @@ def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
 @pytest.mark.parametrize("degree", [1, 2])
 @pytest.mark.parametrize("pressure_subscale", ["true", "false"])
 @pytest.mark.parametrize(("dynamics", "name"), [("static", "Sta"), ("dynamic", "Dyn")])
-def test_rule5_accepts_linear_asgs(
-    tmp_path: Path, degree: int, pressure_subscale: str, dynamics: str, name: str
+@pytest.mark.parametrize(("splitting", "label"), [("linear", "Lin"), ("nonlinear", "Nl")])
+def test_rule5_accepts_every_asgs_case(
+    tmp_path: Path,
+    degree: int,
+    pressure_subscale: str,
+    dynamics: str,
+    name: str,
+    splitting: str,
+    label: str,
 ) -> None:
     text = (
-        STATIC_ASGS.replace('"static"', f'"{dynamics}"')
+        STATIC_ASGS.replace('"static"', f'"{dynamics}"').replace('"linear"', f'"{splitting}"')
         + f"pressure_subscale = {pressure_subscale}\n[discretization]\n"
         f"velocity_degree = {degree}\npressure_degree = {degree}\n"
     )
     config = load_text(tmp_path, text)
-    assert method_name(config.stabilization) == f"{name}-Lin-ASGS"
+    assert method_name(config.stabilization) == f"{name}-{label}-ASGS"
     assert config.discretization.velocity_degree == degree
 
 

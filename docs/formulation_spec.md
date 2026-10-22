@@ -171,6 +171,8 @@ Each case is the master formulation with the switch values in its row; R̂\_u = 
 
 Only the two linear-splitting ASGS cases are fully explicit in u\_h and p\_h, so the inner solve alone completes the time step. Every OSS case also needs the outer loop because ξ\_h and ζ\_h are lagged, and every nonlinear-splitting case because ũ sits inside a, τ\_m and τ\_c. Colomés et al. report the linear ASGS cases diverging on coarse turbulent meshes and dynamic OSS as robust and cheapest, with no significant cost difference between its linear and nonlinear forms (§5.2.2). Dyn-Nl-OSS is the target because it is the most complete model, not because the evidence ranks it above Dyn-Lin-OSS.
 
+Static nonlinear subscales can be ill-posed on coarse meshes. With a = u\_h + ũ the pointwise problem is (I + τ ∇u\_h) ũ = τ R, with τ depending on |u\_h + ũ|. Where the flow is nearly at rest, τ\_m approaches its viscous limit h²/(c1·k⁴·ν); when τ\_m times an eigenvalue of −∇u\_h approaches 1, the matrix is nearly singular, the problem may have no well-behaved solution, and no local iteration converges. Dynamic subscales avoid this while δt|∇u\_h| is moderate, because τ\_t ≤ δt/α0, and finer meshes or higher degrees shrink τ\_m. This matches the sources: Colomés et al. leave static nonlinear cases out of their comparison (Table 1) and report static nonlinear ASGS diverging in their small-time-step study (Table 4). A failed local update is therefore reported as a property of the case and mesh, not repaired by relaxation or a different local solver.
+
 ## Galerkin baseline
 
 The unstabilized reference solves the master FE equation with every stabilization term removed, on an inf-sup stable Taylor–Hood pair.
