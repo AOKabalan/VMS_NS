@@ -942,3 +942,37 @@ Deviations from spec or plan:
 Open questions:
 1. Re 1000 cavity: keep Dyn-Lin-OSS (feasible, about 10 min for all three); run Dyn-Nl-OSS at δt = 0.01 (about 17 h for P1/P1 64, more for 128 and P2/P2); or drop the Re 1000 VMS runs.
 2. Cylinder levels and cuts, against the 24 h budget: the proposal is in the report to the owner and is decided there.
+
+## Phase 10a: final validation run set (2026-10-22)
+Done (your decisions on the Phase 10a open questions):
+1. **Re 1000 cavity:** it keeps Dyn-Lin-OSS with 5 Picard iterations before Newton.
+   - Your spec update records the condition in the paragraph after the eight-cases table: at a boundary-velocity jump τ_m|∇u_h| ≈ Re·h/(c1·k⁴), with the Phase 10a measurements (about 3.9 for Re 1000 on 64×64 P1, where 6 of 49,152 quadrature points failed, all in the two corner cells; about 0.39 at Re 100).
+   - The headers of the three `cavity_re1000_linoss_*` configs now cite that paragraph and the value.
+2. **Cylinder run set (your choice of the proposed set, t_end = 30 as in FEATFLOW's procedure):** Taylor–Hood on levels 1, 2 and 3; Dyn-Nl-OSS P1/P1 at δt = 0.005 on levels 1 and 2; Dyn-Nl-OSS P2/P2 on level 1; Dyn-Nl-OSS P1/P1 at δt = 0.0025 on level 1.
+   - New configs: `cylinder_th_l2_dt0.005`, `cylinder_th_l3_dt0.005`, `cylinder_oss_p1_l2_dt0.005`. They differ from their level-1 versions only in run name and mesh file.
+   - With all 7 cavity and both lattice-vortex runs, the projected queue total is about 18 h: cavities 0.2 h, lattice vortex 0.5 h, cylinder 17.0 h. The cylinder projections cover only the start from rest, so allow about ±30 %.
+3. **Queue order:** the cost key mesh size × degree² × steps put Taylor–Hood level 3 (3.1 h) after OSS P1/P1 level 2 (4.8 h).
+   - The key is now vertices × unknowns per vertex × outer iterations × steps. P2 has about 4 nodes per vertex, OSS doubles the fields for ξ_h and ζ_h, and nonlinear splitting is weighted by 7 outer iterations per step, the mean measured in the probes.
+   - The cylinder order is now the measured order: Taylor–Hood L1 (0.19 h), Taylor–Hood L2 (1.08 h), OSS P1/P1 L1 (1.16 h), OSS P1/P1 L1 δt 0.0025 (2.13 h), Taylor–Hood L3 (3.09 h), OSS P2/P2 L1 (4.53 h), OSS P1/P1 L2 (4.81 h).
+   - Cavities and lattice vortex still come first; all cavity runs take minutes.
+
+Possible second batch (cut from this queue; probe projections on 4 ranks, t_end = 30):
+
+| Run | Projected | Peak RSS |
+| --- | --- | --- |
+| Dyn-Nl-OSS P1/P1 L3, δt 0.005 | 20.1 h | 2.5 GB |
+| Dyn-Nl-OSS P1/P1 L3, δt 0.0025 | 40.8 h | 2.5 GB |
+| Dyn-Nl-OSS P2/P2 L3, δt 0.005 | 100.1 h | 6.6 GB |
+| Dyn-Nl-OSS P2/P2 L2, δt 0.005 | 23.0 h | 2.9 GB |
+| Dyn-Nl-OSS P1/P1 L2, δt 0.0025 | 8.3 h | 1.7 GB |
+
+If the first batch's periodicity check shows established shedding well before t = 15, these could run to t = 15 at about half the cost.
+
+Tests:
+- `ruff check .` and `ruff format --check .` are clean. `pytest tests/unit -n 4`: 348 passed. The config test now expects 16 configs, 7 of them cylinder.
+- Smoke queue on 4 ranks from a clean folder: 16 completed, 0 failed, in 3 min 44 s, in the new cost order. The new runs load their meshes: Taylor–Hood L2 80,875 unknowns, Taylor–Hood L3 262,656, OSS P1/P1 L2 54,450.
+- The slow suite was not rerun: nothing in `src/` changed since the Phase 10a run (63 passed), only configs, the queue's ordering, a test count and documents.
+
+Deviations from spec or plan: none beyond the queue cost key, item 3.
+
+Open questions: None. Both Phase 10a questions are resolved by your decisions above. The full queue is yours to launch: `bash scripts/run_validation_queue.sh`.

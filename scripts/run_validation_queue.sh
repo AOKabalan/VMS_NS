@@ -17,8 +17,9 @@ log="$root/validation_queue.log"
 failures=0
 completed=0
 skipped=0
-# Within each case group, cheaper runs first: mesh size (cells, or the gmsh file's size) times
-# degree² times the number of steps. The order is deterministic.
+# Within each case group, cheaper runs first. Estimated cost: vertices × unknowns per vertex
+# (P2 has about 4 nodes per vertex; OSS doubles the fields with ξ, ζ) × outer iterations per
+# step (about 7 with nonlinear splitting) × steps. The order is deterministic.
 while IFS=$'\t' read -r config case_name run_name; do
     folder="$root/$case_name/$run_name"
     if [[ -f "$folder/validation.csv" ]]; then
@@ -44,17 +45,28 @@ while IFS=$'\t' read -r config case_name run_name; do
 done < <(python - <<'PY'
 from pathlib import Path
 import tomllib
+groups = {'lid_driven_cavity': 0, 'lattice_vortex': 1, 'cylinder_dfg_2d': 2}
+nodes_per_vertex = {1: 1, 2: 4}
+
+def vertices(mesh):
+    if 'cells' in mesh:
+        return (mesh['cells'][0] + 1) * (mesh['cells'][1] + 1)
+    lines = Path(mesh['file']).read_text().splitlines()
+    return int(lines[lines.index('$Nodes') + 1])
+
 entries = []
-groups = {'lid_driven_cavity':0, 'lattice_vortex':1, 'cylinder_dfg_2d':2}
 for path in Path('configs/validation').glob('*.toml'):
     config = tomllib.loads(path.read_text())
-    mesh = config.get('mesh', {})
-    cells = mesh['cells'][0] * mesh['cells'][1] if 'cells' in mesh else Path(mesh['file']).stat().st_size
-    degree = config.get('discretization',{}).get('velocity_degree',1)
+    degrees, stabilization = config['discretization'], config['stabilization']
+    vms = stabilization['method'] == 'vms'
+    fields = 2 * nodes_per_vertex[degrees['velocity_degree']] + nodes_per_vertex[degrees['pressure_degree']]
+    if vms and stabilization['subscale_space'] == 'oss':
+        fields *= 2
+    outer = 7 if vms and stabilization['scale_splitting'] == 'nonlinear' else 1
     steps = config['time']['t_end'] / config['time']['dt']
-    size = cells * degree**2 * steps
-    entries.append(((groups[config['case']],size,str(path)), path,config['case'],config['run_name']))
-for _,path,case,name in sorted(entries):
+    cost = vertices(config['mesh']) * fields * outer * steps
+    entries.append(((groups[config['case']], cost, str(path)), path, config['case'], config['run_name']))
+for _, path, case, name in sorted(entries):
     print(f'{path}\t{case}\t{name}')
 PY
 )

@@ -1,5 +1,7 @@
-# Re 1000 uses linear splitting: Dyn-Nl-OSS fails its local subscale update in the
-# lid-corner cells at this δt (progress log, Phase 10a). The Picard warm-up starts Newton from rest.
+# Re 1000 uses linear splitting (owner's decision, Phase 10a). At the lid corners
+# τ_m|∇u_h| ≈ Re·h/(c1·k⁴) ≈ 3.9 on 64×64 P1, so Dyn-Nl-OSS fails its local subscale update
+# at this δt (spec: The eight cases, the paragraph on static nonlinear subscales and
+# boundary-velocity jumps). The Picard warm-up starts Newton from rest.
 case = "lid_driven_cavity"
 run_name = "cavity_re1000_linoss_p2_64"
 

@@ -191,10 +191,10 @@ def test_lattice_formula_forcing_flux_and_energy() -> None:
 
 def test_every_validation_config_loads_with_requested_pairs_and_time_steps() -> None:
     configs = [load_config(path) for path in (ROOT / "configs/validation").glob("*.toml")]
-    assert len(configs) == 13
+    assert len(configs) == 16
     assert sum(c.case == "lid_driven_cavity" for c in configs) == 7
     assert sum(c.case == "lattice_vortex" for c in configs) == 2
-    assert sum(c.case == "cylinder_dfg_2d" for c in configs) == 4
+    assert sum(c.case == "cylinder_dfg_2d" for c in configs) == 7
     for config in configs:
         if config.case == "cylinder_dfg_2d":
             assert config.time.t_end == 30 and config.time.dt in (0.005, 0.0025)
