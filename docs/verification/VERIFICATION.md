@@ -1,3 +1,163 @@
+**Phase 11b — minimal EMAC–VMS closure and conservation corrections — 23 October 2026**
+
+Reviewed the revised 19-page `~/04_applications/FEops_prep/VMS_masters_thesis/chapter5_preview.pdf` after first checking its SHA-256: `720be75921b3956325668b85cac1641428b0fb626e9e4ca4bf67e5d248b014bc`, exactly the supplied value. Applied items 1–5 of `docs/phase11b_spec_changes.md`, SHA-256 `4bb90f5d7784b6d6253bff03ba53ef71e10a5a092e3e886d2cec07b1308729e2`, including the explicit owner decisions. The resulting `docs/formulation_spec.md` has SHA-256 `f7912ddf478fc276284a061b7d66123b8102ce7dd1d7269e4fcab059c1b339b0`. The supplied change list is retained unchanged. The chapter's equations were re-derived, not accepted on agreement with the change list. PDF pages 12–13 were also inspected as rendered images.
+
+**Verdict: the updated spec passes. No remaining discrepancy requires changing its equations, signs or iteration.** The minimal closure has the claimed total convective energy cancellation for both splittings, reuses the physical-pressure master residual, and removes convective force and torque up to the stated boundary fluxes. It retains the master's possible local singularity and unmatched-sweep OSS orthogonality defect. The gate has no equation-level blocker; work stops after Phase 11b as explicitly requested. Two remaining chapter prose errors are recorded separately below.
+
+No implementation or plan changes, simulations, repository test suites or access to `results/`. A process check found no running validation queue, validation runner, MPI or pytest processes. Independent verification used component algebra, integration by parts and the discrete scale equations, supplemented by a small standalone exact-rational check in `/tmp`: 80 tensor/pressure/midpoint cases across 2D/3D and both splittings, 40 determinant cases, and the two local-update counterexamples below all passed. These are verification probes, not the future implementation tests T1–T6.
+
+Notation: \(u=u_h\), \(s=\tilde u\), \(\chi=\chi_N\), \(A_{ij}=\partial_j u_i\) (UFL gradient), \(D=(A+A^T)/2\), \(d=\operatorname{tr}A\), and \(a=u+\chi s\). Thus the chapter gradient is \(A^T\). \(G(v)\) denotes the minimal resolved convective functional, not the matrix called G in the spec's local update. All discrete products use the common quadrature.
+
+| Item | Spec says | Source says / independent derivation | Agree / Disagree | Note |
+| --- | --- | --- | --- | --- |
+| J01 — index convention | Retain all five UFL translations. | Advection is Aa; chapter-gradient times a is Aᵀa; the nonsymmetric contraction is uⱼaᵢ∂ᵢvⱼ. Symmetrization removes the transpose difference. | Agree | The Phase 11a U10 conclusions remain valid; the new residual uses both distinct contractions. |
+| J02 — minimal stress and expansion | \(T=s\otimes u+u\otimes s+\chi s\otimes s\); replace both convective terms. | \(T:\nabla^s v=s\cdot[(a\cdot\nabla)v+(\nabla v)u]\) by indices, for one common s. | Agree | Exactly (5.23), (5.25), (5.28), with χ=0 giving (5.32). No isotropic part or second standard coupling. |
+| J03 — pointwise energy | \(T:D=s\cdot N\), \(N=Aa+A^Tu\). | \(T:D=2s\cdot Du+\chi s\cdot Ds=s\cdot[(A+A^T)u+\chi As]\). | Agree | χ multiplies the quadratic contraction. No divergence, projection, bubble or integration-by-parts assumption. |
+| J04 — integrated energy and momenta | \(G(u)+(s,N)=0\), \(G(e_k)=G(\phi)=0\) under the stated flux conditions. | The energy sum is \(B(u)\); the two rigid tests give \(B(v)+H_b(v)\). Definitions and derivation in J-D1. | Agree with explicit boundary scope | These zeros are not unconditional on open or periodic angular domains. Arbitrary quadrature-point s is allowed, including at boundary-adjacent points. |
+| J05 — linear splitting and zero subscale | Drop only the Reynolds stress and set a=u; no outer subscale loop. | \(T_{\rm lin}:D=s\cdot(A+A^T)u\), and s=0 gives exactly \(c_E(u;u,v)\). | Agree | Both conservation identities survive; (5.32) is not the former full-stress linear model. |
+| J06 — physical residual | Use modified P in the resolved equation and physical \(p=P+\lvert u\rvert^2/2\) in the residual. | \(\nabla p=\nabla P+A^Tu\), so \(N+\nabla P=Aa+\nabla p\). | Agree | Exactly the master subscale equation with the selected stress viscosity. For OSS, dropping \(D_tu\) is an equivalent projected representative, not equality of the unreduced residual fields. |
+| J07 — pressure reporting and midpoint | Null space on P; recover and normalize physical p separately in a rich enough space; use averaged velocity for CN. | Endpoint-average kinetic pressure exceeds the correct half-level correction by \(\lvert u^{n+1}-u^n\rvert^2/8\). | Agree | Projection of the correction into Qh changes the physical field and generally its gradient. Pressure itself is not extrapolated. |
+| J08 — stress assembly and Newton | Substitute \(s_{\rm expr}\) in every T slot; residual and τ use stored s*. | T and its full derivative are symmetric; the substituted tensor is nonlinear. The unmatched energy remainder is \(\chi(s_{\rm expr},A(s^*-s_{\rm expr}))\). | Agree | J-D2. At the coupled fixed point this remainder is zero. This is the eliminated-subscale option of Remark 5.9, not the fully lagged matrix (5.41) during iterations. |
+| J09 — master local update | \((I+\tau_tA)s=\tau_t(X-\xi)\). | Move \((s\cdot\nabla)u=As\) from the residual to the left; \(\tau_t^{-1}=\chi_D\alpha_0/\delta t+\tau_m^{-1}\). | Agree | Same pointwise system for all nonlinear forms, with physical pressure. No new M-based solve. Dynamic subscales can also fail. |
+| J10 — determinant and solvability | In 2D trace-free flow, determinant differs from the symmetric-strain determinant by \(\tau_t^2\omega^2/4\). | Set \(A=\left[\begin{smallmatrix}r&b\\c&-r\end{smallmatrix}\right]\); subtraction gives \(\tau_t^2(c-b)^2/4\). | Agree | Pure strain gives identical failure. The chapter's further conditioning claim does not follow; C09 below. |
+| J11 — OSS orthogonality | Matched expression is orthogonal after a converged inner solve, not during unmatched local sweeps. | At fixed τ, \((s_{\rm new},w)=-(\tau_t A(s_{\rm new}-s^*),w)\); variable τ adds the weight-change term. | Agree with the fixed-coefficient qualification added to item 1b | J-D3. Store the final matched expression; CN extrapolation preserves endpoint orthogonality. No claim for raw Newton iterates. |
+| J12 — optional matrix projection | W is optional, oblique in general, outside Phase 12; positive symmetric part suffices. | \((W\xi,w)=(WX,w)\) makes \(s=W(X-\xi)\) orthogonal. Positive \(\operatorname{sym}W\) makes the finite projection matrix coercive under the stated quadrature/rank conditions. | Agree | Nonsymmetric W supplies no inner-product norm. The inverse and matched coefficients are prerequisites. The revised PDF now states this correctly. |
+| J13 — consistency | Continuous convective forms can agree after a pressure change; discrete schemes need not. | The difference from the standard nonlinear coupling is \(((\nabla\cdot U)u,v)+(\nabla(\lvert u\rvert^2/2),v)\), up to fluxes, U=u+s. | Agree | Weak continuity is not pointwise solenoidality; the kinetic correction generally lies outside Qh. J-D4 re-derives Proposition 5.6. |
+| J14 — outflow and viscosity | The first four forms have physical-pressure traction; EMAC uses P; subgrid traction vanishes under the zero-trace convention. | The standard corrective facets cancel their weak-convection surface terms. Minimal stress would contribute \(-Tn\); \(L_\nu u=\nu(\Delta u+\nabla d)\) is formally self-adjoint. | Agree | Stress residual has \(+L_\nu u\); adjoint coupling has \(-(s,L_\nu v)\). EMAC traction in p has \(+\lvert u\rvert^2n/2\). |
+| J15 — variable weights and (A2) | Constant τ unnecessary for ASGS and matched weighted OSS. | \((s,\xi)=0\), \((\tau_c(d-\zeta),\zeta)=0\); hence the pressure product is \((\tau_c(d-\zeta),d-\zeta)\). | Agree | No coefficient is pulled through a projector or integral. This is the weighted extension, not the unweighted projector multiplied by variable τ. |
+| J16 — closure sign and defect | \(r=\mathrm{rate}+\mathcal D+\mathcal N_{\rm pred}-\mathrm{power}=0\) for every form. | Summing the two scale equations gives exactly this sign; \(\mathcal N_{\rm meas}=\mathrm{power}-\mathrm{rate}-\mathcal D\). | Agree; H24 corrected | EMAC nonlinear defect is \((s,(u\cdot\nabla)u)\); linear defect is \((s,A^Tu)\). Resolved Lamb production is different. |
+| J17 — exact CN budget | Endpoint total energy and midpoint dissipation/power, dynamic both scales, step 2 onward. | Midpoint polarization gives the exact rate; subscale ODE contributes \(\tau_m^{-1}\), and the two viscous products sum to \(-2(s,L_\nu u)\). | Agree at coupled convergence | J-D5. BDF1 startup has an additional positive increment term. Existing diagnostics retain their meanings. |
+| J18 — defect tables and admissible tests | Tables 5.1–5.2 with boundary corrections; periodic linear momentum/energy only. | The unchanged H-D1 product identity cancels arbitrary s pointwise; J-D1 supplies the minimal closure's zero interior row. | Agree | The continuity pairing controls u+s even for linear splitting. Rigid tests on zero-Dirichlet spaces need the strip/cutoff argument; global OSS does not imply patch moments vanish. |
+| J19 — chapter implementation and references | Updated equation numbers and eliminated-subscale assembly. | Differentiating the lagged cross stress gives \(-\int N^B(s_l^*\partial_lN^A\delta_{ij}+s_i^*\partial_jN^A)\); the Reynolds RHS is \(+\int s_i^*s_l^*\partial_lN^A\). | Agree | Exactly (5.41); the former isotropic matrix term is gone. K and D for the five forms retain the correct index formulas. Newton through the eliminated stress adds its derivative, explicitly permitted by Remark 5.9 and §5.9.3. |
+| J20 — allowed linearization | EMAC and EMAC–VMS use Newton without Picard warm-up in Phase 12a. | The explicit owner decision and change list select this restriction. Frozen advection alone leaves the kinetic-pressure term and substituted stress nonlinear. | Agree | The later task bullet allowing warm-up is superseded by that explicit decision. No new iteration is invented. |
+
+**Independent derivations and qualifications.**
+
+**J-D1 — minimal tensor, fluxes and arbitrary subscales.** For \(H_{ij}=\partial_jv_i\), symmetry gives
+
+\[
+T:\operatorname{sym}H=T:H
+=s\cdot H(u+\chi s)+s\cdot H^Tu.
+\]
+
+Setting H=A yields \(T:D=s\cdot N\). Setting v to either rigid test gives zero pointwise, since \(\operatorname{sym}H=0\). This uses neither a trace nor a derivative of s. Define
+
+\[
+B(v)=\int_{\partial\Omega}(u\cdot n)(u\cdot v),\qquad
+H_b(v)=\frac12\int_{\partial\Omega}|u|^2(v\cdot n).
+\]
+
+Component differentiation shows the resolved EMAC operator is the divergence of \(u\otimes u+\tfrac12|u|^2I\). Therefore
+
+\[
+G(e_k)=B(e_k)+H_b(e_k),\qquad
+G(\phi)=B(\phi)+H_b(\phi),\qquad
+G(u)+(s,N)=B(u).
+\]
+
+For the last identity, \(c_E(u;u,u)=\int_\Omega\nabla\cdot(|u|^2u)\). Thus all three vanish with zero boundary u, whatever the quadrature-point s. Periodicity cancels the first and third, but not generally the second. These arguments hold for χ=0 and χ=1. They prove algebraic defects, not availability of eₖ or φ as tests of a Dirichlet solve. The strip assumption supplies admissible cutoff tests on the active region for the full balances.
+
+The all-form table derivation remains \(((a\cdot\nabla)u,v)+(u,(a\cdot\nabla)v)+D_\chi(u\cdot v)=B(v)\), with \(D_\chi(w)=(d,w)-\chi(s,\nabla w)\). Only the polynomial resolved part requires integration by parts. The 12 interior rows and the six boundary-correction rows in H-D1 below remain valid with the new minimal EMAC–VMS zero row; none of the first five forms changed.
+
+**J-D2 — substituted stress versus stored residual advector.** For an increment v in u and the induced increment ρ in \(s_{\rm expr}\),
+
+\[
+\delta T=\rho\otimes u+u\otimes\rho+s\otimes v+v\otimes s
++\chi(\rho\otimes s+s\otimes\rho).
+\]
+
+Each pair is symmetric, without assuming ρ independent of u, P or ξ. In contrast, using a*=u+χs* in the expanded coupling replaces the quadratic symmetric tensor by a mixed product. Directly, with s denoting the expression used in T,
+
+\[
+G(u)+(s,N(a^*))=B(u)+\chi(s,A(s^*-s)).
+\]
+
+This is why the energy budget is a check at the coupled fixed point. Newton symmetry preserves the convective rigid-test cancellation during iteration, but does not establish the full time-dependent balance before convergence. Linear splitting has no such stored-advector remainder.
+
+**J-D3 — shared local update, determinant, and OSS.** Write \(X=f-\chi_A D_tu-Au+L_\nu u-\nabla p+\chi_Ds_{\rm hist}/\delta t\). The matched expression is \(s_{\rm expr}=\tau_0(X-As^*-\xi)\), with its projection satisfying \((s_{\rm expr},w)=0\). A local sweep with τ₁ solves \(s_{\rm new}=\tau_1(X-As_{\rm new}-\xi)\), so subtraction gives
+
+\[
+(s_{\rm new},w)
+=((\tau_1-\tau_0)(X-As^*-\xi),w)
+-(\tau_1A(s_{\rm new}-s^*),w).
+\]
+
+The shorter formula in item 1b assumes τ₁=τ₀. For two equally weighted points and projection onto constants, take τ=1, ξ=0, s*=0, X=(1,−1), and one active diagonal component of A equal to (0,1). The matched expression has zero mean; the implicit update is (1,−½), with mean ¼. This is already the master update, without M. The example concerns the local projection implication; it does not assume a solved FE momentum equation. At outer convergence the projection and expression match again.
+
+For \(A=\left[\begin{smallmatrix}r&b\\c&-r\end{smallmatrix}\right]\), \(\omega=c-b\),
+
+\[
+\det(I+tA)=1-t^2(r^2+bc),\quad
+\det(I+tD)=1-t^2\left(r^2+\frac{(b+c)^2}{4}\right).
+\]
+
+Their difference is \(t^2\omega^2/4\). This proves the stated determinant identity and pure-strain comparison, not a global conditioning bound. The dynamic \(t=(\alpha_0/\delta t+\tau_m^{-1})^{-1}\) can still reach singular values.
+
+For the optional W rule, the projected system is generally nonsymmetric. Nevertheless \(z^TMz=(Ww_h,w_h)=(\operatorname{sym}Ww_h,w_h)>0\) for nonzero coefficients z under the stated positivity/rank assumptions, proving uniqueness. It is a sufficient condition, not an assertion that W is symmetric or that the condition is necessary.
+
+**J-D4 — residual, pressure and consistency.** Component differentiation gives \(\partial_i(\tfrac12u_ju_j)=u_j\partial_i u_j=(A^Tu)_i\), which proves the physical-pressure residual equality without a discrete pressure projection. Under the zero-trace model and with \(U=u+s\),
+
+\[
+c_{nc}(U;u,v)-(s,(U\cdot\nabla)v)
+\doteq ((U\cdot\nabla)U,v)+((\nabla\cdot U)s,v),
+\]
+\[
+G(v)\doteq((U\cdot\nabla)U,v)+((\nabla\cdot U)U,v)
++(\nabla(|u|^2/2),v).
+\]
+
+Here \(\doteq\) suppresses boundary fluxes. Subtracting proves Proposition 5.6(ii) and the spec's consistency wording. The divergence pairing only gives \(D_1(q_h)=0\), not \(D_1(u\cdot v)=0\), and it cannot put the kinetic-pressure correction into Qh. This does not identify the two discrete schemes.
+
+**J-D5 — total-energy signs and time level.** Test the resolved equation with u and its pressure equation with the pressure unknown; dot the subscale equation with s and add. The pressure-gradient products cancel, the viscous cross product appears twice with a minus sign, and the forcing is \((f,u+s)\). ASGS gives the time product \((D_t(u+s),u+s)\); weighted OSS gives \((D_tu,u)+(D_ts,s)\), with the cross terms zero at matched states in the fixed FE space. Hence
+
+\[
+\mathrm{rate}
++a_\nu(u,u)+(\tau_m^{-1}s,s)-2(s,L_\nu u)
++(\tau_c(d-\zeta),d)+\mathcal N=(f,u+s).
+\]
+
+No derivative of τ is introduced. For midpoint states \((z^{n+1}-z^n,\bar z)=(\|z^{n+1}\|_h^2-\|z^n\|_h^2)/2\), proving the per-step formula, its signs, and the need for separate endpoint and solve-level state. For EMAC–VMS \(\mathcal N=0\) by J-D1; for standard EMAC the residual leaves the additional \((s,A^Tu)\) beyond the resolved convective energy. Combining this with the H-D1 product rule gives \((s,Au)\) for nonlinear and \((s,A^Tu)\) for linear splitting. Both skew forms have zero interior defect. The residual including the predicted defect is zero for every form.
+
+**Disagreements and dispositions for the spec/change list.**
+
+- The former spec's isotropic stress and M-based residual/update are replaced, not patched. H19/H-D2 (linearity), H21/H-D3 (orthogonality), H12 (periodic angular flux) and H24 (closure sign) are corrected. The master limitation remains explicitly documented; no solver change or W projection is silently selected.
+- Item 1b's orthogonality subtraction needs fixed τ. The spec now states that hypothesis and includes the extra term when local sweeps recompute τ. This qualifies the diagnostic identity without changing the requested iteration.
+- The change list's C08 disposition “moot” is too strong: the same mechanism survives in the standard update. The revised chapter itself acknowledges it, and the updated spec follows that qualification.
+- Zero defects require the stated flux conditions. No bubble condition on arbitrary s is needed for the minimal tensor tests, whereas a zero-trace model is needed to suppress its natural traction when interpreting the weak equation.
+- The explicit owner decision selects Newton without warm-up despite the later generic Part 2 bullet allowing warm-up. The spec records the explicit decision. No implementation choice remains open from this conflict.
+
+**Chapter issues and dispositions, separate from the spec.**
+
+| Issue | Revised chapter location | Independent disposition |
+| --- | --- | --- |
+| C01 — resolved versus total EMAC energy defect | Introduction, p. 2; Proposition 5.4 | Fixed. The Lamb-vector production and total defect are distinguished; J-D5 confirms the latter. |
+| C02 — subgrid boundary term | Remark 5.12, p. 14 | Fixed. Zero trace suppresses Tn; without it the traction has −Tn. The physical-pressure form and midpoint correction have the correct signs. |
+| C03 — skew/conservative outflow | §5.9.1, p. 16 | Fixed. The half/full advective natural-traction changes and compensating facet terms are now explicit. |
+| C04 — different symmetric iterations | §5.7.7, p. 13; §5.9.3, p. 17 | Fixed. Only the resolved term is linearized in the displayed fully lagged-subscale recipe; (5.38) and other symmetric iterations are distinguished. The eliminated-subscale option is separately acknowledged. |
+| C05 — OSS moments on patches | §§5.3–5.4; scope paragraph §5.7.3, p. 11 | Fixed with scope qualifications. Orthogonality is global and depends on projection-space membership; patch statements are formal. Periodic φ is explicitly excluded. |
+| C06 — BDF dissipation | Remark 5.10, p. 14 | Fixed. BDF1 adds physical-energy dissipation; BDF2 controls a two-level modified energy; BDF3 has no general identity of that kind. |
+| C07 — physical residual and residual bound | Remark 5.8(3), p. 10; Remark 5.11, p. 14 | Fixed for the minimal closure. The residual really is standard with physical p; the τ-residual norm relation is marked quasi-static and heuristic. |
+| C08 — local update versus OSS projection | §5.7.6, pp. 12–13 | Addressed as a shared limitation, not eliminated. Both matrices can fail; fixed-projection implicit sweeps need not be orthogonal. The optional W rule is now correctly described as oblique, with a positive symmetric-part sufficient condition. |
+| Phase 11a follow-up — shared master properties | Remark 5.8(3), §5.7.6, §5.9.3 | Fixed. Minimal closure reuses the standard local system, including its failure and projection properties. |
+| Phase 11a follow-up — forms versus schemes | Proposition 5.6 and following paragraph, p. 10 | Fixed. J-D4 reproduces both extra terms; the text explicitly rejects equality of discrete schemes. |
+| Per-iterate full momentum claim | Proposition 5.10 and Remark 5.9, p. 13 | Fixed. The claim is now for the convective part; the full balance requires coupled convergence, including the ASGS time term. |
+| C09 — rotation implies better conditioning | §5.7.6, p. 12, immediately after the determinant identity | Still too broad. A positive determinant correction need not improve conditioning and can make an invertible strain matrix singular. Counterexample below. The displayed determinant equation is correct. |
+| C10 — resolved energy versus conservative exchange | §5.7.4, p. 12, paragraph after the dissipation bound | Wording needs narrowing. Zero total convective defect does not imply zero resolved-scale production or zero exchange: \(G(u)=-(s,N)\) generally is nonzero. Say that convection transfers energy between scales with zero net contribution to the total balance. The displayed equations already express this correctly. |
+
+For C09, take t=1 and
+
+\[
+D=\begin{pmatrix}5/4&0\\0&-5/4\end{pmatrix},\qquad
+A=\begin{pmatrix}5/4&-3/4\\3/4&-5/4\end{pmatrix}.
+\]
+
+The trace is zero and ω=3/2. The strain matrix I+D is invertible, with determinant −9/16 and 2-norm condition number 9. But I+A is singular: its determinant is zero. The positive correction \(+\omega^2/4=9/16\) moves the determinant to zero. Thus retain the determinant identity and pure-strain comparison, and remove or restrict the general conditioning claim.
+
+C09–C10 require prose corrections only, not a change to the minimal equations, signs or chosen iteration. No chapter file was edited. Phase 12a has not started.
+
+---
+
+
 **Phase 11a — independent verification of the Chapter 5 addendum — 23 October 2026**
 
 Reviewed `docs/formulation_spec.md`, SHA-256 `2f2022d86c520725a90d8911abeab134d039f7a65abc98b6d9378db1f00f5abf`, against `~/04_applications/FEops_prep/VMS_masters_thesis/chapter5_preview.pdf`, SHA-256 `ee4aed24de3a624f40a2059b1bb2ef0c99cd1ef04aef63735a7af575df765c8c` (17 pages). Spec line numbers below refer to that revision. The check re-derives the identities from indices, integration by parts and the discrete equations; agreement with the chapter alone is not treated as verification. PDF pages 14–15 were also inspected as rendered images to check the implementation matrices and their parentheses. UFL's operator definitions were checked against its [official form-language reference](https://docs.fenicsproject.org/ufl/main/manual/form_language.html#gradient). No implementation code, simulations or test suites were run, and `results/` was not accessed. The spec and chapter were not edited.

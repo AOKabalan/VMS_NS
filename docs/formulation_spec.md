@@ -2,7 +2,7 @@
 
 Oct 21, 2026 · @Ali Kabalan
 
-Every VMS variant is one master system at the solve level with three switches: subscale space (ASGS or OSS), subscale dynamics (static or dynamic) and scale splitting (linear or nonlinear). A fourth switch selects the inner linearization (Newton or Picard); it changes the iterations, not the converged solution. All eight cases follow from these switches with no further choices; the Galerkin baseline is the same system with every stabilization term removed. Revised after an independent re-derivation (VERIFICATION.md, 21 October 2026); split OSS was removed because the thesis does not use it.
+Every VMS variant is one master system at the solve level with three switches: subscale space (ASGS or OSS), subscale dynamics (static or dynamic) and scale splitting (linear or nonlinear). A fourth switch selects the inner linearization (Newton or Picard); it changes the iterations, not the converged solution. All eight cases follow from these switches with no further choices; the Galerkin baseline is the same system with every stabilization term removed. The master equations below display the default convective and viscous forms; the Chapter 5 sections specify the selectable replacements, their pressure conventions, and their linearization restrictions. Revised after independent re-derivations in VERIFICATION.md; split OSS was removed because the thesis does not use it.
 
 ## Fixed choices
 
@@ -11,11 +11,11 @@ Every modelling decision is fixed once; "Ours" marks a choice that goes beyond w
 | Decision | Choice | Basis |
 | --- | --- | --- |
 | Variants | Galerkin baseline without stabilization, and ASGS or OSS × static or dynamic × linear or nonlinear splitting: 8 VMS cases | Ours. Colomés §§2.2.1–2.2.3 define the three choices; their Table 1 benchmarks only six (no static-nonlinear cases) |
-| Inner linearization | Newton or Picard, selectable; same converged solution | Ours. Colomés §4 uses Picard; thesis §3.2 compares both |
+| Inner linearization | Newton or Picard, selectable; same converged solution. EMAC and EMAC–VMS: Newton only, without Picard warm-up in Phase 12a | Ours. Colomés §4 uses Picard; thesis §3.2 compares both; Chapter 5 owner decision |
 | Interpolation | VMS: equal order Pk/Pk, k = 1 first, k = 2 when the viscous residual must be active. Galerkin baseline: Taylor–Hood P(k+1)/Pk | Ours. Admissible in all sources (Codina 2008 also allows unequal orders); Δ\_h vanishes for affine P1 |
-| Galerkin convective form | Skew-symmetric type 1; on outflow add ½⟨(u\_h·n)u\_h, v\_h⟩ | Volume form: Colomés eq. 10 and Remark 2.1 (needs no derivative of the discontinuous ũ; volume terms energy-neutral). Outflow term: ours |
-| Viscous form | ν(∇u\_h, ∇v\_h); residual uses ν Δ\_h u\_h | All sources (volume terms) |
-| Outflow condition | Gradient-form do-nothing, ν ∂\_n u − p n = 0, no traction load | Ours; see Boundary conditions and quadrature |
+| Galerkin convective form | Default skew-symmetric type 1, with ½⟨(u\_h·n)u\_h, v\_h⟩ on outflow; the Chapter 5 forms and EMAC–VMS are selectable (see Convective forms) | Volume form: Colomés eq. 10 and Remark 2.1 (needs no derivative of the discontinuous ũ; volume terms energy-neutral). Outflow term: ours |
+| Viscous form | Default Laplacian ν(∇u\_h, ∇v\_h) with ν Δ\_h u\_h in the residual; stress form 2ν(∇ˢu\_h, ∇ˢv\_h) selectable, required for angular momentum and EMAC–VMS | All sources (volume terms) |
+| Outflow condition | Default gradient-form do-nothing, ν ∂\_n u − p n = 0, no traction load; stress-form and modified-pressure conditions in Convective forms | Ours; see Boundary conditions and quadrature |
 | Subscales on element boundaries | Zero (bubble assumption); interelement terms neglected | Codina et al. 2007 §2; VMS chapter §5.4 |
 | Adjoint approximation | (ũ, (∇·a) v\_h) and element-boundary terms neglected | Colomés, text after eq. 14 |
 | Pressure subscale | Quasi-static, p̃ = τ\_c P(R\_p) | Colomés eq. 16; Principe et al. eq. 11. Differs from Codina et al. 2007 eq. 12 (extra τ ∂t r\_p term) and eq. 17 (p̃ = 0) |
@@ -94,7 +94,7 @@ Stability. BDF1 and BDF2 are A-stable. BDF3 is only A(α)-stable, with α ≈ 86
 
 ## Boundary conditions and quadrature
 
-Verify every variant on periodic and all-Dirichlet problems first, where no boundary terms arise; the outflow condition is used only for the cylinder.
+Verify every variant on periodic and homogeneous all-Dirichlet problems first; periodic cancellation applies to linear momentum and energy, not angular momentum. The table and equations here describe the default skew-symmetric type 1 and Laplacian forms; see Convective forms for the other outflow terms. The outflow condition is used only for the cylinder.
 
 | Boundary | Velocity | Pressure | Terms added |
 | --- | --- | --- | --- |
@@ -188,7 +188,7 @@ The unstabilized reference solves the master FE equation with every stabilizatio
 
 ## OSS projections
 
-The projections are τ-weighted L² projections onto the unconstrained FE spaces, with weight τ\_t for the velocity so that the dynamic subscale stays exactly orthogonal.
+The projections are τ-weighted L² projections onto the unconstrained FE spaces, with weight τ\_t for the velocity so that the matched subscale expression is exactly orthogonal after a converged inner solve. In nonlinear splitting this does not assert orthogonality during a local sweep with a fixed projection; see the qualification following the accelerated update.
 
 ```latex
 \begin{aligned}
@@ -209,14 +209,14 @@ Implementation rules:
 
 - Project onto V̂\_h and Q̂\_h, the spaces without Dirichlet or zero-mean constraints. Projecting onto the constrained spaces creates spurious numerical boundary layers (Codina 2008, Remark 1). The unconstrained space also reproduces time-dependent Dirichlet values in D\_t u\_h.
 - Use the consistent mass matrix and the common quadrature rule. Lumping, or a different rule for the projection, breaks exact orthogonality.
-- ξ\_h and ζ\_h are unknowns of the inner solve, together with u\_h and p\_h (Codina 2008 §2.3; Colomés §5.2.2). The pressure null space applies only to p\_h; the projections stay unconstrained, and ζ\_h with its equation is absent when τ\_c is off. Lagging them by one outer iteration, as in Colomés §4.2, has the same fixed point but was measured to fail here: with a frozen Kovasznay advector, the error contraction per outer iteration was 0.85–0.97 for P1/P1, and for static P2/P2 reached 1.19 in magnitude (divergent); half relaxation and lagging the full residual did not fix it (implementation probe and independent review, 22 October 2026). Shrinking δt does not help, because the pressure has no time-derivative term.
+- ξ\_h and ζ\_h are unknowns of the inner solve, together with u\_h and the pressure unknown (Codina 2008 §2.3; Colomés §5.2.2). The pressure null space applies only to p\_h, or to P\_h for EMAC and EMAC–VMS; the projections stay unconstrained, and ζ\_h with its equation is absent when τ\_c is off. Lagging them by one outer iteration, as in Colomés §4.2, has the same fixed point but was measured to fail here: with a frozen Kovasznay advector, the error contraction per outer iteration was 0.85–0.97 for P1/P1, and for static P2/P2 reached 1.19 in magnitude (divergent); half relaxation and lagging the full residual did not fix it (implementation probe and independent review, 22 October 2026). Shrinking δt does not help, because the pressure has no time-derivative term.
 - This ξ\_h is not the same field as Colomés' ξ\_m, which projects the full residual: ξ\_m = ξ\_h − D\_t u\_h. The converged solutions agree; iteration counts are not comparable with the paper's lagged algorithm.
 - R̂\_u keeps f and the elementwise viscous term νΔ\_h u\_h. Both cancel or vanish in common cases (f in the FE space; P1 elements), and dropping νΔ\_h does not reduce the convergence order, but keeping them is what makes the formulation exactly residual based.
 - ζ\_h only matters when τ\_c is active. With τ\_c = 0 (turbulence settings) the pressure subscale, its projection and the grad-div term disappear.
 
 ## Inner linearization: Newton and Picard
 
-Both solve the same discrete equation F(u\_h, p\_h) = 0 at fixed outer data, so when both converge to the same solution the time step is identical; they differ only in how the advection velocity and τ are treated during the inner iterations.
+For the first four convective forms, both solve the same discrete equation F(u\_h, p\_h) = 0 at fixed outer data, so when both converge to the same solution the time step is identical; they differ only in how the advection velocity and τ are treated during the inner iterations. EMAC and EMAC–VMS use Newton only, without Picard warm-up in Phase 12a.
 
 F is the left side minus the right side of the master FE equation, with ũ substituted. Frozen during the inner solve: u\_hist, ũ\_hist, and the stored ũ\* inside a (nonlinear splitting). For OSS, ξ\_h and ζ\_h are unknowns of F together with (u\_h, p\_h), through their projection equations. The unknowns (u\_h, p\_h) enter nonlinearly in two ways: through a = u\_h (+ ũ\*) in c, L\_a and L\*\_a, and through τ\_m, τ\_c and τ\_t, which depend on |a|.
 
@@ -234,7 +234,7 @@ Picard: iteration j evaluates every advection velocity and every τ at â = u\_h
 
 The factor χ\_A removes D\_t u\_h for OSS (reduced residual). In c, the outflow term uses û\_h = u\_h^(j−1). For OSS the projection equations join the system with weights τ̂\_t and τ̂\_c, and are linear in (u\_h, p\_h, ξ\_h, ζ\_h). Convergence is typically linear and more robust from poor initial guesses; neither method is guaranteed to converge.
 
-Recommended use: a few Picard iterations, then Newton once the residual has dropped (thesis §3.2.2). Picard with one inner iteration per outer iteration has the same structure as the Colomés §4 algorithm (one linearized solve, then the local subscale update and the projection update), but for OSS the iterates differ, because Colomés lag the projections while this spec solves them with the FE unknowns. The fixed points agree. The thesis found Picard converging poorly with EMAC; that belongs to the later convective-term study (Charnyi et al. 2019 analyse the EMAC linearizations), not to this baseline.
+For the first four forms, recommended use is a few Picard iterations, then Newton once the residual has dropped (thesis §3.2.2). Picard with one inner iteration per outer iteration has the same structure as the Colomés §4 algorithm (one linearized solve, then the local subscale update and the projection update), but for OSS the iterates differ, because Colomés lag the projections while this spec solves them with the FE unknowns. The fixed points agree. The EMAC and EMAC–VMS Newton residuals additionally depend on the kinetic-pressure gradient and, for EMAC–VMS, every occurrence of the substituted subscale in the symmetric stress; differentiate through these dependencies. Freezing the advector alone does not give an affine Picard equation for them.
 
 ## Time-step algorithm
 
@@ -249,13 +249,40 @@ Given the velocity and subscale histories the scheme needs (back to level n−2 
 5. Convergence: stop when the relative changes of u\_h, p\_h, ũ\*, ξ\_h and ζ\_h (when τ\_c is active) and the FE residual are all below tolerance; otherwise return to step 2.
 6. Store: for dynamic subscales, ũ^(n+1) is the subscale expression evaluated at the converged state; shift the histories of u\_h, ũ, ξ\_h and ζ\_h.
 
-Accelerated subscale update for step 3, a d×d linear solve per quadrature point, with τ\_t evaluated at the previous ũ\* and (∇u\_h)\_ij = ∂u\_h,i/∂x\_j:
+Accelerated subscale update for step 3, a d×d linear solve per quadrature point, with τ\_t evaluated at the previous ũ\* and G\_ij = ∂\_j u\_h,i (UFL grad(u\_h), the transpose of the chapter gradient). Here p\_h is the physical pressure and L\_ν is the selected viscous operator:
 
 ```latex
-\big(I + \tau_t\, \nabla u_h\big)\, \tilde u = \tau_t \left(f - \chi_A\, D_t u_h - u_h\cdot\nabla u_h + \nu\,\Delta_h u_h - \nabla p_h + \chi_D\,\frac{\tilde u_{\mathrm{hist}}}{\delta t} - \xi_h\right)
+\big(I + \tau_t G\big)\, \tilde u = \tau_t \left(f - \chi_A\, D_t u_h - u_h\cdot\nabla u_h + L_\nu u_h - \nabla p_h + \chi_D\,\frac{\tilde u_{\mathrm{hist}}}{\delta t} - \xi_h\right)
 ```
 
 This is Colomés eqs. 50 and 52 with the τ\_t factor restored on the left, ξ\_h multiplied by a single τ\_t (not τ\_t² as in thesis eq. 4.39), and χ\_A dropping D\_t u\_h for OSS.
+
+Local-update qualification (all nonlinear cases, including EMAC–VMS). The matrix can be singular for static or dynamic subscales; a time step only protects it while τ\_t‖G‖ is sufficiently small. In two dimensions, with ∇·u\_h = 0 and ω\_h = ∂₁u\_h,2 − ∂₂u\_h,1,
+
+```latex
+\det(I+\tau_t G)
+=\det(I+\tau_t\nabla^s u_h)+\frac{\tau_t^2\omega_h^2}{4}.
+```
+
+Thus pure strain has exactly the same singularity as the former symmetric-matrix closure. Removing that closure does not remove the cavity-corner failure mechanism described in The eight cases. The determinant correction alone gives no general ordering of condition numbers.
+
+For OSS, let X denote the right-hand quantity before −ξ\_h, with the subscale advection Gũ omitted. At a converged inner solve, the matched expression ũ\_expr = τ\_t(X − Gũ\* − ξ\_h) is orthogonal. If u\_h, X, τ\_t and ξ\_h are held fixed while the local system is solved, subtraction gives
+
+```latex
+(\tilde u_{\rm new},w_h)
+=-(\tau_t G(\tilde u_{\rm new}-\tilde u^*),w_h).
+```
+
+This formula assumes the same τ\_t as in the matched projection. If a local sweep changes the weight from τ₀ to τ₁, the right-hand side instead is
+
+```latex
+\big((\tau_1-\tau_0)(X-G\tilde u^*-\xi_h),w_h\big)
+-\big(\tau_1G(\tilde u_{\rm new}-\tilde u^*),w_h\big).
+```
+
+Neither expression is generally zero during unmatched local sweeps. Orthogonality holds for the matched expression after each converged inner solve and at convergence of the outer iteration; store that final expression as in step 6. Do not invoke OSS cancellations for the unmatched local values.
+
+An optional alternative, outside Phase 12, is W = (τ\_t⁻¹I + G)⁻¹ and (Wξ\_h, w\_h) = (WX, w\_h), with ũ = W(X − ξ\_h). This enforces orthogonality when the same W and X are used in both equations. W is generally nonsymmetric, so the projection is oblique, not an orthogonal projection in a W norm; a positive-definite symmetric part of W is sufficient for well-posedness with the positive common quadrature and a full-rank projection space. It does not remove the requirement that the pointwise inverse exist.
 
 Which steps each case runs:
 
@@ -271,6 +298,206 @@ Which steps each case runs:
 | Dyn-Nl-OSS | 2, 3, 5, 6 |
 
 Initial data: ũ⁰ = 0, which also satisfies the initial orthogonality OSS needs, and ξ\_h⁰, ζ\_h⁰ from projecting the initial residuals (or zero).
+
+## Convective forms (Chapter 5)
+
+These sections specify Chapter 5 of the thesis (revised chapter5\_preview.pdf, 19 pages, SHA-256 720be75921b3956325668b85cac1641428b0fb626e9e4ca4bf67e5d248b014bc): five convective forms, EMAC–VMS, and the conservation checks; numbers (5.x) refer to that chapter.
+
+Index convention. The chapter defines (∇v)ᵢⱼ = ∂ᵢvⱼ; UFL's grad uses the transpose, grad(v)\[i, j\] = ∂vᵢ/∂xⱼ. Implement every term from the table below, never by transcribing a chapter formula into UFL letter by letter; test U10 catches a swapped convention.
+
+| Chapter | Index form | UFL |
+| --- | --- | --- |
+| (a·∇)u | aᵢ ∂ᵢuⱼ | dot(grad(u), a) |
+| (∇u) a | ∂ᵢuⱼ aⱼ (free index i) | dot(a, grad(u)) |
+| ∇ˢu | ½(∂ᵢuⱼ + ∂ⱼuᵢ) | sym(grad(u)) |
+| (a ⊗ u) : ∇v = u·(a·∇)v | aᵢ uⱼ ∂ᵢvⱼ | inner(outer(u, a), grad(v)) |
+| A : ∇ˢv, A symmetric | Aᵢⱼ ∂ᵢvⱼ | inner(A, sym(grad(v))) |
+
+The forms, for advection velocity a, transported u and test function v (chapter (5.3)–(5.7)):
+
+```latex
+\begin{aligned}
+c_{nc}(a;u,v) &= ((a\cdot\nabla)u,\, v) \\
+c_{c}(a;u,v) &= -(u,\, (a\cdot\nabla)v) \\
+c_{ss1}(a;u,v) &= \tfrac12((a\cdot\nabla)u,\, v) - \tfrac12(u,\, (a\cdot\nabla)v) \\
+c_{ss2}(a;u,v) &= ((a\cdot\nabla)u,\, v) + \tfrac12((\nabla\cdot a)\, u,\, v) \\
+c_{E}(a;u,v) &= (2(\nabla^s u)\, a,\, v) + ((\nabla\cdot a)\, u,\, v)
+\end{aligned}
+```
+
+| Form | Config value | Outflow term on Γ\_N | Uses ∇·a | Residual operator N | Pressure unknown |
+| --- | --- | --- | --- | --- | --- |
+| Non-conservative | nonconservative | None | No | (a·∇)u\_h | p\_h |
+| Conservative | conservative | +⟨(u\_h·n) u, v⟩ | No | (a·∇)u\_h | p\_h |
+| Skew-symmetric 1 (default) | skew\_symmetric\_1 | +½⟨(u\_h·n) u, v⟩ | No | (a·∇)u\_h | p\_h |
+| Skew-symmetric 2 | skew\_symmetric\_2 | None | Yes | (a·∇)u\_h | p\_h |
+| EMAC | emac | None | Yes | (a·∇)u\_h + (∇u\_h)u\_h | P\_h |
+| EMAC–VMS | emac\_vms | None | No | (a·∇)u\_h + (∇u\_h)u\_h | P\_h |
+
+Outflow terms (ours): they give the first four forms the same natural condition, ν∂\_n u − p n = 0, or (2ν∇ˢu − p I)n = 0 with stress viscosity. The EMAC resolved operator is a volume form, so its natural condition comes from the viscous and pressure terms: ν∂\_n u − P n = 0, or (2ν∇ˢu − P I)n = 0 with stress viscosity. For EMAC–VMS, −(T̃, ∇ˢv) would add −T̃n to the traction if the subscale had a trace; under the zero-subscale-boundary convention T̃n = 0, and the condition is that of stress-form EMAC (chapter Remark 5.12). In physical pressure it is (2ν∇ˢu − p I)n + ½|u|²n = 0. Results on outflow problems carry this difference.
+
+Divergence of the subscale. With a = u\_h + ũ, skew-symmetric 2 and EMAC need ∇·ũ, which stored point values cannot provide. Following chapter Remark 5.3, this spec takes as the definition
+
+```latex
+\big((\nabla\cdot a)\, u,\; v\big) := \big((\nabla\cdot u_h)\, u,\; v\big) - \big(\tilde u,\; \nabla(u\cdot v)\big)_h, \qquad a = u_h + \tilde u,
+```
+
+and more generally (∇·a, w) := (∇·u\_h, w) − (ũ, ∇w)\_h for any computable w. The continuity equation (q\_h, ∇·u\_h) − (ũ, ∇q\_h) is then exactly (∇·a, q\_h), so the chapter's Lemma 5.2 holds discretely: after a converged step, (∇·a, q\_h) = 0 for every q\_h. This replaces the earlier rule that skew-symmetric 2 and EMAC cannot be used with nonlinear splitting. The neglected term (ũ, (∇·a)v\_h) of the adjoint approximation stays neglected for every form (chapter Remark 5.2).
+
+For linear splitting a = u\_h, use (∇·a, w) = (∇·u\_h, w) in the convective form. Its continuity equation still constrains the pairing for u\_h + ũ; it does not impose (∇·u\_h, q\_h) = 0 separately.
+
+EMAC pressure. With EMAC and EMAC–VMS the pressure unknown is the modified pressure P\_h ≈ p − ½|u|² (chapter (5.9)); the null space and the zero-mean normalization act on P\_h. Every reported pressure (pressure errors, forces, output fields) is the physical p\_h = P\_h + ½|u\_h|², normalized separately where the null space is active. Evaluate the kinetic term and its gradient pointwise, without projecting onto Q\_h. Output the physical field in a space containing both P\_h and ½|u\_h|² (on affine polynomial cells, degree at least max(k\_p, 2k\_u)), so reporting does not discard the correction.
+
+Under Crank–Nicolson, p\_h^(n+½) = P\_h^(n+½) + ½|ū\_h|² with ū\_h = (u\_hⁿ⁺¹ + u\_hⁿ)/2, the velocity of the converged solve. Use this pressure for half-level forces and output; pressure is not extrapolated. Averaging the two endpoint kinetic corrections would add ⅛|u\_hⁿ⁺¹ − u\_hⁿ|² and is incorrect. Manufactured volume forcing is unchanged, since the continuous equations are equivalent; prescribed traction data must respect the chosen pressure convention.
+
+Viscous form. Two options: "laplacian" (default), ν(∇u\_h, ∇v\_h) with L\_ν v = νΔ\_h v; and "stress", 2ν(∇ˢu\_h, ∇ˢv\_h) with L\_ν v = 2ν∇·(∇ˢv) element by element. L\_ν enters L\_a and L\*\_a in place of νΔ\_h; it is formally self-adjoint, with the same element-boundary convention. Thus the residual contains +L\_ν u\_h and the adjoint coupling contains −(ũ, L\_ν v\_h). The stress form is required for angular-momentum checks (chapter §5.4: the Laplacian form adds ν∫(∇×u\_h)\_k) and for EMAC–VMS; its natural outflow condition uses p for the first four forms and P for EMAC and EMAC–VMS, as above. Forces always use the physical σ = −p I + ν(∇u + ∇uᵀ). The U5 eigenvalue check must also pass for the stress form on the test meshes.
+
+Linearization. EMAC and EMAC–VMS use Newton only, with no Picard warm-up in Phase 12a. The standard and symmetric Picard variants of chapter §5.7.7 are deferred: freezing an advector alone does not linearize the kinetic-pressure term or the substituted stress. Any future warm-up must specify its symmetric affine equation, for example (5.38) for c\_E and a fully lagged subscale in T̃. The other forms keep Newton and Picard as before; Picard freezes a in c and in the ∇·a pairing.
+
+## EMAC–VMS (chapter Definition 5.1)
+
+EMAC–VMS replaces the resolved convective term and the convective part of the subscale coupling by a symmetric stress, so the subscales cannot produce a net force or torque; it requires method = "vms" and the stress form.
+
+Resolved equation, for all v\_h, q\_h, at the solve level:
+
+```latex
+\begin{aligned}
+&(D_t u_h, v_h) + \chi_A\chi_D (D_t \tilde u, v_h) + c_E(u_h;\, u_h, v_h) - (\tilde T,\, \nabla^s v_h) + 2\nu(\nabla^s u_h, \nabla^s v_h) - (P_h, \nabla\cdot v_h) + (q_h, \nabla\cdot u_h) \\
+&\quad - \sum_K (\tilde u,\; L_\nu v_h + \nabla q_h)_K + \sum_K \big(\tau_c(\nabla\cdot u_h - \zeta_h),\, \nabla\cdot v_h\big)_K = \langle f, v_h\rangle
+\end{aligned}
+```
+
+Compared with the master formulation, c(a; u\_h, v\_h) becomes c\_E(u\_h; u\_h, v\_h), with advection velocity u\_h, and the convective subscale coupling −(ũ, (a·∇)v\_h) becomes −(T̃, ∇ˢv\_h). The standard convective coupling must not be added as well.
+
+Minimal subgrid stress and residual, with χ\_N = 1 for nonlinear and 0 for linear splitting (chapter (5.23), (5.26), (5.32)):
+
+```latex
+\begin{aligned}
+\tilde T &= \tilde u\otimes u_h + u_h\otimes\tilde u + \chi_N\,\tilde u\otimes\tilde u, \qquad a=u_h+\chi_N\tilde u, \\
+N &= (a\cdot\nabla)u_h+(\nabla u_h)u_h, \\
+R_u &= f-\chi_A D_tu_h-N+L_\nu u_h-\nabla P_h.
+\end{aligned}
+```
+
+There is no isotropic subgrid stress. The resolved equation uses P\_h, but the residual is exactly the master residual with the physical pressure p\_h = P\_h + ½|u\_h|², since ∇p\_h = ∇P\_h + (∇u\_h)u\_h. Here the gradient has the chapter convention; UFL implements N as `dot(grad(uh), a) + dot(uh, grad(uh))`. The χ\_A factor gives the reduced residual for OSS; it is equivalent after projection to including D\_t u\_h. No kinetic-pressure projection into Q\_h is allowed. The pressure null space, separate physical normalization, output space and midpoint level are specified in Convective forms.
+
+The velocity subscale is the master relation ũ = τ\_t (R\_u + χ\_D ũ\_hist/δt − ξ\_h), with τ evaluated at a = u\_h + χ\_Nũ; ξ\_h, ζ\_h and the switches χ\_A, χ\_D are as for the other cases. There is no new local solve. Step 3 is the master accelerated update with G = grad(u\_h) in the UFL convention and physical p\_h as above, including its singularity and OSS-orthogonality qualifications.
+
+Define G(v) = c\_E(u\_h; u\_h, v) − (T̃, ∇ˢv). For one common subscale field its equivalent expansion (5.28) is
+
+```latex
+G(v)=c_E(u_h;u_h,v)-\big(\tilde u,(a\cdot\nabla)v+(\nabla v)u_h\big).
+```
+
+The second term is `inner(us, dot(grad(v), a) + dot(uh, grad(v)))` in UFL. The energy cancellation is pointwise for both splittings:
+
+```latex
+\begin{aligned}
+\tilde T:\nabla^s u_h
+&=2\tilde u\cdot(\nabla^s u_h)u_h
+  +\chi_N\,\tilde u\cdot(\nabla^s u_h)\tilde u\\
+&=\tilde u\cdot\big[(a\cdot\nabla)u_h+(\nabla u_h)u_h\big]
+=\tilde u\cdot N.
+\end{aligned}
+```
+
+It uses 2(∇ˢu\_h)u\_h = (u\_h·∇)u\_h + (∇u\_h)u\_h and ũ·(∇ˢu\_h)ũ = ũ·(ũ·∇)u\_h. With c\_E(u\_h; u\_h, u\_h) = 0 under the energy-flux conditions below, G(u\_h) + (ũ, N) = 0, giving (5.31). Also ∇ˢe\_k = ∇ˢφ = 0 for φ = e\_k × x, so the subgrid stress gives zero force and torque for arbitrary point values of ũ, without a bubble assumption. The resolved EMAC contribution is boundary fluxes only; with u\_h zero on the boundary, G(e\_k) = G(φ) = 0. These algebraic statements do not by themselves supply admissible tests for the solved momentum equations.
+
+Assembly and iteration (owner decision). Build T̃ directly as `outer(us_expr, uh) + outer(uh, us_expr) + chiN*outer(us_expr, us_expr)`, with the substituted subscale expression in every slot, and differentiate through it for Newton. In the residual and τ only, keep the master's stored advector a\* = u\_h + χ\_Nũ\*. The resolved c\_E uses u\_h alone. Do not assemble the expanded coupling with a\*: it mixes ũ\_expr and ũ\* and need not give a symmetric stress during iteration. The expansion is an algebraic test with one common ũ.
+
+T̃ and its Newton derivative are symmetric at every iterate. The substituted stress is nonlinear in u\_h; it would be affine if the subscale were fully lagged (chapter Remark 5.9). Symmetry removes the convective force/torque contribution, up to resolved EMAC fluxes, at every Newton iterate and in its linearization (Proposition 5.10). Full momentum balances, including the ASGS subscale time term, and the energy balance require convergence of the coupled iteration. In particular, the energy cancellation uses the same ũ in T̃ and a, as obtained at outer convergence. The optional matrix-weighted projection described in the master algorithm is outside Phase 12.
+
+Linear splitting (χ\_N = 0): T̃ = ũ⊗u\_h + u\_h⊗ũ and a = u\_h in the residual. The same pointwise energy identity holds without the quadratic term. The subscale is an expression throughout, and no outer loop is needed.
+
+Consistency (Proposition 5.6). At ũ = 0 this is exactly resolved EMAC. Under the chapter's zero-trace model, comparison with the standard nonlinear convective coupling gives a difference ((∇·U)u\_h, v) + (½∇|u\_h|², v), up to boundary fluxes, with U = u\_h + ũ. Pointwise ∇·U = 0 removes the first term and a continuous pressure change absorbs the second. This compares convective forms, not discrete schemes: the continuity equation imposes only orthogonality of ∇·U to Q\_h, and ½|u\_h|² generally does not belong to Q\_h.
+
+## Conservation checks
+
+Distinguish algebraic defect identities, evaluable for any matching fields, from balances of the solved equations. The latter require admissible velocity tests, the stated boundary conditions, and convergence of the coupled iteration. Pointwise tensor identities and matched weighted projections are exact in the common quadrature inner product. Identities that also use integration by parts require exact integration of the remaining FE polynomial products: on affine Pk meshes degree 3k suffices here, with sufficiently exact facet quadrature. Common quadrature alone is not an integration-by-parts theorem on curved or non-polynomial geometry.
+
+Defect functionals, assembled from the forms actually used by the code:
+
+- Linear momentum: D\_k = c(a; u\_h, e\_k); for EMAC–VMS, G(e\_k).
+- Angular momentum: D\_φ = c(a; u\_h, φ) − (ũ, (a·∇)φ), with φ = e\_k × x (2D: φ = (−y, x)); for EMAC–VMS, G(φ).
+- Total convective energy defect: 𝒩 = c(a; u\_h, u\_h) + (ũ, N − (a·∇)u\_h) for the first five forms; for EMAC–VMS, 𝒩 = G(u\_h) + (ũ, N). Include the selected outflow term in c.
+
+Their interior predicted values are chapter Tables 5.1 and 5.2 (zero in every column for minimal EMAC–VMS), with the divergence pairing for the selected splitting. In particular, writing D\_χ(w) = (∇·u\_h, w) − χ\_N(ũ, ∇w), the energy column is:
+
+| Form | Nonlinear splitting | Linear splitting |
+| --- | --- | --- |
+| Non-conservative | −½D\_1(u\_h·u\_h) | −½D\_0(u\_h·u\_h) |
+| Conservative | +½D\_1(u\_h·u\_h) | +½D\_0(u\_h·u\_h) |
+| Skew-symmetric 1 or 2 | 0 | 0 |
+| EMAC | (ũ, (u\_h·∇)u\_h) | ½(ũ, ∇(u\_h·u\_h)) |
+| EMAC–VMS | 0 | 0 |
+
+Here the argument of D\_χ is the scalar u\_h·u\_h. The resolved-scale EMAC production (ũ, ω\_h × u\_h) is a different quantity (Proposition 5.3), not 𝒩.
+
+Boundary scope. With u\_h = 0 on all of ∂Ω, all convective fluxes vanish, including for arbitrary quadrature-point ũ. On periodic domains the linear-momentum and energy fluxes cancel, but the angular-momentum fluxes generally do not: φ is not periodic. Use the explicit boundary corrections in the Phase 11a verification (H-D1) otherwise; the corrections are unchanged by the minimal stress. Run angular-defect checks only with zero boundary u\_h or compactly supported flows. For full momentum balances, use a strip of elements in which the solution and subscales vanish, as in the compact Gresho setting, so admissible cutoff tests reproduce e\_k and φ on the active region; account for imposed forces, wall reactions or fluxes if they remain. Homogeneous velocity data alone do not make rigid tests admissible.
+
+OSS moments. The identities ∫ũ = 0 and ∫x × ũ = 0 apply on the whole domain only when the corresponding rigid test belongs to the unconstrained projection space, not on arbitrary patches. In particular φ is not in a periodic projection space. These cancellations require matched converged states; do not use them during unmatched local sweeps.
+
+Variable τ. Chapter assumption (A2), constant τ, is unnecessary for this weighted model (Remark 5.6). Matched τ-weighted velocity projection gives (ũ, ξ\_h) = 0, and the pressure projection gives (τ\_c(d − ζ\_h), ζ\_h) = 0, where d = ∇·u\_h. Therefore (τ\_c(d − ζ\_h), d) = (τ\_c(d − ζ\_h), d − ζ\_h) ≥ 0 with positive quadrature. ASGS uses ξ\_h = ζ\_h = 0 and requires no projection or constant-τ assumption. This variable-weight formulation is not obtained by multiplying an unchanged unweighted OSS projector by a variable τ.
+
+Crank–Nicolson closure. For dynamic subscales, from step 2 onward, use the one-leg midpoint scheme for both scales, fixed FE spaces and quadrature, and the energy-flux/test conditions above. At a converged step let ū, s̄, P̄ (or p̄), ζ̄ and τ̄ be the solve-level fields; let uⁿ, sⁿ and uⁿ⁺¹, sⁿ⁺¹ be the endpoint states. The exact discrete counterpart of (5.20), or (5.31) for EMAC–VMS, is
+
+```latex
+\begin{aligned}
+E^j_{\rm ASGS}&=\tfrac12\|u^j+s^j\|_h^2,\qquad
+E^j_{\rm OSS}=\tfrac12(\|u^j\|_h^2+\|s^j\|_h^2),\\
+\mathrm{rate}&=(E^{n+1}-E^n)/\delta t,\qquad
+\mathrm{power}=(\bar f,\bar u+\bar s)_h,\\
+\mathcal D&=a_\nu(\bar u,\bar u)
+  +(\bar\tau_m^{-1}\bar s,\bar s)_h
+  -2(\bar s,L_\nu\bar u)_h
+  +(\bar\tau_c(\nabla\cdot\bar u-\bar\zeta),\nabla\cdot\bar u)_h,\\
+r&=\mathrm{rate}+\mathcal D+\mathcal N_{\rm pred}-\mathrm{power}=0,\\
+\mathcal N_{\rm meas}&=\mathrm{power}-\mathrm{rate}-\mathcal D
+=\mathcal N_{\rm pred}.
+\end{aligned}
+```
+
+Here a\_ν(u,u) is ν‖∇u‖² or 2ν‖∇ˢu‖². Every term of 𝒟 and 𝒩 is evaluated at the midpoint, and f̄ is the prescribed endpoint-average force. The residual r must vanish for every convective form, including those with nonzero 𝒩. Equivalently Eⁿ⁺¹ − Eⁿ + δt(𝒟 − power) = −δt𝒩. Do not replace τ\_m by τ\_t in the dissipation. The viscous cross term has coefficient −2. The weighted pressure term above is the implemented meaning of the chapter's (τ\_c P̃(d), d).
+
+The BDF1 startup is excluded from this midpoint check: it adds ‖Δ(u+s)‖²/(2δt) for ASGS or (‖Δu‖² + ‖Δs‖²)/(2δt) for OSS. BDF2 has a two-level modified-energy identity; no general analogous dissipation claim is made for BDF3 (Remark 5.10). A per-step total linear-momentum balance uses the same integrator on u\_h and ũ, or the whole-domain OSS moment cancellation when admissible. With mixed integrators and nonzero subscale moments the tested discrete quantity mixes the two time operators.
+
+Diagnostics must retain the existing names and meanings; add these defect and budget quantities alongside them. Capture the old endpoint before shifting history and keep solve-level and endpoint state explicit, particularly for midpoint pressure, dissipation and power. Algebraic defects may be computed at arbitrary matching fields; the per-step closure is a solved-equation check.
+
+Required Chapter 5 tests (implementation deferred to Phase 12a):
+
+| Test | Requirement |
+| --- | --- |
+| T1 | Stress and expansion (5.28) give identical G(v) for random u\_h and one common arbitrary quadrature-point ũ, for both splittings. |
+| T2 | With zero boundary u\_h, G(e\_k), G(φ) and G(u\_h) + (ũ,N) vanish, including nonzero ũ at boundary-adjacent quadrature points. No bubble assumption is needed for these algebraic tests. |
+| T3 | T̃ : ∇ˢu\_h = ũ·N pointwise, with χ\_N on the quadratic contraction. |
+| T4 | Setting ũ = 0 gives G(v) = c\_E(u\_h;u\_h,v). |
+| T5 | The midpoint closure residual r vanishes for every form on unit-scale dynamic Crank–Nicolson steps from step 2 onward; measured and predicted defects agree. |
+| T6 | Reproduce the periodic angular-momentum counterexample in H-D1; periodicity must not suppress this flux. |
+
+Relation to the thesis chapter. The index-convention table and divergence pairing specify the discrete interpretation of the chapter. For degree k the bound is τ\_m ≤ h²/(c1·k⁴·ν); the chapter's c1 > 2C²\_inv (Laplacian) and c1 > 4C²\_inv (stress) are sufficient conditions with c1 replaced by c1·k⁴, while U5 checks positivity directly on the test meshes. The master's local solvability and unmatched-sweep orthogonality limitations apply also to minimal EMAC–VMS.
+
+## Chapter 5 references
+
+Numbers refer to the revised 19-page PDF identified above; the former isotropic-stress variant is retained in the chapter for comparison and is not implemented.
+
+| Item | Previous chapter | Revised chapter |
+| --- | --- | --- |
+| EMAC–VMS definition | Definition 5.1 | Definition 5.1, minimal closure |
+| Subgrid stress | (5.23) | (5.23), no isotropic part |
+| Residual | (5.26), N\_E | (5.26), N = (a·∇)u\_h + (∇u\_h)u\_h |
+| Linear splitting | (5.29) | (5.32) |
+| EMAC–VMS energy balance | (5.28) | (5.31) |
+| Total balance and corollary | (5.20), Corollary 5.1 | Unchanged |
+| Projection assumption / (A2) | — | Remark 5.6 |
+| Consistency of forms | — | Proposition 5.6 |
+| Momenta, energy, linear splitting, iteration | Propositions 5.6–5.9 | Propositions 5.7–5.10 |
+| Former M\_h variant | Definition 5.1, Remark 5.9 | §5.7.6, (5.33)–(5.35), not implemented |
+| Linearization and eliminated subscale | — | §5.7.7, Remark 5.9 |
+| Time integration | Remark 5.8 | Remark 5.10 |
+| Stabilization | Remark 5.10 | Remark 5.11 |
+| Boundary conditions and pressure | — | Remark 5.12 |
+| Implementation stress matrix | §5.9.3, (5.37) | §5.9.3, (5.41) |
+| Forms, Remarks 5.1–5.3, Lemma 5.2, Tables 5.1–5.2 | (5.3)–(5.7) and stated labels | Unchanged |
 
 ## Errata
 

@@ -993,3 +993,27 @@ The variable-τ extension and the Crank–Nicolson identity pass, including both
 Verification: hand derivations, source PDF text plus rendered pages 14–15, and the official UFL operator definitions. Lightweight document checks only; no implementation code, simulations or test suites, and no access to `results/`. The existing spec addendum was reviewed without modification and remains outside this verification commit.
 
 Deviations from scope: none. This phase records findings and stops; it does not apply spec or chapter corrections.
+
+## Phase 11b: EMAC–VMS minimal closure and conservation-check corrections (2026-10-23)
+
+Done:
+
+1. Verified the supplied 19-page Chapter 5 PDF hash, 720be75921b3956325668b85cac1641428b0fb626e9e4ca4bf67e5d248b014bc, before proceeding. Checked running processes; no validation queue, validation runner, MPI or pytest process was found.
+2. Applied items 1–5 of phase11b_spec_changes.md to formulation_spec.md: minimal symmetric stress, physical-pressure master residual, master local-update qualifications, consistency of forms versus schemes, outflow traction, conservation budgets and corrected chapter references. Recorded the required T1–T6 tests for the implementation phase.
+3. Recorded the owner decisions: substitute the subscale in every stress slot and differentiate through it; retain the stored advector in the residual and τ; use Newton without Picard warm-up for EMAC and EMAC–VMS; report physical pressure in a sufficient output space, including the midpoint correction; retain existing diagnostic meanings.
+4. Prepended the independent verification pass J01–J20, derivations J-D1–J-D5, spec/change-list qualifications, and a separate disposition of C01–C08 and the Phase 11a follow-up. The updated equations pass for both splittings. The original change list is included unchanged as the input to this phase.
+
+Tests:
+
+- Re-derived the tensor/energy/rigid-test identities, pressure equivalence, local matrix and determinant, OSS mismatch including a changing local weight, optional oblique projection, consistency difference, and midpoint budget with all signs.
+- Checked the revised PDF text and rendered pages 12–13. Re-derived the changed stress matrix (5.41).
+- Small standalone exact-rational probes in /tmp passed: 80 tensor, pressure and midpoint cases across 2D/3D and both splittings; 40 determinant cases; the OSS local-sweep and conditioning counterexamples.
+- Document whitespace, table structure, math delimiters, source hashes and preservation of the previous verification pass checked. No repository code, simulations or test suites were run; results/ was not accessed.
+
+Deviations:
+
+- Item 1b's displayed OSS mismatch is qualified by fixed τ; the spec also gives the extra term when τ changes during a local sweep. This does not change the requested algorithm.
+- The change list calls C08 moot; the chapter correctly treats it as a shared master-update limitation. The spec records the limitation.
+- Only Phase 11b was performed, following the explicit scope restriction. No Phase 12 implementation or planning was started.
+
+Open questions: none affecting the spec equations, signs or iteration. Two chapter prose corrections remain in the verification report: C09, rotation does not guarantee better conditioning; C10, zero total convective production permits nonzero transfer between scales. Neither changes the specified formulation. The chapter was not edited.
