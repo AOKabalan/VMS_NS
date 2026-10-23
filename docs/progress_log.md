@@ -1017,3 +1017,17 @@ Deviations:
 - Only Phase 11b was performed, following the explicit scope restriction. No Phase 12 implementation or planning was started.
 
 Open questions: none affecting the spec equations, signs or iteration. Two chapter prose corrections remain in the verification report: C09, rotation does not guarantee better conditioning; C10, zero total convective production permits nonzero transfer between scales. Neither changes the specified formulation. The chapter was not edited.
+
+## Phase 12a, stage 1: Chapter 5 forms and operators (2026-10-23)
+
+Done:
+- Added the Phase 12 plan, including the four commit stages and future 12b/12c configuration briefs, provisional costs and placement after the existing queue. No future run was launched or added to the queue.
+- Added the six convective selections in one module: resolved form, convective subscale coupling, residual convection and corrective outflow term, plus the divergence pairing and minimal symmetric stress. The default convection entry point remains compatible.
+- Added Laplacian/stress viscous bilinear forms and strong operators, with the selected operator in the residual and formal adjoint. Solver/configuration wiring is the next stage.
+- Captured three pre-change unit-scale smoke runs from commit 1fa820d under /tmp/phase12_baseline_1fa820d: Taylor–Hood, static linear ASGS, and dynamic nonlinear OSS with CN. The chapter reference hash matches; no queue/MPI/pytest process was active before work began.
+
+Tests: ruff check . and ruff format --check . pass. pytest tests/unit -n 2: 460 passed, including 112 new Chapter 5 tests. New tests cover component-index translations, every entry of both defect tables in 2D/3D for P1/P2, both splittings and arbitrary quadrature subscales; T1–T4/T6; channel boundary corrections and pressure convention; and the stress operator/adjoint with its boundary term. Initial failures were test fixture issues (domain-free constants and zero-form assembly), corrected by using FE rigid fields and recognizing exact zero integrands. No existing test was changed.
+
+Deviations: the outflow test checks physical-pressure do-nothing for the first four forms and modified-pressure traction for EMAC variants, as required by the spec. No chapter prose changes, production simulations or access to the repository's results/. All test output is temporary. MPI initialization and source/test writes required the authorized sandbox escalation.
+
+Open questions: none. Remaining stages: solver wiring and Jacobians/regression; physical-pressure reporting; conservation budgets and the per-step closure test T5. Stress-form U5 checks will accompany solver wiring, when the VMS residual accepts that selection.

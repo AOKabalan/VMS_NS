@@ -23,7 +23,7 @@ In scope:
 - Logs of every nonlinear iteration and residual, per-step records, diagnostics and field output.
 - The verification tests of section 10 and the validation scripts of phase 10.
 
-Out of scope for this plan: convective forms other than skew-symmetric type 1 and the Chapter 5 conservation study, split OSS, adaptive time stepping, checkpoint and restart, iterative preconditioners and parallel performance tuning, turbulence benchmarks.
+Phase 12 adds the Chapter 5 convective forms and conservation study described below. Otherwise out of scope: split OSS, adaptive time stepping, checkpoint and restart, iterative preconditioners and parallel performance tuning, turbulence benchmarks beyond the optional Phase 12c comparison.
 
 ## 3. Ground rules for the code
 
@@ -117,7 +117,7 @@ navier-stokes-vms/
 | `discretization/quadrature.py` | The single quadrature rule: `dx`, `ds`, the matching quadrature element, positivity check | Anything else |
 | `discretization/time_schemes.py` | α₀, history weights, solve level, CN extrapolation, startup sequence, data level | Import Firedrake |
 | `formulation/operators.py` | L_a, L*_a, R_u, R̂_u, R_p, elementwise Laplacian | Store state |
-| `formulation/convective_forms.py` | c(a; u, v) including the outflow term | Know about VMS |
+| `formulation/convective_forms.py` | Resolved convection, convective subscale coupling, residual convection and outflow term for all six Chapter 5 choices | Store state or know about solvers |
 | `formulation/stabilization_parameters.py` | τ_m, τ_c, τ_t | Anything else |
 | `formulation/galerkin.py` | Galerkin residual form, parameterized by the advection velocity `a` | Know about solvers |
 | `formulation/vms.py` | Subscale expression and VMS terms from the three switches | Know about solvers |
@@ -411,6 +411,42 @@ Phase 10a delivers everything below except the long runs: reference data in `dat
 - Lattice vortex: the thesis setup (domain (0, 1)², ν = 7·10⁻⁵, strong Dirichlet data, the thesis' exact solution), reporting kinetic energy against the exact decay.
 - Acceptance: each script runs, writes all outputs and a short comparison table into the progress log. These are validation runs, not tests; a miss is reported, not hidden by tuning.
 
-## 14. After this plan
+## Phase 12 — Chapter 5
 
-The Chapter 5 work adds convective forms to `convective_forms.py`, the validation rule that rejects forms needing ∇·ũ under nonlinear splitting, and energy and momentum budget tests. It will get its own spec section and plan.
+The Phase 11b spec and verification at commit 1fa820d govern this phase. The reference chapter is the 19-page PDF with SHA-256 720be75921b3956325668b85cac1641428b0fb626e9e4ca4bf67e5d248b014bc. Its two prose issues are handled by the owner; no chapter edits belong here. The divergence pairing makes skew-symmetric 2 and EMAC available with nonlinear splitting. The former restriction on those forms is superseded.
+
+### 12a: implementation and algebraic tests
+
+Four stages, each tested and committed before the next:
+
+1. **Forms/operators.** One convection module supplies resolved convection, convective subscale coupling, residual convection and the outflow term. Keep the existing default entry point. Implement the five forms and minimal EMAC–VMS, using the U10 index convention and the weak divergence pairing. Add the Laplacian/stress viscous operators and their adjoints. Test both defect tables, both splittings, arbitrary quadrature subscales, T1–T4/T6, boundary conditions and stress self-adjointness.
+2. **Solver wiring.** Pass the selected forms through one assembly path, including the residual, OSS projection and master local update. Add the six choices to [convection].form and [viscosity].form = "laplacian" or "stress", preserving defaults. EMAC–VMS requires VMS and stress viscosity. EMAC and EMAC–VMS require Newton with zero Picard warm-up, per the explicit owner decision. Assemble every stress slot from the substituted expression and differentiate through it; only the residual advector and τ retain the stored subscale. Check Newton Jacobians against finite differences, including projection rows, and default regression against commit 1fa820d on three unit-scale runs in temporary directories.
+3. **Physical pressure.** Keep the unknown/null space on P for EMAC variants. Recover p = P + |u|²/2 in a space containing the correction, normalize it separately, and use it for every output, error and force. Midpoint output uses the solve velocity, not the endpoint velocity or averaged endpoint squares. Test both time levels, output space and forces.
+4. **Conservation budgets.** Preserve existing diagnostic meanings. Add the actual assembled convective defects and the dynamic midpoint closure r, with explicit previous/current endpoint and solve-level state. Test T5 for all forms from step 2 onward, the weighted pressure and velocity terms, the viscous cross term, and the startup exclusion.
+
+Run ruff check, ruff format --check and the unit suite at each stage. Use at most two pytest workers while the validation queue runs (two is also the default for this work). Tests and regression outputs go under /tmp; do not read or write the repository's results/. Run no validation simulations in 12a. The slow verification suite is eligible only once the queue is finished, and its execution must still respect the unit-scale restriction for this phase. A budget stop is allowed only after a tested, committed stage; report the remaining stages.
+
+### 12b: conservation runs (planned, not launched in 12a)
+
+Configuration briefs below are the future files in configs/chapter5/conservation/. A {form} suffix ranges over all six choices; {space} is ASGS or OSS and {split} is linear or nonlinear. Use stress viscosity for the comparison, positive common quadrature, dynamic subscales, and Newton without warm-up for the EMAC variants. Include force power, momentum defects and the midpoint closure residual.
+
+| Configuration family | Settings and purpose | Estimated cost on 4 ranks | Queue placement |
+| --- | --- | --- | --- |
+| gresho_{form}_{space}_{split}.toml | 32×32 initial mesh, CN dt=0.005, T=0.5; all three balances. The case must enforce/check a zero strip for the solution and subscales throughout the run, not merely at initialization. Define its forcing and admissible cutoff tests before launching. | Planning allowance 1–10 min each, 24 configs; 0.4–4 h total | After the existing validation queue and a unit-scale check of the strip conditions |
+| taylor_green_{form}_{space}_{split}.toml | Periodic 2D, 32×32 P1/P1, ν=0.01, CN dt=0.005, T=0.5; linear momentum and energy only. No periodic angular-momentum assertion. | Planning allowance 1–10 min each, 24 configs; 0.4–4 h total | After Gresho; shortest measured cost first |
+
+Every configuration checks rate + dissipation + predicted defect − power from step 2 onward, including nonzero predicted defects. Refinement runs (64×64 and halved dt) follow only if the first batch warrants them. The ranges are provisional workload estimates, not measurements of the new formulations; time a short prefix before scheduling full runs.
+
+### 12c: stabilization comparison (planned, not launched in 12a)
+
+Use the same mesh, velocity/pressure pair, time scheme, stabilization constants and stress viscosity for standard skew-1 OSS, EMAC with standard OSS, and minimal EMAC–VMS. Configuration suffix {model} denotes those three choices. Existing Chapter 10 timings below are estimates for the standard solver, not guarantees for EMAC Newton convergence. Keep the physical-pressure outflow difference explicit in cylinder comparisons.
+
+| Configuration family in configs/chapter5/stabilization/ | Settings and measurements | Estimated cost on 4 ranks | Queue placement |
+| --- | --- | --- | --- |
+| cylinder_re100_{model}_p1_l1.toml | Existing L1 mesh, Dyn-Nl-OSS P1/P1, dt=0.005, T=30; drag, lift, Strouhal and solver iterations | Existing baseline ≈1.16 h; allow 1–4 h/model, 3–12 h total | After 12b and the existing queue |
+| cavity_re100_{model}_p1_64.toml | Existing 64×64 cavity, Dyn-Nl-OSS; same steady-stop rule as Chapter 10 | Minutes/model; allow 0.5 h for the trio | First in 12c by estimated cost |
+| cavity_re1000_{model}_p1_64.toml | Dyn-Lin-OSS for all three, matching the feasible existing Re=1000 case; EMAC has no warm-up | Allow 0.5 h for the trio if Newton converges; report failure without changing the model | After Re=100; no nonlinear Re=1000 run is silently substituted |
+| manufactured_{model}_p{k}_n{n}.toml | Manufactured spatial solution, k=1,2; n=8,16,32; short small-dt runs, physical-pressure and velocity convergence rates | Allow 0.5–2 h for 18 runs; verify temporal error is negligible | Before cylinder, after the cavity comparison |
+| taylor_green_3d_re1600_{model}.toml (optional) | Requires a new 3D case and a separate resolution/time-horizon decision; compare resolved and subscale energy/dissipation | Not responsibly bounded before a unit-scale timing probe; potentially tens of hours | Last, separate optional batch; not part of the current queue |
+
+Do not add these future runs to the active queue or launch them during 12a. Refine costs and finalize the Gresho strip and optional 3D configuration before the respective run phases.
