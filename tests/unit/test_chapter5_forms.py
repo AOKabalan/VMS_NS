@@ -24,7 +24,6 @@ from navier_stokes_vms.formulation.convective_forms import (
     resolved_convection,
 )
 from navier_stokes_vms.formulation.operators import (
-    adjoint_operator,
     momentum_residual,
     viscous_bilinear,
     viscous_operator,
@@ -261,12 +260,8 @@ def test_stress_operator_residual_and_formal_self_adjointness() -> None:
         * ds
     )
     same((ufl.inner(lu, v) - ufl.inner(u, lv)) * dx, surface)
-    same(
-        ufl.inner(adjoint_operator(u, v, p, nu, "stress"), u) * dx,
-        ufl.inner(-ufl.dot(ufl.grad(v), u) - lv - ufl.grad(p), u) * dx,
-    )
     zero = ufl.zero(u.ufl_shape)
-    residual = momentum_residual(u, u, p, nu, zero, zero, viscous_form="stress")
+    residual = momentum_residual(u, u, p, nu, zero, zero, "skew_symmetric_1", "stress")
     same(
         ufl.inner(residual, v) * dx, ufl.inner(-ufl.dot(ufl.grad(u), u) + lu - ufl.grad(p), v) * dx
     )

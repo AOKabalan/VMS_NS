@@ -116,52 +116,71 @@ class TimeStepper:
         self._subscales: SubscaleStorage | None = None
         self._u_sub: Expr | None = None
         self._iterate: SubscaleIterate | None = None
-        if stabilization.method == "none":
-            newton = galerkin_residual(u, p, v, q, u, u, nu, level, self._dx, outflow_ds)
-            picard = galerkin_residual(u, p, v, q, frozen, frozen, nu, level, self._dx, outflow_ds)
-        else:
-            chi = switches(stabilization)
+        forms = {"convective_form": config.convection.form, "viscous_form": config.viscosity.form}
+        chi = switches(stabilization) if stabilization.method == "vms" else None
+        u_sub_history = None
+        a, a_hat = u, frozen
+        tau_t = tau_c = tau_t_hat = tau_c_hat = None
+        xi, zeta = (projections + [None, None])[:2]
+        w, r = (projection_tests + [None, None])[:2]
+        if chi is not None:
             if chi.is_dynamic or chi.is_nonlinear:
                 quadrature_space = subscale_space(mesh, degree)
-            u_sub_history = None
             if chi.is_dynamic:
                 self._subscales = SubscaleStorage(quadrature_space, len(self._history))
                 u_sub_history = self._subscales.history
-            a, a_hat = u, frozen
             if chi.is_nonlinear:
                 u_sub_iterate = fd.Function(quadrature_space)
                 a, a_hat = u + u_sub_iterate, frozen + u_sub_iterate
             tau_t, tau_c = self._parameters(a, nu, level, chi)
             tau_t_hat, tau_c_hat = self._parameters(a_hat, nu, level, chi)
-            xi, zeta = (projections + [None, None])[:2]
-            w, r = (projection_tests + [None, None])[:2]
 
-            def stabilized(a: Expr, tau_t: Expr, tau_c: Expr) -> ufl.Form:
-                form = vms_terms(
-                    u, p, v, q, a, nu, level, tau_t, tau_c, self._dx, chi, u_sub_history, xi, zeta
-                )
-                if not chi.is_asgs:
-                    residual = subscale_residual(u, p, a, nu, level, chi, u_sub_history)
-                    form += projection_equations(
-                        xi, zeta, w, r, residual, ufl.div(u), tau_t, tau_c, self._dx
-                    )
+        def coupled(a: Expr, u_h: Expr, tau_t: Expr | None, tau_c: Expr | None) -> ufl.Form:
+            form = galerkin_residual(u, p, v, q, a, u_h, nu, level, self._dx, outflow_ds, **forms)
+            if chi is None:
                 return form
+            form += vms_terms(
+                u,
+                p,
+                v,
+                q,
+                a,
+                nu,
+                level,
+                tau_t,
+                tau_c,
+                self._dx,
+                chi,
+                u_sub_history,
+                xi,
+                zeta,
+                **forms,
+            )
+            if not chi.is_asgs:
+                residual = subscale_residual(u, p, a, nu, level, chi, u_sub_history, **forms)
+                form += projection_equations(
+                    xi, zeta, w, r, residual, ufl.div(u), tau_t, tau_c, self._dx
+                )
+            return form
 
-            newton = galerkin_residual(u, p, v, q, a, u, nu, level, self._dx, outflow_ds)
-            picard = galerkin_residual(u, p, v, q, a_hat, frozen, nu, level, self._dx, outflow_ds)
+        newton = coupled(a, u, tau_t, tau_c)
+        picard = coupled(a_hat, frozen, tau_t_hat, tau_c_hat)
+        if chi is not None:
             if config.solver.linearization == "newton" and config.solver.newton_tau == "frozen":
                 # τ on the frozen advector, then restored after differentiating: J has no τ′,
                 # in the projection weights as elsewhere.
-                frozen_tau = newton + stabilized(a, tau_t_hat, tau_c_hat)
+                frozen_tau = coupled(a, u, tau_t_hat, tau_c_hat)
                 jacobian = ufl.replace(fd.derivative(frozen_tau, self._solution), {frozen: u})
-            newton += stabilized(a, tau_t, tau_c)
-            picard += stabilized(a_hat, tau_t_hat, tau_c_hat)
-            self._u_sub = velocity_subscale(u, p, a, nu, level, tau_t, chi, u_sub_history, xi)
+            self._u_sub = velocity_subscale(
+                u, p, a, nu, level, tau_t, chi, u_sub_history, xi, **forms
+            )
             if chi.is_nonlinear:
                 update = (
                     self._u_sub
                     if config.solver.subscale_update == "fixed_point"
-                    else accelerated_subscale(u, p, nu, level, tau_t, chi, u_sub_history, xi)
+                    else accelerated_subscale(
+                        u, p, nu, level, tau_t, chi, u_sub_history, xi, **forms
+                    )
                 )
                 self._iterate = SubscaleIterate(
                     u_sub_iterate,

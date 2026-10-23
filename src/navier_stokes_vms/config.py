@@ -18,7 +18,10 @@ Method = Literal["none", "vms"]
 SubscaleSpace = Literal["asgs", "oss"]
 SubscaleDynamics = Literal["static", "dynamic"]
 ScaleSplitting = Literal["linear", "nonlinear"]
-ConvectiveForm = Literal["skew_symmetric_1"]
+ConvectiveForm = Literal[
+    "nonconservative", "conservative", "skew_symmetric_1", "skew_symmetric_2", "emac", "emac_vms"
+]
+ViscousForm = Literal["laplacian", "stress"]
 Linearization = Literal["newton", "picard"]
 NewtonTau = Literal["frozen", "exact"]
 SubscaleUpdate = Literal["fixed_point", "accelerated"]
@@ -68,9 +71,16 @@ class StabilizationOptions:
 
 @dataclass(frozen=True)
 class ConvectionOptions:
-    """Galerkin convective form."""
+    """Convective form of the resolved equation and subscale coupling (spec: Convective forms)."""
 
     form: ConvectiveForm = "skew_symmetric_1"
+
+
+@dataclass(frozen=True)
+class ViscosityOptions:
+    """Viscous bilinear form and its elementwise operator L_ν (spec: Convective forms)."""
+
+    form: ViscousForm = "laplacian"
 
 
 @dataclass(frozen=True)
@@ -116,6 +126,7 @@ class Config:
     time: TimeOptions = field(default_factory=TimeOptions)
     stabilization: StabilizationOptions = field(default_factory=StabilizationOptions)
     convection: ConvectionOptions = field(default_factory=ConvectionOptions)
+    viscosity: ViscosityOptions = field(default_factory=ViscosityOptions)
     solver: SolverOptions = field(default_factory=SolverOptions)
     output: OutputOptions = field(default_factory=OutputOptions)
 
@@ -126,6 +137,7 @@ _SECTIONS: dict[str, type] = {
     "time": TimeOptions,
     "stabilization": StabilizationOptions,
     "convection": ConvectionOptions,
+    "viscosity": ViscosityOptions,
     "solver": SolverOptions,
     "output": OutputOptions,
 }
@@ -167,7 +179,8 @@ def _config_from_dict(data: Mapping[str, object], default_run_name: str) -> Conf
 def validate_config(config: Config) -> None:
     """Raise ValueError for an illegal option or combination (plan §7, rules 1, 2, 4).
 
-    Rule 5 has nothing left to reject: all eight VMS cases are implemented.
+    Rule 5 has nothing left to reject: all eight VMS cases are implemented. The Chapter 5 forms
+    add their own restrictions (spec: Convective forms and EMAC–VMS).
     """
     for name, value in (("case", config.case), ("run_name", config.run_name)):
         if not _NAME.fullmatch(value):
@@ -184,6 +197,7 @@ def validate_config(config: Config) -> None:
         )
     _check_mesh(config.mesh)
     _check_stabilization(config)
+    _check_forms(config)
     if (
         "subscale_kinetic_energy" in config.output.diagnostics
         and config.stabilization.method == "none"
@@ -373,3 +387,29 @@ def _check_stabilization(config: Config) -> None:
             f"discretization.pressure_degree = {pressure}: stabilization.method = 'vms' "
             "needs equal orders, velocity_degree = pressure_degree"
         )
+
+
+def _check_forms(config: Config) -> None:
+    form, solver = config.convection.form, config.solver
+    if form == "emac_vms":
+        for name, value, required in (
+            ("stabilization.method", config.stabilization.method, "vms"),
+            ("viscosity.form", config.viscosity.form, "stress"),
+        ):
+            if value != required:
+                raise ValueError(
+                    f"convection.form = 'emac_vms', {name} = {value!r}: "
+                    f"EMAC–VMS needs {name} = {required!r}"
+                )
+    if form in ("emac", "emac_vms"):
+        # Owner decision: no Picard linearization of the kinetic pressure or substituted stress.
+        if solver.linearization != "newton":
+            raise ValueError(
+                f"convection.form = {form!r}, solver.linearization = {solver.linearization!r}: "
+                "EMAC forms need solver.linearization = 'newton'"
+            )
+        if solver.picard_iterations_before_newton > 0:
+            raise ValueError(
+                f"convection.form = {form!r}, solver.picard_iterations_before_newton = "
+                f"{solver.picard_iterations_before_newton}: EMAC forms need no Picard warm-up"
+            )

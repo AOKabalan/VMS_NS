@@ -131,7 +131,7 @@ The `formulation/` layer uses the spec's symbols so that it reads side by side w
 | τ_m, τ_c, τ_t | `tau_m`, `tau_c`, `tau_t` | Stabilization parameters |
 | ξ_h, ζ_h | `xi`, `zeta` | OSS projections |
 | R_u, R̂_u, R_p | `momentum_residual`, `reduced_momentum_residual`, `continuity_residual` | Residuals |
-| L_a, L*_a | `momentum_operator`, `adjoint_operator` | Operators |
+| L_a, L*_a | `momentum_operator`; L*_a inside `vms_terms` | Operators; the convective part of L*_a is `convective_subscale_coupling` |
 | Δ_h | `elementwise_laplacian` | Laplacian evaluated cell by cell |
 | c(a; u, v) | `convection_form` | Galerkin convective form |
 | D_t | `time_derivative` | Discrete time derivative |

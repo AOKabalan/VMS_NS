@@ -354,3 +354,105 @@ def test_run_script_rejects_an_invalid_setup_before_writing(
     assert result.returncode == 1
     assert message in result.stderr
     assert not (tmp_path / "results").exists()
+
+
+CHAPTER5_FORMS = (
+    "nonconservative",
+    "conservative",
+    "skew_symmetric_1",
+    "skew_symmetric_2",
+    "emac",
+    "emac_vms",
+)
+
+
+def test_chapter5_selections_default_to_skew_symmetric_1_and_laplacian(tmp_path: Path) -> None:
+    config = load_text(tmp_path, GALERKIN)
+    assert (config.convection.form, config.viscosity.form) == ("skew_symmetric_1", "laplacian")
+    dumped = config_to_toml(config)
+    assert '[convection]\nform = "skew_symmetric_1"' in dumped
+    assert '[viscosity]\nform = "laplacian"' in dumped
+
+
+@pytest.mark.parametrize("splitting", ["linear", "nonlinear"])
+@pytest.mark.parametrize(
+    ("form", "viscous"),
+    [(form, viscous) for form in CHAPTER5_FORMS[:5] for viscous in ("laplacian", "stress")]
+    + [("emac_vms", "stress")],
+)
+def test_every_form_is_accepted_with_vms_and_both_splittings(
+    tmp_path: Path, form: str, viscous: str, splitting: str
+) -> None:
+    """The divergence pairing supersedes the former rule against ∇·ũ under nonlinear splitting."""
+    text = (
+        STATIC_ASGS.replace('"linear"', f'"{splitting}"')
+        + f'[convection]\nform = "{form}"\n[viscosity]\nform = "{viscous}"\n'
+    )
+    config = load_text(tmp_path, text)
+    assert (config.convection.form, config.viscosity.form) == (form, viscous)
+    dumped = write_config(tmp_path, config_to_toml(config), name="dumped.toml")
+    assert load_config(dumped) == config
+
+
+@pytest.mark.parametrize("viscous", ["laplacian", "stress"])
+@pytest.mark.parametrize("form", CHAPTER5_FORMS[:5])
+def test_galerkin_accepts_every_form_except_emac_vms(
+    tmp_path: Path, form: str, viscous: str
+) -> None:
+    text = GALERKIN + f'\n[convection]\nform = "{form}"\n[viscosity]\nform = "{viscous}"\n'
+    assert load_text(tmp_path, text).convection.form == form
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        (
+            GALERKIN + '\n[convection]\nform = "emac_vms"\n[viscosity]\nform = "stress"\n',
+            "convection.form = 'emac_vms', stabilization.method = 'none': "
+            "EMAC–VMS needs stabilization.method = 'vms'",
+        ),
+        (
+            STATIC_ASGS + '[convection]\nform = "emac_vms"\n',
+            "convection.form = 'emac_vms', viscosity.form = 'laplacian': "
+            "EMAC–VMS needs viscosity.form = 'stress'",
+        ),
+        (
+            STATIC_ASGS + '[convection]\nform = "emac"\n[solver]\nlinearization = "picard"\n',
+            "convection.form = 'emac', solver.linearization = 'picard': "
+            "EMAC forms need solver.linearization = 'newton'",
+        ),
+        (
+            STATIC_ASGS
+            + '[convection]\nform = "emac_vms"\n[viscosity]\nform = "stress"\n'
+            + '[solver]\nlinearization = "picard"\n',
+            "convection.form = 'emac_vms', solver.linearization = 'picard'",
+        ),
+        (
+            GALERKIN
+            + '\n[convection]\nform = "emac"\n[solver]\npicard_iterations_before_newton = 2\n',
+            "convection.form = 'emac', solver.picard_iterations_before_newton = 2: "
+            "EMAC forms need no Picard warm-up",
+        ),
+        (
+            STATIC_ASGS
+            + '[convection]\nform = "emac_vms"\n[viscosity]\nform = "stress"\n'
+            + "[solver]\npicard_iterations_before_newton = 1\n",
+            "convection.form = 'emac_vms', solver.picard_iterations_before_newton = 1",
+        ),
+        (GALERKIN + '\n[convection]\nform = "rotational"\n', "convection.form = 'rotational'"),
+        (GALERKIN + '\n[viscosity]\nform = "bingham"\n', "viscosity.form = 'bingham'"),
+    ],
+    ids=[
+        "emac_vms-galerkin",
+        "emac_vms-laplacian",
+        "emac-picard",
+        "emac_vms-picard",
+        "emac-warmup",
+        "emac_vms-warmup",
+        "unknown-convection",
+        "unknown-viscosity",
+    ],
+)
+def test_chapter5_restrictions_name_the_fields(tmp_path: Path, text: str, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        load_text(tmp_path, text)

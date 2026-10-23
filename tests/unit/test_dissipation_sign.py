@@ -1,4 +1,7 @@
-"""Eigenvalue checks of static ASGS and OSS dissipation, and the cell-diameter regression (U5)."""
+"""Eigenvalue checks of static ASGS and OSS dissipation, and the cell-diameter regression (U5).
+
+Both viscous forms are checked (spec: Convective forms, viscous form).
+"""
 
 import logging
 from pathlib import Path
@@ -12,6 +15,7 @@ from ufl.form import Form
 from navier_stokes_vms.discretization.function_spaces import mixed_space, oss_space
 from navier_stokes_vms.discretization.quadrature import volume_measure
 from navier_stokes_vms.formulation.galerkin import SolveLevel
+from navier_stokes_vms.formulation.operators import viscous_bilinear
 from navier_stokes_vms.formulation.oss_projections import projection_equations
 from navier_stokes_vms.formulation.stabilization_parameters import stabilization_parameters
 from navier_stokes_vms.formulation.vms import Switches, subscale_residual, vms_terms
@@ -34,10 +38,13 @@ def free_matrix(
     return (restricted + restricted.T) / 2, free
 
 
+@pytest.mark.parametrize("viscous", ["laplacian", "stress"])
 @pytest.mark.parametrize("k", [1, 2])
 @pytest.mark.parametrize("mesh_kind", ["left", "crossed", "box", "cylinder"])
 @pytest.mark.parametrize("nu", [10.0, 1e-4], ids=["viscous", "convective"])
-def test_static_asgs_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, nu: float) -> None:
+def test_static_asgs_energy_has_no_negative_eigenvalues(
+    k: int, mesh_kind: str, nu: float, viscous: str
+) -> None:
     mesh = (
         fd.Mesh(str(Path(__file__).resolve().parents[2] / "meshes/cylinder_dfg_2d_coarse.msh"))
         if mesh_kind == "cylinder"
@@ -60,20 +67,27 @@ def test_static_asgs_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, 
         ufl.zero(mesh.geometric_dimension),
     )
     tau_m, tau_c = stabilization_parameters(a, nu, k, 4.0, 2.0)
-    energy = nu * ufl.inner(ufl.grad(u), ufl.grad(v)) * dx
-    energy += vms_terms(u, p, v, q, a, nu, level, tau_m, tau_c, dx, STATIC_LINEAR, None)
+    energy = viscous_bilinear(u, v, nu, dx, viscous)
+    energy += vms_terms(
+        u, p, v, q, a, nu, level, tau_m, tau_c, dx, STATIC_LINEAR, None, viscous_form=viscous
+    )
     matrix, _ = free_matrix(fd.lhs(energy), state, fd.DirichletBC(space.sub(0), 0, "on_boundary"))
     eigenvalues = np.linalg.eigvalsh(matrix)
     smallest, largest = eigenvalues[0], eigenvalues[-1]
-    LOGGER.info("U5 P%d/P%d %s ν=%g: λ_min=%g, λ_max=%g", k, k, mesh_kind, nu, smallest, largest)
+    LOGGER.info(
+        "U5 %s P%d/P%d %s ν=%g: λ_min=%g, λ_max=%g", viscous, k, k, mesh_kind, nu, smallest, largest
+    )
     assert largest > 0
     assert smallest >= -1e-12 * largest
 
 
+@pytest.mark.parametrize("viscous", ["laplacian", "stress"])
 @pytest.mark.parametrize("k", [1, 2])
 @pytest.mark.parametrize("mesh_kind", ["left", "crossed", "box", "cylinder"])
 @pytest.mark.parametrize("nu", [10.0, 1e-4], ids=["viscous", "convective"])
-def test_static_oss_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, nu: float) -> None:
+def test_static_oss_energy_has_no_negative_eigenvalues(
+    k: int, mesh_kind: str, nu: float, viscous: str
+) -> None:
     """E(u, p; v, q) with (ξ_h, ζ_h) eliminated: the Schur complement of the coupled form.
 
     The projections are linear in (u, p), so eliminating them from the coupled bilinear form gives
@@ -101,9 +115,11 @@ def test_static_oss_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, n
     )
     tau_m, tau_c = stabilization_parameters(a, nu, k, 4.0, 2.0)
     chi = STATIC_LINEAR_OSS
-    residual = subscale_residual(u, p, a, nu, level, chi, None)
-    form = nu * ufl.inner(ufl.grad(u), ufl.grad(v)) * dx
-    form += vms_terms(u, p, v, q, a, nu, level, tau_m, tau_c, dx, chi, None, xi, zeta)
+    residual = subscale_residual(u, p, a, nu, level, chi, None, viscous_form=viscous)
+    form = viscous_bilinear(u, v, nu, dx, viscous)
+    form += vms_terms(
+        u, p, v, q, a, nu, level, tau_m, tau_c, dx, chi, None, xi, zeta, viscous_form=viscous
+    )
     form += projection_equations(xi, zeta, w, r, residual, ufl.div(u), tau_m, tau_c, dx)
     marker = fd.Function(space).assign(1.0)
     fd.DirichletBC(space.sub(0), 0, "on_boundary").zero(marker)
@@ -120,7 +136,14 @@ def test_static_oss_energy_has_no_negative_eigenvalues(k: int, mesh_kind: str, n
     eigenvalues = np.linalg.eigvalsh((schur + schur.T) / 2)
     smallest, largest = eigenvalues[0], eigenvalues[-1]
     LOGGER.info(
-        "U5 OSS P%d/P%d %s ν=%g: λ_min=%g, λ_max=%g", k, k, mesh_kind, nu, smallest, largest
+        "U5 OSS %s P%d/P%d %s ν=%g: λ_min=%g, λ_max=%g",
+        viscous,
+        k,
+        k,
+        mesh_kind,
+        nu,
+        smallest,
+        largest,
     )
     assert largest > 0
     assert smallest >= -1e-12 * largest

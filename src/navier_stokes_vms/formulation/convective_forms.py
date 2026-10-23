@@ -20,15 +20,13 @@ def divergence_pairing(u_h: Expr, u_sub: Expr, w: Expr, dx: Measure) -> Form:
     return (ufl.div(u_h) * w - ufl.inner(u_sub, ufl.grad(w))) * dx
 
 
-def minimal_stress(u: Expr, u_sub: Expr, nonlinear: bool = True) -> Expr:
+def minimal_stress(u: Expr, u_sub: Expr, nonlinear: bool) -> Expr:
     """T̃ = ũ⊗u + u⊗ũ + χ_N ũ⊗ũ, with the same expression in every slot (spec: EMAC–VMS)."""
     stress = ufl.outer(u_sub, u) + ufl.outer(u, u_sub)
     return stress + ufl.outer(u_sub, u_sub) if nonlinear else stress
 
 
-def resolved_convection(
-    a: Expr, u_h: Expr, u: Expr, v: Expr, dx: Measure, form: str = "skew_symmetric_1"
-) -> Form:
+def resolved_convection(a: Expr, u_h: Expr, u: Expr, v: Expr, dx: Measure, form: str) -> Form:
     """The selected resolved volume form; u_h is the resolved advector (spec: Chapter 5)."""
     if form == "skew_symmetric_1":
         return (
@@ -60,8 +58,8 @@ def convective_subscale_coupling(
     v: Expr,
     u_sub: Expr,
     dx: Measure,
-    form: str = "skew_symmetric_1",
-    nonlinear: bool = True,
+    form: str,
+    nonlinear: bool,
 ) -> Form:
     """Convective subscale feedback, replacing the standard coupling for minimal EMAC–VMS."""
     if form == "emac_vms":
@@ -71,7 +69,7 @@ def convective_subscale_coupling(
     return -ufl.inner(u_sub, ufl.dot(ufl.grad(v), a)) * dx
 
 
-def residual_convection(a: Expr, u: Expr, form: str = "skew_symmetric_1") -> Expr:
+def residual_convection(a: Expr, u: Expr, form: str) -> Expr:
     """N = (a·∇)u, plus the kinetic-pressure gradient for a P unknown (spec: Chapter 5)."""
     convection = ufl.dot(ufl.grad(u), a)
     if PRESSURE_UNKNOWNS[form] == "P":
@@ -79,9 +77,7 @@ def residual_convection(a: Expr, u: Expr, form: str = "skew_symmetric_1") -> Exp
     return convection
 
 
-def outflow_term(
-    u_h: Expr, u: Expr, v: Expr, outflow_ds: Measure | None, form: str = "skew_symmetric_1"
-) -> Form:
+def outflow_term(u_h: Expr, u: Expr, v: Expr, outflow_ds: Measure | None, form: str) -> Form:
     """Corrective facet term; EMAC retains its modified-pressure traction (spec: outflow)."""
     if form not in PRESSURE_UNKNOWNS:
         raise ValueError(f"unknown convective form: {form!r}")
