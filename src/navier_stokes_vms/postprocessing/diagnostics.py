@@ -14,6 +14,7 @@ from navier_stokes_vms.formulation.convective_forms import (
     convective_defect,
     energy_defect,
     predicted_energy_defect,
+    predicted_momentum_defect,
 )
 from navier_stokes_vms.formulation.operators import viscous_bilinear, viscous_operator
 from navier_stokes_vms.problem.boundary_conditions import named_boundary_measure
@@ -32,6 +33,7 @@ ENERGY_BUDGET_TERMS = (
     "defect_measured",
     "residual",
 )
+MOMENTUM_BUDGET_TERMS = ("rate", "defect", "forcing", "residual")
 
 
 @dataclass(frozen=True)
@@ -70,11 +72,11 @@ def _functional(form: Form) -> Callable[[], float]:
 
 
 class Conservation:
-    """Convective defects and the Crank–Nicolson energy closure (spec: Conservation checks).
+    """Convective defects and the Crank–Nicolson closures (spec: Conservation checks).
 
     `capture` runs after each converged solve, before the histories advance, so every term uses
-    the solve-level state and the old endpoint; `energy_budget` then adds only the new endpoint
-    energy.
+    the solve-level state and the old endpoint; `energy_budget` and `momentum_budget` then add
+    only the new endpoint energy and moments.
     """
 
     def __init__(self, names: Sequence[str], fields: ConservationFields) -> None:
@@ -95,6 +97,11 @@ class Conservation:
                     fields.convective_form,
                     fields.is_nonlinear,
                 )
+            )
+
+        def predicted(w: Expr) -> Callable[[], float]:
+            return _functional(
+                predicted_momentum_defect(u, s, w, dx, fields.convective_form, fields.is_nonlinear)
             )
 
         x = fd.SpatialCoordinate(mesh)
@@ -118,6 +125,14 @@ class Conservation:
         if "angular_momentum_defect" in names:
             self._defects["angular_momentum_defect"] = {
                 axis: defect(phi) for axis, phi in rotations.items()
+            }
+        if "linear_momentum_defect_predicted" in names:
+            self._defects["linear_momentum_defect_predicted"] = {
+                axis: predicted(e) for axis, e in zip(axes, rigid, strict=True)
+            }
+        if "angular_momentum_defect_predicted" in names:
+            self._defects["angular_momentum_defect_predicted"] = {
+                axis: predicted(phi) for axis, phi in rotations.items()
             }
         if "convective_energy_defect" in names:
             self._defects["convective_energy_defect"] = {
@@ -158,10 +173,31 @@ class Conservation:
             else:
                 energy = (ufl.inner(u_end, u_end) + ufl.inner(s_end, s_end)) / 2 * dx
             self._energy = _functional(energy)
+        self._momentum_terms: dict[str, dict[str, Callable[[], float]]] = {}
+        self._momenta: dict[str, Callable[[], float]] = {}
+        if "momentum_budget" in names:
+            self._momentum_terms = {
+                "defect": {axis: defect(e) for axis, e in zip(axes, rigid, strict=True)},
+                "forcing": {
+                    axis: _functional(ufl.inner(fields.forcing, e) * dx)
+                    for axis, e in zip(axes, rigid, strict=True)
+                },
+            }
+            # (u_h + χ_A ũ, e_k): OSS uses only the resolved moment, as in its discrete equation.
+            moment = fields.endpoint_velocity
+            if fields.is_asgs:
+                moment = moment + fields.endpoint_subscale
+            self._momenta = {
+                axis: _functional(ufl.inner(moment, e) * dx)
+                for axis, e in zip(axes, rigid, strict=True)
+            }
+        self._axes = axes
         self._dt = fields.dt
         self._captured: dict[str, dict[str, float]] = {}
         self._terms: dict[str, float] | None = None
         self._old_energy = 0.0
+        self._momentum_captured: dict[str, dict[str, float]] | None = None
+        self._old_momenta: dict[str, float] = {}
 
     def capture(self, midpoint: bool) -> None:
         """Evaluate the solve-level terms and the old endpoint energy before the shift.
@@ -176,6 +212,13 @@ class Conservation:
         if self._energy is not None and midpoint:
             self._terms = {name: value() for name, value in self._budget.items()}
             self._old_energy = self._energy()
+        self._momentum_captured = None
+        if self._momenta and midpoint:
+            self._momentum_captured = {
+                term: {axis: value() for axis, value in components.items()}
+                for term, components in self._momentum_terms.items()
+            }
+            self._old_momenta = {axis: value() for axis, value in self._momenta.items()}
 
     def defect(self, name: str) -> float | dict[str, float]:
         """A captured defect: a scalar, or its components by axis."""
@@ -194,6 +237,21 @@ class Conservation:
         terms["defect_measured"] = terms["power"] - terms["rate"] - terms["dissipation"]
         terms["residual"] = terms["defect_predicted"] - terms["defect_measured"]
         return {name: terms[name] for name in ENERGY_BUDGET_TERMS}
+
+    def momentum_budget(self) -> dict[str, float | None]:
+        """r_M,k = rate_M,k + D_k − F_k per axis, after the shift (spec: Momentum budget)."""
+        columns = [f"{term}_{axis}" for term in MOMENTUM_BUDGET_TERMS for axis in self._axes]
+        if self._momentum_captured is None:
+            return dict.fromkeys(columns)
+        terms: dict[str, float] = {}
+        for axis, moment in self._momenta.items():
+            terms[f"rate_{axis}"] = (moment() - self._old_momenta[axis]) / self._dt
+            terms[f"defect_{axis}"] = self._momentum_captured["defect"][axis]
+            terms[f"forcing_{axis}"] = self._momentum_captured["forcing"][axis]
+            terms[f"residual_{axis}"] = (
+                terms[f"rate_{axis}"] + terms[f"defect_{axis}"] - terms[f"forcing_{axis}"]
+            )
+        return {column: terms[column] for column in columns}
 
 
 @dataclass(frozen=True)
@@ -267,6 +325,20 @@ def _force(state: DiagnosticState) -> dict[str, float]:
     return values
 
 
+def _region_l2(state: DiagnosticState, field: Expr) -> float:
+    """√∫ χ_R |field|² with the case's monitor-region indicator χ_R (spec: Monitor-region)."""
+    indicator = state.problem.monitor_region(fd.SpatialCoordinate(state.problem.mesh))
+    return math.sqrt(fd.assemble(indicator * ufl.inner(field, field) * state.dx))
+
+
+def _region_velocity_l2(state: DiagnosticState) -> float:
+    return _region_l2(state, state.velocity)
+
+
+def _region_subscale_l2(state: DiagnosticState) -> float:
+    return _region_l2(state, state.subscale_velocity)
+
+
 def _divergence_l2(state: DiagnosticState) -> float:
     return math.sqrt(fd.assemble(ufl.div(state.velocity) ** 2 * state.dx))
 
@@ -303,6 +375,10 @@ def _energy_budget(state: DiagnosticState) -> dict[str, float | None]:
     return state.conservation.energy_budget()
 
 
+def _momentum_budget(state: DiagnosticState) -> dict[str, float | None]:
+    return state.conservation.momentum_budget()
+
+
 DIAGNOSTICS: dict[str, Diagnostic] = {
     "kinetic_energy": Diagnostic(_kinetic_energy, needs_exact_solution=False),
     "subscale_kinetic_energy": Diagnostic(_subscale_kinetic_energy, needs_exact_solution=False),
@@ -310,6 +386,8 @@ DIAGNOSTICS: dict[str, Diagnostic] = {
     "angular_momentum": Diagnostic(_angular_momentum, needs_exact_solution=False),
     "force": Diagnostic(_force, needs_exact_solution=False),
     "divergence_l2": Diagnostic(_divergence_l2, needs_exact_solution=False),
+    "region_velocity_l2": Diagnostic(_region_velocity_l2, needs_exact_solution=False),
+    "region_subscale_l2": Diagnostic(_region_subscale_l2, needs_exact_solution=False),
     "velocity_error_l2": Diagnostic(_velocity_error_l2, needs_exact_solution=True),
     "velocity_gradient_error_l2": Diagnostic(
         _velocity_gradient_error_l2, needs_exact_solution=True
@@ -321,24 +399,40 @@ DIAGNOSTICS: dict[str, Diagnostic] = {
     "angular_momentum_defect": Diagnostic(
         _conservation_defect("angular_momentum_defect"), needs_exact_solution=False
     ),
+    "linear_momentum_defect_predicted": Diagnostic(
+        _conservation_defect("linear_momentum_defect_predicted"), needs_exact_solution=False
+    ),
+    "angular_momentum_defect_predicted": Diagnostic(
+        _conservation_defect("angular_momentum_defect_predicted"), needs_exact_solution=False
+    ),
     "convective_energy_defect": Diagnostic(
         _conservation_defect("convective_energy_defect"), needs_exact_solution=False
     ),
     "energy_budget": Diagnostic(_energy_budget, needs_exact_solution=False),
+    "momentum_budget": Diagnostic(_momentum_budget, needs_exact_solution=False),
 }
 
 CONSERVATION_DIAGNOSTICS = (
     "linear_momentum_defect",
     "angular_momentum_defect",
+    "linear_momentum_defect_predicted",
+    "angular_momentum_defect_predicted",
     "convective_energy_defect",
     "energy_budget",
+    "momentum_budget",
 )
+REGION_DIAGNOSTICS = ("region_velocity_l2", "region_subscale_l2")
 
 
 def check_diagnostics_supported(names: Sequence[str], problem: Problem) -> None:
-    """Reject diagnostics whose required exact solution or force boundaries are absent."""
+    """Reject diagnostics whose exact solution, force boundaries or monitor region are absent."""
     if "force" in names and not problem.force_boundaries:
         raise ValueError("output.diagnostics: force requires the case to declare force_boundaries")
+    regional = [name for name in names if name in REGION_DIAGNOSTICS]
+    if regional and problem.monitor_region is None:
+        raise ValueError(
+            f"output.diagnostics: {', '.join(regional)} require the case to declare monitor_region"
+        )
     needing = [name for name in names if DIAGNOSTICS[name].needs_exact_solution]
     if needing and problem.exact_velocity is None:
         raise ValueError(
@@ -364,12 +458,22 @@ def diagnostic_columns(names: Sequence[str], problem: Problem) -> tuple[str, ...
     axes = "xyz"[: problem.mesh.geometric_dimension]
     columns = []
     for name in names:
-        if name in ("linear_momentum", "linear_momentum_defect") or (
-            name in ("angular_momentum", "angular_momentum_defect") and len(axes) == 3
+        if name in (
+            "linear_momentum",
+            "linear_momentum_defect",
+            "linear_momentum_defect_predicted",
+        ) or (
+            name
+            in ("angular_momentum", "angular_momentum_defect", "angular_momentum_defect_predicted")
+            and len(axes) == 3
         ):
             columns.extend(f"{name}_{axis}" for axis in axes)
         elif name == "energy_budget":
             columns.extend(f"{name}_{term}" for term in ENERGY_BUDGET_TERMS)
+        elif name == "momentum_budget":
+            columns.extend(
+                f"{name}_{term}_{axis}" for term in MOMENTUM_BUDGET_TERMS for axis in axes
+            )
         elif name == "force":
             columns.extend(
                 f"force_{boundary}_{axis}" for boundary in problem.force_boundaries for axis in axes

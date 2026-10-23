@@ -63,7 +63,10 @@ four forms.
 
 Available diagnostics: `kinetic_energy`, `subscale_kinetic_energy` (VMS only),
 `linear_momentum`, `angular_momentum`, `force`, `divergence_l2`, and, for cases with an exact
-solution, `velocity_error_l2`, `velocity_gradient_error_l2` and `pressure_error_l2`.
+solution, `velocity_error_l2`, `velocity_gradient_error_l2` and `pressure_error_l2`. For cases
+that declare `Problem.monitor_region`, `region_velocity_l2` and `region_subscale_l2` (VMS only)
+are √∫_R|u_h|² and √∫_R|ũ|² over that region, at the same times as the kinetic energies. They
+observe the zero-strip assumption and constrain nothing.
 All integrals are global and use the common quadrature rule; error norms use twice its degree.
 Momentum vectors expand into `_x`, `_y`, `_z` columns; angular momentum in 2D is one scalar.
 A case declares `Problem.force_boundaries`, a tuple of boundary names; `force` writes
@@ -80,6 +83,10 @@ at the converged solve-level state (`pressure_time`):
 - `angular_momentum_defect` is D_φ = c(a; u_h, φ) − (ũ, (a·∇)φ) with φ = e_k × x, and G(φ)
   for EMAC–VMS. It is a scalar in 2D, with φ = (−y, x).
 - `convective_energy_defect` is 𝒩 = c(a; u_h, u_h) + (ũ, N − (a·∇)u_h), and G(u_h) + (ũ, N)
+  for EMAC–VMS.
+- `linear_momentum_defect_predicted` and `angular_momentum_defect_predicted` are the interior
+  predictions of chapter Tables 5.2–5.3 for the same fields, with
+  D_χ(w) = (∇·u_h, w) − χ_N(ũ, ∇w) and, for linear splitting, J = (ũ, (u_h·∇)φ). They are zero
   for EMAC–VMS.
 
 Here c includes the selected outflow term, a = u_h + ũ* is the advector of the residual, and ũ is
@@ -101,7 +108,15 @@ with dynamic VMS subscales. Its columns are:
 - `residual`: r = rate + 𝒟 + 𝒩_pred − power.
 
 With u_h = 0 on the whole boundary, or for the energy on periodic domains, r vanishes to solver
-tolerance for every form. The terms are captured after the solve, before the histories advance.
+tolerance for every form.
+
+`momentum_budget` is the per-step linear-momentum closure, with the same restrictions and blank
+startup row. For each axis k it writes `rate_k` = (M_k^(n+1) − M_k^n)/δt with
+M_k = (u_h + ũ, e_k) for ASGS and (u_h, e_k) for OSS at the endpoints, `defect_k` = D_k (as
+`linear_momentum_defect`), `forcing_k` = (f, e_k) with the endpoint-average force, and
+`residual_k` = rate + D_k − F_k. On periodic domains the residual vanishes to solver tolerance.
+With Dirichlet walls it is the consistent wall reaction, the force on the fluid, and is only
+reported. The terms are captured after the solve, before the histories advance.
 The backward-Euler startup step is excluded and its columns are blank: it would add
 ‖Δ(u_h + ũ)‖²/(2δt) for ASGS, or (‖Δu_h‖² + ‖Δũ‖²)/(2δt) for OSS.
 

@@ -494,3 +494,37 @@ def test_energy_budget_needs_the_midpoint_scheme_for_both_scales(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         load_text(tmp_path, text)
+
+
+CN_MOMENTUM = CN_DYNAMIC.replace("energy_budget", "momentum_budget")
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        (
+            CN_MOMENTUM.replace('"crank_nicolson"', '"bdf2"'),
+            "momentum_budget with time.scheme = 'bdf2', .*subscale_dynamics = 'dynamic'",
+        ),
+        (
+            CN_MOMENTUM.replace('"dynamic"', '"static"'),
+            "momentum_budget with .*stabilization.subscale_dynamics = 'static'",
+        ),
+        (
+            GALERKIN + '\n[time]\nscheme = "crank_nicolson"\n[output]\n'
+            'diagnostics = ["momentum_budget"]\n',
+            "momentum_budget with .*stabilization.method = 'none'",
+        ),
+        (
+            GALERKIN + '\n[output]\ndiagnostics = ["region_subscale_l2"]\n',
+            "region_subscale_l2 requires stabilization.method = 'vms'",
+        ),
+    ],
+    ids=["bdf2", "static", "galerkin", "region_subscale_galerkin"],
+)
+def test_momentum_budget_and_subscale_region_norm_restrictions(
+    tmp_path: Path, text: str, message: str
+) -> None:
+    assert load_text(tmp_path, CN_MOMENTUM).output.diagnostics == ("momentum_budget",)
+    with pytest.raises(ValueError, match=message):
+        load_text(tmp_path, text)

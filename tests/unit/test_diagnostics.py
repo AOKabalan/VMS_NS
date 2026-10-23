@@ -23,6 +23,7 @@ from navier_stokes_vms.discretization.quadrature import boundary_measure, volume
 from navier_stokes_vms.discretization.time_schemes import step_coefficients
 from navier_stokes_vms.postprocessing.diagnostics import (
     ENERGY_BUDGET_TERMS,
+    MOMENTUM_BUDGET_TERMS,
     DiagnosticState,
     check_diagnostics_supported,
     diagnostic_columns,
@@ -273,3 +274,32 @@ def test_galerkin_defects_in_3d_use_the_solve_level_convective_form(tmp_path: Pa
             defect(ufl.cross(e, x)), rel=1e-10, abs=1e-14
         )
     assert float(row["convective_energy_defect"]) == pytest.approx(0.0, abs=1e-14)
+
+
+@pytest.mark.parametrize("dimension", [2, 3])
+def test_momentum_budget_and_predicted_defect_columns(dimension: int) -> None:
+    problem = analytic_state(dimension).problem
+    names = ("linear_momentum_defect_predicted", "angular_momentum_defect_predicted")
+    axes = "xyz"[:dimension]
+    angular = [f"{names[1]}_{a}" for a in axes] if dimension == 3 else [names[1]]
+    assert diagnostic_columns((*names, "momentum_budget"), problem) == (
+        *(f"{names[0]}_{a}" for a in axes),
+        *angular,
+        *(f"momentum_budget_{term}_{a}" for term in MOMENTUM_BUDGET_TERMS for a in axes),
+    )
+
+
+def test_region_norms_of_known_fields() -> None:
+    """With the region boundary on cell edges, the quadrature-point indicator is exact."""
+    original = analytic_state(2)
+    x = fd.SpatialCoordinate(original.problem.mesh)
+    problem = replace(
+        original.problem, monitor_region=lambda y: ufl.conditional(ufl.gt(y[0], 0.5), 1.0, 0.0)
+    )
+    state = replace(original, problem=problem, subscale_velocity=ufl.as_vector((x[0], 0.0)))
+    state.velocity.interpolate(ufl.as_vector((2.0, -3.0)))
+    values = evaluate_diagnostics(("region_velocity_l2", "region_subscale_l2"), state)
+    assert values["region_velocity_l2"] == pytest.approx((13 * 0.5) ** 0.5, rel=1e-13)
+    assert values["region_subscale_l2"] == pytest.approx((7 / 24) ** 0.5, rel=1e-13)
+    with pytest.raises(ValueError, match="region_velocity_l2 require the case to declare"):
+        check_diagnostics_supported(("kinetic_energy", "region_velocity_l2"), original.problem)

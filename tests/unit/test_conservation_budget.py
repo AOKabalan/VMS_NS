@@ -46,6 +46,8 @@ DIAGNOSTICS = (
     "convective_energy_defect",
     "linear_momentum_defect",
     "angular_momentum_defect",
+    "linear_momentum_defect_predicted",
+    "angular_momentum_defect_predicted",
 )
 
 
@@ -223,7 +225,19 @@ def test_midpoint_closure_vanishes_from_step_2_T5(
         assert abs(float(row["energy_budget_residual"])) <= 1e-10 * scale
         for name in ("linear_momentum_defect_x", "linear_momentum_defect_y"):
             close(row[name], reference[name], scale)
+            predicted_name = name.replace("_x", "_predicted_x").replace("_y", "_predicted_y")
+            close(row[predicted_name], reference[name], scale)
         close(row["angular_momentum_defect"], reference["angular_momentum_defect"], scale)
+        close(row["angular_momentum_defect_predicted"], reference["angular_momentum_defect"], scale)
+        if form == "emac_vms":
+            assert float(row["linear_momentum_defect_predicted_x"]) == 0.0
+            assert float(row["angular_momentum_defect_predicted"]) == 0.0
+        # J = (ũ, (u_h·∇)φ) vanishes for OSS: (u_h·∇)φ is a rotated u_h, in the FE space.
+        nonzero = form in ("nonconservative", "skew_symmetric_1", "skew_symmetric_2")
+        nonzero |= form == "emac" and (splitting == "nonlinear" or space == "asgs")
+        nonzero |= form == "conservative" and splitting == "linear" and space == "asgs"
+        if nonzero:
+            assert abs(reference["angular_momentum_defect"]) > 1e-5 * scale
     if form == "emac_vms":
         final = table[-1]
         for name in ("linear_momentum_defect_x", "linear_momentum_defect_y"):

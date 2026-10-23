@@ -29,6 +29,7 @@ from navier_stokes_vms.config import (
     ViscosityOptions,
 )
 from navier_stokes_vms.discretization.time_schemes import step_coefficients
+from navier_stokes_vms.postprocessing.diagnostics import evaluate_diagnostics
 from navier_stokes_vms.problem.boundary_conditions import Dirichlet
 from navier_stokes_vms.problem.problem_definition import (
     exact_solution_forcing,
@@ -45,10 +46,15 @@ DIAGNOSTICS = (
     "linear_momentum",
     "angular_momentum",
     "energy_budget",
+    "momentum_budget",
     "linear_momentum_defect",
     "angular_momentum_defect",
+    "linear_momentum_defect_predicted",
+    "angular_momentum_defect_predicted",
     "convective_energy_defect",
     "force",
+    "region_velocity_l2",
+    "region_subscale_l2",
     "velocity_error_l2",
     "pressure_error_l2",
     "divergence_l2",
@@ -209,9 +215,25 @@ def test_frozen_tau_step_from_rest_is_finite_K_D1(
     with (tmp_path / "diagnostics.csv").open() as stream:
         startup, midpoint = list(csv.DictReader(stream))
     assert startup["energy_budget_residual"] == ""
+    assert startup["momentum_budget_residual_x"] == ""
     for name, value in midpoint.items():
         assert value != "", name
         assert math.isfinite(float(value)), name
+    # f = 0: the momentum residual is the wall reaction, reported and not asserted to vanish.
+    assert float(midpoint["momentum_budget_forcing_x"]) == 0.0
+    assert float(midpoint["region_velocity_l2"]) > 0.0
+
+
+def test_interpolated_vortex_vanishes_in_the_frame(tmp_path: Path) -> None:
+    """Every node of a frame cell lies outside r = 0.4, so the initial frame norm is zero."""
+    config = gresho_config(cells=20)
+    stepper = TimeStepper(config, build_problem(config), tmp_path, LOGGER)
+    stepper._initialise()
+    values = evaluate_diagnostics(
+        ("kinetic_energy", "region_velocity_l2"), stepper._diagnostic_state
+    )
+    assert values["region_velocity_l2"] == 0.0
+    assert values["kinetic_energy"] == pytest.approx(2 * math.pi / 75, rel=0.05)
 
 
 def test_exact_tau_fails_at_rest_K_D1(tmp_path: Path) -> None:

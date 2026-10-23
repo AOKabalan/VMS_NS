@@ -157,3 +157,30 @@ def predicted_energy_defect(
     if form not in PRESSURE_UNKNOWNS:
         raise ValueError(f"unknown convective form: {form!r}")
     return Form([])
+
+
+def predicted_momentum_defect(
+    u_h: Expr, u_sub: Expr | None, rigid: Expr, dx: Measure, form: str, nonlinear: bool
+) -> Form:
+    """Interior D_k or D_φ of chapter Tables 5.2–5.3 for the rigid test e_k or φ = e_k × x.
+
+    With D_χ(w) = (∇·u_h, w) − χ_N(ũ, ∇w) and J = (ũ, (u_h·∇)r), which vanishes for e_k
+    (spec: Conservation checks, predicted momentum defects).
+    """
+    if form not in PRESSURE_UNKNOWNS:
+        raise ValueError(f"unknown convective form: {form!r}")
+    zero = ufl.zero(u_h.ufl_shape)
+    pairing_subscale = u_sub if nonlinear and u_sub is not None else zero
+    pairing = divergence_pairing(u_h, pairing_subscale, ufl.inner(u_h, rigid), dx)
+    transfer = Form([])
+    if u_sub is not None and not nonlinear:
+        transfer = -ufl.inner(u_sub, ufl.dot(ufl.grad(rigid), u_h)) * dx
+    if form == "nonconservative":
+        return -pairing + transfer
+    if form in ("skew_symmetric_1", "skew_symmetric_2"):
+        return -0.5 * pairing + transfer
+    if form == "emac" and nonlinear and u_sub is not None:
+        return ufl.inner(u_sub, ufl.dot(ufl.grad(u_h), rigid)) * dx
+    if form == "emac_vms":
+        return Form([])
+    return transfer

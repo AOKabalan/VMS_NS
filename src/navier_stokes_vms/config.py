@@ -198,25 +198,23 @@ def validate_config(config: Config) -> None:
     _check_mesh(config.mesh)
     _check_stabilization(config)
     _check_forms(config)
-    if (
-        "subscale_kinetic_energy" in config.output.diagnostics
-        and config.stabilization.method == "none"
-    ):
-        raise ValueError(
-            "output.diagnostics: subscale_kinetic_energy requires stabilization.method = 'vms'"
-        )
-    if "energy_budget" in config.output.diagnostics and (
-        config.time.scheme != "crank_nicolson"
-        or config.stabilization.method != "vms"
-        or config.stabilization.subscale_dynamics != "dynamic"
-    ):
-        # The per-step closure is the midpoint identity of both scales (spec: Conservation checks).
-        raise ValueError(
-            f"output.diagnostics: energy_budget with time.scheme = {config.time.scheme!r}, "
-            f"stabilization.method = {config.stabilization.method!r}, "
-            f"stabilization.subscale_dynamics = {config.stabilization.subscale_dynamics!r}: "
-            "needs 'crank_nicolson' with dynamic VMS subscales"
-        )
+    for name in ("subscale_kinetic_energy", "region_subscale_l2"):
+        if name in config.output.diagnostics and config.stabilization.method == "none":
+            raise ValueError(f"output.diagnostics: {name} requires stabilization.method = 'vms'")
+    for name in ("energy_budget", "momentum_budget"):
+        if name in config.output.diagnostics and (
+            config.time.scheme != "crank_nicolson"
+            or config.stabilization.method != "vms"
+            or config.stabilization.subscale_dynamics != "dynamic"
+        ):
+            # The per-step closures are midpoint identities of both scales (spec: Conservation
+            # checks).
+            raise ValueError(
+                f"output.diagnostics: {name} with time.scheme = {config.time.scheme!r}, "
+                f"stabilization.method = {config.stabilization.method!r}, "
+                f"stabilization.subscale_dynamics = {config.stabilization.subscale_dynamics!r}: "
+                "needs 'crank_nicolson' with dynamic VMS subscales"
+            )
     solver = config.solver
     if solver.picard_iterations_before_newton > 0 and solver.linearization != "newton":
         raise ValueError(
