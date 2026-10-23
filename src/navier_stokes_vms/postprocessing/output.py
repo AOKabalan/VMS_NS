@@ -5,7 +5,7 @@ import json
 import platform
 import socket
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from importlib import metadata
@@ -142,6 +142,13 @@ def write_run_info(comm: MPI.Comm, folder: Path, info: RunInfo) -> None:
     if comm.rank == 0:
         text = json.dumps(asdict(info), indent=2)
         (folder / "run_info.json").write_text(text + "\n", encoding="utf-8")
+
+
+def write_initial_state(comm: MPI.Comm, folder: Path, values: Mapping[str, float]) -> None:
+    """Write initial_state.json on rank 0: domain size and moments of the initial velocity."""
+    if comm.rank == 0:
+        text = json.dumps(dict(values), indent=2)
+        (folder / "initial_state.json").write_text(text + "\n", encoding="utf-8")
 
 
 def _git_state() -> tuple[str | None, bool | None]:

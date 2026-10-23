@@ -1136,9 +1136,20 @@ Done:
   - The script was replaced atomically (written beside it, then `mv`), so a queue already running keeps reading the old file.
   - README: the options and a tmux launch command. tmux is not installed on this machine; the command string was checked with `sh -c` and a dry run.
 
+- Step 5: `scripts/analyse_conservation.py` writes, per family, a CSV with every column and a Markdown table. Each row has:
+  - status (completed, failed, incomplete or missing) and iterations;
+  - the largest closures from step 2;
+  - measured, predicted and |measured − predicted| defects for D_k, D_φ (Gresho) and 𝒩;
+  - final and largest M, A and E drifts;
+  - final frame norms, wall forces and velocity error;
+  - flags for the K-D2 expectations.
+
+  `summary.md` lists the runs that did not complete with the logged reason, and `gresho_long.png` plots E/E(0), |M − M(0)|/M_c, (A − A(0))/A_c and the L² velocity error per form. Every scaled value uses the K-D2 scales of its run. Neither script imports Firedrake.
+  - The scales need E(0), M(0), A(0), |Ω| and d, so every run now writes `initial_state.json` after initialisation. The file is additive: `diagnostics.csv` keeps its rows and meanings.
+
 Tests:
 
-- Steps 1–3: ruff check and ruff format --check clean; `OMP_NUM_THREADS=1 pytest tests/unit -n 2`: 634 passed and 1 xfailed at step 1, 666 and 1 at step 2, 672 and 1 at step 3, 680 and 1 at step 4.
+- Steps 1–3: ruff check and ruff format --check clean; `OMP_NUM_THREADS=1 pytest tests/unit -n 2`: 634 passed and 1 xfailed at step 1, 666 and 1 at step 2, 672 and 1 at step 3, 680 and 1 at step 4, 683 and 1 at step 5. The slow suite was not run (unit-scale restriction; the validation queue is assumed active).
 - Gresho:
   - The Euler residual, divergence and vorticity vanish to round-off at degree-8 quadrature; the fields do not depend on t.
   - Velocity and pressure jump by less than 1e-10 across r = 0.2 and 0.4; the constants are checked.
@@ -1152,6 +1163,8 @@ Tests:
   - All 24 form/space/splitting combinations: from step 2, |r_M,k| ≤ 1e-10 × max(|rate|, |D_k|, |F_k|). Rates come from independently assembled endpoint moments and forces from the exact integral.
   - The ASGS subscale moment is significant; ∫ũ = 0 for OSS. A mutation dropping the ASGS moment is caught.
 - Predicted defects equal the independent T5 table references for all 24 combinations; EMAC–VMS predictions are exactly zero.
+- Queue: stub runners and a stub mpiexec in a temporary repository cover resume, recorded failures, the interrupted-folder move, the default and smoke validation paths, the dry run and invalid usage.
+- Analysis: on a synthetic tree with hand-computed K-D2 scales, the test checks closures, defect differences and flags, drifts, wall forces, statuses (6 completed, 1 failed, 1 incomplete, 47 missing), the CSV, Markdown and failure report, and a nonempty plot. `initial_state.json` is checked against independent assemblies of the interpolated Gresho velocity. The script also ran on the timing-prefix tree, which has no initial state, and left the scaled columns blank.
 - Matrix: the committed files are byte-identical to a fresh generation; the 55 run names are unique; the step counts are 2400 + 5000 + 400 + 2400; settings, diagnostic names and case support are checked.
 
 Timing prefixes: the three authorized ten-step runs of committed configurations, on one core with OMP_NUM_THREADS=1, results in /tmp/vms_phase12b1_timing.
@@ -1180,6 +1193,9 @@ Deviations:
   - The K-D1 unit test sets `inner_max_iterations = 100`.
 - The generic coarse-mesh case test now accepts UFL's zero as a forcing: Gresho's f = 0 has no integral to assemble.
 - The T5 test also checks the predicted momentum columns. Its new significance check excludes J for OSS, where (u_h·∇)φ lies in the FE space and orthogonality makes J vanish.
+- Runs write `initial_state.json`, which plan §9 did not list; two existing file-inventory tests now include it. `diagnostics.csv` gained no step-0 row, because the validation analysis reads it.
+- Drifts use the resolved diagnostics (`linear_momentum`, `angular_momentum`, `kinetic_energy`). For ASGS the momentum budget instead uses u_h + ũ, as specified; the two are reported side by side.
+- `matplotlib`, already in the Firedrake environment, is now a declared dependency for the plot.
 - K-D1 probes beyond the tiny mesh: 32×32 runs of three steps with raised iteration limits, into the session scratch folder, were used to diagnose open questions 1 and 2. They are not matrix runs. Apart from them, only the three authorized prefixes ran at matrix resolution.
 
 Open questions:
@@ -1190,3 +1206,4 @@ Open questions:
    - Residual, Jacobian and diagnostics stay finite. The test records the case as a strict xfail.
    - As generated, the 6 `gresho_*_asgs_nonlinear` runs and `gresho_refined_emac_vms_asgs` will fail in their first step. Keep them as recorded failures, or change the method for them (for example exact τ after the first outer iteration, or Picard)? Exact τ cannot start from rest.
 2. **`inner_max_iterations` for ASGS Gresho.** The owner's settings leave the default of 30, so the 6 `gresho_*_asgs_linear` runs will stop in step 1 although they converge given about 140 iterations. Raise it, for example to 200, for the Gresho family, or keep the prescribed default?
+3. Phase 12b-2 is ready apart from questions 1 and 2. Regenerate with `python scripts/generate_conservation_configs.py` after any change to the generator, and launch with the README tmux command after the validation queue. tmux is not installed on this machine.

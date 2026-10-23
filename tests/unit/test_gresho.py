@@ -6,6 +6,7 @@ Jacobian singular there.
 """
 
 import csv
+import json
 import logging
 import math
 from dataclasses import replace
@@ -244,3 +245,31 @@ def test_exact_tau_fails_at_rest_K_D1(tmp_path: Path) -> None:
     stepper = TimeStepper(config, build_problem(config), tmp_path / "run", LOGGER)
     with pytest.raises(ConvergenceError, match="solver.newton_tau = 'exact'"):
         stepper.run()
+
+
+def test_run_records_the_initial_state_for_the_run_scales(tmp_path: Path) -> None:
+    """initial_state.json holds |Ω|, d and the energy and moments of the interpolated u_h(0)."""
+    config = gresho_config(space="oss", steps=1)
+    stepper = TimeStepper(config, build_problem(config), tmp_path, LOGGER)
+    stepper.run()
+    initial = json.loads((tmp_path / "initial_state.json").read_text())
+    space = fd.VectorFunctionSpace(stepper._problem.mesh, "CG", 1)
+    x = fd.SpatialCoordinate(stepper._problem.mesh)
+    u0 = fd.Function(space).interpolate(gresho.velocity(x, 0.0))
+    dx = stepper._dx
+    assert set(initial) == {
+        "time",
+        "domain_volume",
+        "dimension",
+        "kinetic_energy",
+        "linear_momentum_x",
+        "linear_momentum_y",
+        "angular_momentum",
+    }
+    assert (initial["time"], initial["dimension"]) == (0.0, 2)
+    assert initial["domain_volume"] == pytest.approx(1.0, rel=1e-14)
+    assert initial["kinetic_energy"] == pytest.approx(fd.assemble(ufl.inner(u0, u0) / 2 * dx))
+    assert abs(initial["linear_momentum_x"]) <= 1e-15
+    angular = fd.assemble((x[0] * u0[1] - x[1] * u0[0]) * dx)
+    assert initial["angular_momentum"] == pytest.approx(angular, rel=1e-12)
+    assert angular > 0.01

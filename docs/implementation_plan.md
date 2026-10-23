@@ -260,6 +260,7 @@ Every run writes to `results/<case>/<run_name>/`:
 | `outer_iterations.csv` | One row per outer iteration |
 | `time_steps.csv` | One row per time step |
 | `diagnostics.csv` | One row per time step; scalar diagnostics and expanded vector/boundary components, with their field times |
+| `initial_state.json` | \|Ω\|, d, and the kinetic energy and linear and angular momentum of the interpolated initial velocity, for the Phase 12b run scales |
 | `fields/` | VTK output of `u_h`, `p_h` every `vtk_every` steps |
 
 Columns:

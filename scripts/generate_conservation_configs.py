@@ -1,11 +1,10 @@
 """Write the Phase 12b conservation matrix: python scripts/generate_conservation_configs.py."""
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 from types import MappingProxyType
-
-from mpi4py import MPI
 
 from navier_stokes_vms.config import (
     Config,
@@ -20,7 +19,6 @@ from navier_stokes_vms.config import (
     config_to_toml,
     validate_config,
 )
-from navier_stokes_vms.postprocessing.run_logging import configure_logging
 
 FOLDER = Path(__file__).resolve().parents[1] / "configs" / "chapter5" / "conservation"
 FORMS = (
@@ -190,7 +188,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--folder", type=Path, default=FOLDER, help="output directory")
     arguments = parser.parse_args(argv)
-    logger = configure_logging(MPI.COMM_WORLD, "INFO")
+    # The format of run logs, without importing Firedrake for a file-only task.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-7s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    logger = logging.getLogger(Path(__file__).stem)
     paths = write_configs(arguments.folder)
     logger.info("Wrote %d configurations to %s", len(paths), arguments.folder)
     return 0

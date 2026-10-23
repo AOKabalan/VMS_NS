@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "VMS-stabilized incompressible Navier–Stokes in Firedrake"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["tomli-w>=1.0"]
+dependencies = ["tomli-w>=1.0", "matplotlib"]
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-xdist", "ruff"]

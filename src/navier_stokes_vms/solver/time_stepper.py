@@ -46,7 +46,12 @@ from navier_stokes_vms.postprocessing.diagnostics import (
     diagnostic_columns,
     evaluate_diagnostics,
 )
-from navier_stokes_vms.postprocessing.output import CsvWriter, FieldWriter, open_diagnostics_csv
+from navier_stokes_vms.postprocessing.output import (
+    CsvWriter,
+    FieldWriter,
+    open_diagnostics_csv,
+    write_initial_state,
+)
 from navier_stokes_vms.postprocessing.run_logging import IterationLogs, open_iteration_logs
 from navier_stokes_vms.problem.boundary_conditions import (
     Dirichlet,
@@ -320,6 +325,7 @@ class TimeStepper:
         diagnostics = open_diagnostics_csv(comm, self._folder, columns)
         try:
             self._initialise()
+            write_initial_state(comm, self._folder, self._initial_state())
             for step in range(1, steps + 1):
                 self._step(step, step == steps, logs, diagnostics)
                 if after_step is not None and after_step(step, self._time(step)):
@@ -346,6 +352,19 @@ class TimeStepper:
                 self._history[level].interpolate(self._problem.exact_velocity(x, earlier))
         self._velocity.assign(self._history[0])
         self._pressure.assign(0.0)
+
+    def _initial_state(self) -> dict[str, float]:
+        """|Ω|, d, and the energy and moments of u_h(0), which fix the conservation-run scales.
+
+        Spec: Conservation-run normalization (owner decision K-D2).
+        """
+        names = ("kinetic_energy", "linear_momentum", "angular_momentum")
+        return {
+            "time": 0.0,
+            "domain_volume": self._area,
+            "dimension": self._problem.mesh.geometric_dimension,
+            **evaluate_diagnostics(names, self._diagnostic_state),
+        }
 
     def _step(self, step: int, last: bool, logs: IterationLogs, diagnostics: CsvWriter) -> None:
         started = time.perf_counter()

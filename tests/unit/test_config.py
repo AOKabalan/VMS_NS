@@ -298,6 +298,7 @@ def test_run_script_writes_resolved_config_run_info_and_log(tmp_path: Path) -> N
     assert sorted(path.name for path in folder.iterdir()) == [
         "config_resolved.toml",
         "diagnostics.csv",
+        "initial_state.json",
         "inner_iterations.csv",
         "outer_iterations.csv",
         "run.log",

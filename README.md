@@ -38,8 +38,10 @@ A run is described by one TOML file (plan §7). Every field has a default except
 `run_name` defaults to the file name without extension. The run writes to
 `results/<case>/<run_name>/`, relative to the working directory, and refuses to overwrite an
 existing folder. It writes the files of plan §9: `config_resolved.toml`, `run_info.json`,
-`run.log`, `inner_iterations.csv`, `outer_iterations.csv`, `time_steps.csv`, `diagnostics.csv`
-and, when `vtk_every > 0`, `fields/velocity.pvd` and `fields/pressure.pvd`. The Crank–Nicolson
+`run.log`, `inner_iterations.csv`, `outer_iterations.csv`, `time_steps.csv`, `diagnostics.csv`,
+`initial_state.json` (|Ω|, the dimension, and the kinetic energy and linear and angular momentum
+of the interpolated initial velocity) and, when `vtk_every > 0`, `fields/velocity.pvd` and
+`fields/pressure.pvd`. The Crank–Nicolson
 pressure is written at t^(n+½). An invalid configuration stops the run before anything is
 written, with a message naming the offending fields. If a nonlinear solve does not converge, the
 run writes the last state to `fields/`, logs the iteration history and exits with status 1.
@@ -203,7 +205,23 @@ tmux attach -t conservation
 ```
 
 Runs go to `results/gresho/` and `results/taylor_green_2d/`, one line per run to
-`results/conservation_queue.log`, and the summary to `results/CONSERVATION_DONE`. Ten-step
+`results/conservation_queue.log`, and the summary to `results/CONSERVATION_DONE`.
+
+```bash
+# Tables and the long-Gresho plot, into results/conservation_analysis/ (reads the tree only):
+python scripts/analyse_conservation.py
+```
+
+The analysis writes `<family>.csv` (every column) and `<family>.md` for `gresho`,
+`gresho_long`, `gresho_refined` and `taylor_green`, `summary.md` with the runs that did not
+complete, and `gresho_long.png`. Each residual, defect and drift is reported in absolute terms
+and divided by the fixed scales of its run from `initial_state.json` (spec: Conservation-run
+normalization): U_c = √(2E(0)/|Ω|), L_c = |Ω|^(1/d), M_c = |Ω|U_c, A_c = M_c L_c,
+F_c = |Ω|U_c²/L_c, torque F_c L_c and P_c = |Ω|U_c³/L_c. Measured defects are compared with
+their predictions by |measured − predicted| over the same scale, never by dividing by the
+prediction. Closures use steps 2 onward; drifts use the resolved `linear_momentum`,
+`angular_momentum` and `kinetic_energy`. A run without `initial_state.json` gets blank scaled
+columns. Ten-step
 prefixes on one core took 0.5 s per Gresho step and 1.1 s per Taylor–Green step; the
 progress log has the extrapolation, about 2 h serial.
 

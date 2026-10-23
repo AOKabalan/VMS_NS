@@ -75,6 +75,7 @@ RUNS = {
 FILES = [
     "config_resolved.toml",
     "diagnostics.csv",
+    "initial_state.json",
     "inner_iterations.csv",
     "outer_iterations.csv",
     "run.log",
