@@ -1031,3 +1031,60 @@ Tests: ruff check . and ruff format --check . pass. pytest tests/unit -n 2: 460 
 Deviations: the outflow test checks physical-pressure do-nothing for the first four forms and modified-pressure traction for EMAC variants, as required by the spec. No chapter prose changes, production simulations or access to the repository's results/. All test output is temporary. MPI initialization and source/test writes required the authorized sandbox escalation.
 
 Open questions: none. Remaining stages: solver wiring and Jacobians/regression; physical-pressure reporting; conservation budgets and the per-step closure test T5. Stress-form U5 checks will accompany solver wiring, when the VMS residual accepts that selection.
+
+## Phase 12a, stages 2–4: solver wiring, physical pressure and conservation budgets (2026-10-23)
+
+Done:
+- Takeover checks: the chapter PDF hash matches. No validation queue, MPI or pytest process was running. The /tmp/phase12_baseline_1fa820d snapshots are bit-identical to a fresh regeneration from a git worktree at 1fa820d, so they were used as the regression baseline.
+- The previous agent's uncommitted stage-2 edits to config.py, galerkin.py, vms.py and time_stepper.py were reviewed against the spec and kept. They were finished rather than restored: formatting, field-naming validation messages, removal of redundant Literal checks.
+- Stage 2 (3b49a04):
+  - `[convection] form` takes the six choices and `[viscosity] form` is `laplacian` or `stress`; the defaults are unchanged.
+  - `emac_vms` requires VMS and stress viscosity. `emac` and `emac_vms` require Newton with zero Picard warm-up. No rule against ∇·ũ under nonlinear splitting existed to remove.
+  - One assembly path, a single `coupled` residual builder, feeds the Newton, Picard and frozen-τ forms. The Galerkin and VMS residuals, the OSS projection residual, the subscale expression and the accelerated update all take the selection from the configuration.
+  - T̃ uses the substituted expression in every slot. The residual advector a* and τ use ũ*, and resolved EMAC uses u_h.
+  - The convective and operator functions take explicit selections; only `convection_form` keeps its default, for U3. `adjoint_operator` was removed, and its symbol-table row in the README and plan §6 updated.
+- Stage 3 (9b9e7f5):
+  - For `emac` and `emac_vms` the unknown and the null space stay on P_h.
+  - `physical_pressure` gives p_h = P_h + ½|u_h|² at the solve-level velocity (the half level for Crank–Nicolson), with its own zero mean when the null space is active.
+  - `pressure_error_l2` and `force` use the UFL expression. VTK output and `TimeStepper.pressure` use its exact interpolant in CG of degree max(k_p, 2k_u). The other four forms report P_h unchanged.
+- Stage 4 (55c25b5):
+  - New diagnostics `linear_momentum_defect`, `angular_momentum_defect` and `convective_energy_defect` are assembled from the forms used: D(w) = c(a*; u_h, w) with the outflow term, plus the coupling with the substituted ũ, and 𝒩 = D(u_h) + (ũ, N).
+  - `energy_budget` covers Crank–Nicolson with dynamic subscales. Its columns are rate, the viscous, (τ_m⁻¹ũ, ũ), viscous-cross and pressure terms, 𝒟, power, 𝒩_pred (Tables 5.1–5.2), 𝒩_meas and r.
+  - A `Conservation` object captures the solve-level terms and Eⁿ before the histories shift and adds Eⁿ⁺¹ afterwards. The BDF1 startup row is blank.
+  - The README documents the new sections, the pressure convention and the diagnostics.
+
+Tests:
+- Every commit: `ruff check .` and `ruff format --check .` clean. `OMP_NUM_THREADS=1 pytest tests/unit -n 2` passed: 579 at stage 2, 590 at stage 3, 623 at stage 4. No existing test changed except U5 (extended) and the stage-1 test (explicit selections, adjoint check dropped with the function).
+- Default regression against 1fa820d, after each stage, unit-scale runs in /tmp:
+  - Taylor–Hood: identical.
+  - Static linear ASGS: max |Δu| = |Δp| = 8.9e-16.
+  - Dyn-Nl-OSS with CN: max |Δu| = 2.2e-16, |Δp| = 2.2e-14 (|p| ≤ 0.29).
+  - Diagnostics agree to ≤ 2.3e-16 relative, with identical iteration counts.
+- Stage 2:
+  - The EMAC and EMAC–VMS residual of the time stepper equals a reference written in the test from the spec, to 1e-12. Its Newton Jacobian, frozen and exact τ, matches central differences to 1e-8, for ASGS and OSS (projection rows included), both splittings, dynamic P2/P2: 24 cases.
+  - Mutations caught: ũ* in one T̃ slot, a missing (∇u)u in N, and τ′ kept in the frozen Jacobian.
+  - U5 with stress viscosity, 32 new cases: min λ_min/λ_max = −3.6e-16 over ASGS/OSS, P1/P2 and all four meshes.
+  - Per-form runs converge: periodic CN for ASGS and OSS, a coarse cylinder with outflow, and Picard for the first four forms.
+  - Configuration rules tested.
+- Stage 3:
+  - BDF2 and CN, VMS and Galerkin EMAC: the reported field equals P + ½|ū|² with ū = (uⁿ + uⁿ⁺¹)/2 rebuilt from the endpoints, and differs from the endpoint-averaged correction. Also checked: the output space, every VTK write, pressure error and forces with the null space, cylinder forces without it (offset 0), and the other four forms unaffected.
+  - Mutations caught: endpoint velocity, and no separate normalization.
+- Stage 4:
+  - T5 on manufactured_spatial, u_h = 0 on ∂Ω, 4×4 P2/P2, stress, CN, run for all 6 forms × ASGS/OSS × both splittings. From step 2, |r| ≤ 1e-10·scale is asserted; the largest measured |r|/scale is 3.8e-13.
+  - Every term matches an independent reference at the captured solve level: τ_m, not τ_t; the P2 cross term with coefficient −2; the pressure term.
+  - 𝒩_meas equals 𝒩_pred and the assembled 𝒩. The predictions are nonzero for the nonconservative, conservative and EMAC forms.
+  - D_k and D_φ match the table expressions, and EMAC–VMS defects are ≤ 1e-12.
+  - Forcing the closure at the BDF1 step leaves exactly −‖Δ(u + ũ)‖²/(2δt) (ASGS) or −(‖Δu‖² + ‖Δũ‖²)/(2δt) (OSS).
+  - 3D Galerkin defects and the column and configuration rules are tested.
+  - Mutations caught: coefficient −1 on the cross term, τ_t weighting, capture after the shift, and a flipped table sign.
+  - Probes, not in the suite: periodic Taylor–Green r/scale ≤ 1.1e-12 for nonconservative, EMAC and EMAC–VMS, ASGS and OSS. With τ_c off, the pressure term is exactly 0 and r/scale ≤ 4e-15.
+- The slow suite was not run: the validation queue's state cannot be checked without reading results/, and plan 12a limits this phase to unit-scale runs. Default behaviour matches 1fa820d to round-off.
+
+Deviations from spec or plan:
+- `galerkin_residual`, `vms_terms`, `subscale_residual`, `velocity_subscale` and `accelerated_subscale` keep default selections (skew_symmetric_1, laplacian). The existing tests call them without selections and must pass unchanged; the time stepper always passes the configured selection.
+- `energy_budget` is rejected unless the run uses Crank–Nicolson with dynamic VMS subscales, the only setting the spec defines it for. Galerkin, for which ũ = 0 would make it trivial, is excluded too.
+- T5 uses a 4×4 mesh. On 3×3 P2/P2, Dyn-Nl-ASGS with CN fails to converge for the default skew_symmetric_1/laplacian form already at 1fa820d. This is a coarse-mesh property of the case, not a regression.
+
+Open questions:
+- Should `energy_budget` also cover Galerkin under Crank–Nicolson (ũ = 0), or a BDF2 modified-energy closure? The spec defines neither, and neither was implemented.
+- Planning note for 12b: nonlinear splitting needed many outer iterations at outer_rtol = 1e-11 on the 4×4 P2 test case: 35–47 per step for conservative and EMAC with ASGS, 13–25 otherwise. Nonlinear EMAC ASGS without τ_c did not reach 1e-11 in 100 outer iterations (probe only).
