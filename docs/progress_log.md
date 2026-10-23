@@ -1129,14 +1129,12 @@ Done:
   - Newton now honours `inner_max_iterations` above PETSc's default `snes_max_it` of 50.
 - Step 2 (95a9f8f): `momentum_budget`, `linear_momentum_defect_predicted`, `angular_momentum_defect_predicted`, `region_velocity_l2` and `region_subscale_l2`, with their configuration rules.
 - Step 3 (94f70ea): `scripts/generate_conservation_configs.py` writes the 55 resolved configurations into `configs/chapter5/conservation/`. All use the owner's common settings; every other field keeps its default, including `inner_max_iterations = 30` and `vtk_every = 10`.
-
-- Step 4: `scripts/run_validation_queue.sh` takes `--configs DIR`, `--runner validation|simulation` and `--dry-run`. The default validation behaviour is unchanged: same order (checked on all 16 validation configs), completion test, interrupted-folder move, log line and end marker.
+- Step 4 (958fc68): `scripts/run_validation_queue.sh` takes `--configs DIR`, `--runner validation|simulation` and `--dry-run`. The default validation behaviour is unchanged: same order (checked on all 16 validation configs), completion test, interrupted-folder move, log line and end marker.
   - Simulation runs count as finished once `run_info.json` records an exit status, so non-converged runs stay as recorded failures.
   - The log and end marker are named after the config directory (`conservation_queue.log`, `CONSERVATION_DONE`), so this queue never touches `VALIDATION_DONE`.
   - The script was replaced atomically (written beside it, then `mv`), so a queue already running keeps reading the old file.
   - README: the options and a tmux launch command. tmux is not installed on this machine; the command string was checked with `sh -c` and a dry run.
-
-- Step 5: `scripts/analyse_conservation.py` writes, per family, a CSV with every column and a Markdown table. Each row has:
+- Step 5 (8d8a1ef): `scripts/analyse_conservation.py` writes, per family, a CSV with every column and a Markdown table. Each row has:
   - status (completed, failed, incomplete or missing) and iterations;
   - the largest closures from step 2;
   - measured, predicted and |measured − predicted| defects for D_k, D_φ (Gresho) and 𝒩;
