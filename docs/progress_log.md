@@ -976,3 +976,20 @@ Tests:
 Deviations from spec or plan: none beyond the queue cost key, item 3.
 
 Open questions: None. Both Phase 10a questions are resolved by your decisions above. The full queue is yours to launch: `bash scripts/run_validation_queue.sh`.
+
+## Phase 11a: Verify the Chapter 5 spec addendum (2026-10-23)
+
+Done: Added a new independent pass at the top of `docs/verification/VERIFICATION.md`, with verification rows H01–H25, spec disagreements and derivations H-D1–H-D5, and a separate chapter-issues table C01–C08. Re-derived the five UFL translations, outflow conditions, divergence pairing, every entry of chapter Tables 5.1 and 5.2 with its boundary correction, EMAC physical pressure including the midpoint level, stress viscosity, the EMAC–VMS equations and iteration, weighted OSS orthogonality, and the full midpoint energy balance. Also re-derived every K and D element matrix and the symmetric stress matrix in §5.9.
+
+Verdict: the converged volume equations and both defect tables agree, with the stated flux conditions. The addendum needs four principal corrections:
+
+1. The partially frozen EMAC–VMS stress is symmetric but nonlinear in the resolved unknown after substituting the residual-based subscale.
+2. The matched expression from a converged inner OSS solve is orthogonal; an implicit local update with its projection held fixed need not be. Exact orthogonality is recovered at the coupled fixed point.
+3. Periodicity does not generally remove angular-momentum fluxes. The report gives an exact periodic P2 counterexample and distinguishes convective defects from momentum balances with boundary reactions.
+4. The full energy closure residual, including the predicted convective defect, is zero for every form. Omitting that defect gives its negative, not its positive.
+
+The variable-τ extension and the Crank–Nicolson identity pass, including both weighted subscale terms and the viscous cross term with coefficient −2. The report also qualifies the EMAC–VMS natural condition by its zero-subscale-flux assumption. Chapter issues include the resolved/total EMAC energy distinction, natural-boundary claims in §5.9, the difference between its symmetric Picard assembly and (5.32), patchwise OSS claims, and overly broad BDF/residual statements. No sign or coefficient error was found in the printed implementation matrices.
+
+Verification: hand derivations, source PDF text plus rendered pages 14–15, and the official UFL operator definitions. Lightweight document checks only; no implementation code, simulations or test suites, and no access to `results/`. The existing spec addendum was reviewed without modification and remains outside this verification commit.
+
+Deviations from scope: none. This phase records findings and stops; it does not apply spec or chapter corrections.

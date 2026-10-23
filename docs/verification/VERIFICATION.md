@@ -1,3 +1,255 @@
+**Phase 11a — independent verification of the Chapter 5 addendum — 23 October 2026**
+
+Reviewed `docs/formulation_spec.md`, SHA-256 `2f2022d86c520725a90d8911abeab134d039f7a65abc98b6d9378db1f00f5abf`, against `~/04_applications/FEops_prep/VMS_masters_thesis/chapter5_preview.pdf`, SHA-256 `ee4aed24de3a624f40a2059b1bb2ef0c99cd1ef04aef63735a7af575df765c8c` (17 pages). Spec line numbers below refer to that revision. The check re-derives the identities from indices, integration by parts and the discrete equations; agreement with the chapter alone is not treated as verification. PDF pages 14–15 were also inspected as rendered images to check the implementation matrices and their parentheses. UFL's operator definitions were checked against its [official form-language reference](https://docs.fenicsproject.org/ufl/main/manual/form_language.html#gradient). No implementation code, simulations or test suites were run, and `results/` was not accessed. The spec and chapter were not edited.
+
+**Verdict: the converged volume equations and the entries of Tables 5.1–5.2 pass, with the boundary corrections below. The addendum does not pass as written.** The partial freezing of the subscale does not make the stress linear in the resolved unknown; the local implicit update does not preserve OSS orthogonality with its projection held fixed; periodicity does not remove general angular-momentum fluxes; and the proposed closure diagnostic counts the convective defect incorrectly. The variable-τ extension and the midpoint energy identity themselves are valid. Chapter issues are recorded separately after the spec disagreements.
+
+Notation in this pass: \(u=u_h\), \(s=\tilde u\), \(D u=\nabla^s u\), \(d=\nabla\cdot u\), and all unlabelled volume inner products use the common quadrature. Write \(N_{\rm op}\) for the strong convective residual operator and \(\mathcal N\) for its energy defect, to distinguish the two uses of N in the chapter.
+
+| Item | Spec says | Source says / independent derivation | Agree / Disagree | Note |
+| --- | --- | --- | --- | --- |
+| H01 — advection translation, 283 | `dot(grad(u), a)` | Its component j is \((\partial_i u_j)a_i\). | Agree | Exactly \(((a\cdot\nabla)u)_j\). |
+| H02 — chapter gradient times vector, 284 | `dot(a, grad(u))` | Its component i is \(a_j\partial_i u_j\). | Agree | Exactly \(((\nabla u)a)_i\) in the chapter convention. |
+| H03 — symmetric gradient, 285 | `sym(grad(u))` | Components are \(\tfrac12(\partial_j u_i+\partial_i u_j)\). | Agree | Symmetrization removes the transpose difference. |
+| H04 — nonsymmetric outer product, 286 | `inner(outer(u, a), grad(v))` | The contraction is \(u_j a_i\partial_i v_j\). | Agree | Reversing the two factors of `outer` is essential. |
+| H05 — symmetric tensor contraction, 287 | `inner(A, sym(grad(v)))` | For symmetric A, relabelling i,j gives \(A_{ij}\partial_i v_j\). | Agree | This row is correct precisely with the stated symmetry. |
+| H06 — five volume forms, 293–307 | Forms (5.3)–(5.7) and the specified residual operators. | Direct expansion gives \(c_{ss1}=(c_{nc}+c_c)/2\), \(c_{ss2}=c_{nc}+D_a(u\cdot v)/2\), \(c_E=(2Du\,a,v)+D_a(u\cdot v)\). | Agree | The first four deliberately use the same non-conservative residual; the residual need not be the strong operator of their individual resolved form. H-D1 derives the defect tables without assuming solenoidality. |
+| H07 — first four outflow terms, 303–310 | Add \(0,B_N,B_N/2,0\), respectively, to obtain gradient-form do-nothing. | For admissible v, \(c_c=c_{nc}+D_a(u\cdot v)-B_N(v)\), \(c_{ss1}=c_{nc}+D_a(u\cdot v)/2-B_N(v)/2\). | Agree, with the stated zero-subscale-trace model | The additions cancel those surface terms. Thus the resolved Laplacian traction is \(\nu\partial_n u-pn=0\); with stress viscosity it is \((2\nu Du-pI)n=0\). The interior divergence corrections remain. |
+| H08 — EMAC outflow, 307–310 | No convective surface addition; traction uses P. | The EMAC resolved operator is already in strong volume form, so the viscous/pressure integration gives \(\nu\partial_n u-Pn=0\), or \((2\nu Du-PI)n=0\). | Agree; EMAC–VMS needs a qualification | In physical pressure the latter is \((2\nu Du-pI)n+\tfrac12\lvert u\rvert ^2n=0\). The subgrid stress in EMAC–VMS is already a weak divergence; its trace matters if the bubble convention is removed (H-D5). |
+| H09 — divergence pairing and Lemma 5.2, 315–318 | \(D_a(w)=(d,w)-(s,\nabla w)_h\) for \(a=u+s\). | The assembled q-equation is identically \(D_a(q)=0\); hence \(D_a(w)=D_a(w-\Pi_Qw)\) for any suitable projection into the actual pressure test space. | Agree | This defines a functional, not a pointwise divergence of stored quadrature values. No derivative of s is needed for the table weights. For linear splitting use \(D_0(w)=(d,w)\); continuity still controls \(D_a\), not \(D_0\). |
+| H10 — nonlinear defect table, 368–372 | Chapter Table 5.1. | H-D1 derives all eighteen entries, including EMAC's energy defect \((s,(u\cdot\nabla)u)\). | Agree up to the explicit boundary terms | The EMAC resolved-energy Lamb-vector defect and its total-energy defect are different. Conservative momentum cancellations are pointwise even before integration. |
+| H11 — linear defect table, 368–372 | Chapter Table 5.2. | H-D1 derives all eighteen entries. The angular defect has the additional \(-J\), \(J=(s,e_k\times u)\), for the five standard forms. | Agree up to the explicit boundary terms | J vanishes for global OSS with componentwise identical velocity spaces. EMAC–VMS removes it also for ASGS. |
+| H12 — vanishing boundary terms, 372 | Homogeneous Dirichlet or periodic domain removes the fluxes. | Homogeneous zero u removes the convective fluxes. Periodic u removes fluxes tested with periodic functions, but \(\phi=e_k\times x\) is generally not periodic. | Disagree for angular momentum | H-D1 gives a periodic P2 counterexample. Convective-defect identities must also be distinguished from full momentum laws with wall reactions. |
+| H13 — EMAC residual and pressure, 307, 320 | \(N_{\rm op}=(a\cdot\nabla)u+(\nabla u)u\), \(p_h=P_h+\lvert u\rvert ^2/2\). | \((\nabla u)u=\nabla(\lvert u\rvert ^2/2)\), so \(N_{\rm op}+\nabla P_h=(a\cdot\nabla)u+\nabla p_h\). | Agree | Use the physical expression, not merely P, for pressure errors and stresses. A projection into Qh would generally change this identity; \(\lvert u\rvert ^2/2\) need not belong to Qh. At a pressure null space, normalize the recovered physical field separately. |
+| H14 — half-level pressure, 320 | Crank–Nicolson uses half-level u. | \(p_h^{n+1/2}=P_h^{n+1/2}+\tfrac12\lvert \bar u\rvert ^2\), \(\bar u=(u^{n+1}+u^n)/2\). | Agree | The average of endpoint kinetic pressures instead exceeds this correction by \(\tfrac18\lvert u^{n+1}-u^n\rvert ^2\). Neither the endpoint u nor an extrapolated pressure is appropriate. Exact manufactured volume forcing stays unchanged; outflow traction data must respect the changed pressure convention. |
+| H15 — viscous operator and adjoint, 322 | \(a_\nu=2\nu(Du,Dv)\), \(L_\nu v=2\nu\nabla\cdot Dv\). | For constant ν, \((L_\nu v)_j=\nu(\Delta v_j+\partial_j\nabla\cdot v)\). Two integrations by parts give formal elementwise self-adjointness. | Agree | The momentum operator is \(N_{\rm op}-L_\nu u+\nabla p\); the standard subscale coupling uses \(L_a^*(v,q)=-(a\cdot\nabla)v-L_\nu v-\nabla q\) under the same omitted-divergence/boundary approximation. The strong residual contains \(+L_\nu u\) and the resolved coupling contains \(-(s,L_\nu v)\); do not retain just νΔ in the stress case. |
+| H16 — angular viscosity and stability, 322, 376 | Stress form for angular momentum; inverse-estimate restrictions. | \(D\phi=0\), whereas \(\nu(\nabla u,\nabla\phi)=\nu\int(\nabla\times u)_k\). Weighted Young inequalities give the chapter's sufficient constants, with \(c_1k^4\) replacing \(c_1\). | Agree, with scope qualification | Stress is needed for the general patch argument; the Laplacian torque can vanish on the whole zero-boundary or periodic domain. The sufficient bounds do not prove positivity on an arbitrary production mesh; no U5 computation was run here. |
+| H17 — EMAC–VMS resolved equation, 334–346 | Replace both resolved convection and the convective subscale coupling. | Adding (5.11) to (5.24), inserting \(\tilde p=-\tau_c(d-\zeta_h)\), gives exactly 334–335, including \(-(s,L_\nu v+\nabla q)\). | Agree | The conventional \(-(s,(a\cdot\nabla)v)\) must not be added a second time. Removing OSS time terms uses orthogonality; static cases are the stated extension of the chapter's dynamic formulation. |
+| H18 — stress, residual, \(M_h\), 345–346 | \(\tilde T=DS(s)[u]+\chi_NS(s)\), \(N_E=2Du\,u+du+\chi_NM_hs\), \(M_h=Du+dI/2\). | \(S(u+s)-S(u)=DS(s)[u]+S(s)\); contraction with Du gives \(\tilde T:Du=s\cdot N_E\) pointwise. | Agree | These are (5.23), (5.26); setting \(\chi_N=0\) is exactly (5.29). The OSS residual is the reduced representative after projecting away \(D_tu\), rather than literally the full residual (5.26). |
+| H19 — iteration, 352 | Stored s* in τ, \(M_hs\) and quadratic terms makes T linear in u and symmetric. | The actual stress is \(DS(s_{\rm expr}(u,P,\xi))[u]+S(s^*)\). | Agree on symmetry and fixed point; Disagree on linearity | H-D2: the expression depends nonlinearly on u, even with τ frozen. Its exact Newton derivative stays symmetric. At \(s_{\rm expr}=s^*\) the correct energy identity returns. This is not the fully lagged-subscale iteration in chapter §5.9. |
+| H20 — local EMAC–VMS update, 355–358 | \((I+\tau_tM_h)s=\tau_t(R_{u,0}+\chi_Ds_{\rm hist}/\delta t-\xi_h)\). | Rearranging \((\chi_D\alpha_0/\delta t+\tau_m^{-1})s+M_hs=R_{u,0}+\chi_Ds_{\rm hist}/\delta t-\xi_h\) gives it exactly. | Agree | It is symmetric. Nonsingularity requires \(1+\tau_t\lambda_i(M_h)\ne0\) for every eigenvalue. The minimum-eigenvalue condition \(1+\tau_t\lambda_{\min}>0\) is sufficient for positive definiteness, not necessary for invertibility. CN has \(\alpha_0=2\). |
+| H21 — OSS at every iterate, 358 | Projecting with \(-M_hs^*\) keeps s exactly orthogonal. | It enforces \((s_{\rm expr},w_h)=0\) for the matching converged inner solve. The implicit local update changes that expression while keeping ξ fixed. | Disagree as a claim about every iterate | H-D3 gives the defect and a counterexample. Converged, matched states are orthogonal. Raw Newton iterates need not satisfy a nonlinear projection constraint exactly either. |
+| H22 — variable τ and (A2), 374 | Weighted projections remove the constant-τ assumption for energy. | \((s,\xi_h)=0\), and \((\tau_c(d-\zeta_h),\zeta_h)=0\), without pulling either τ through an integral. | Agree | ASGS uses ξ=ζ=0 and requires no constant τ. Variable-τ weighted OSS is an extension of the chapter's unweighted projector, not the identical subscale model away from constant τ (H-D4). |
+| H23 — exact midpoint energy identity, 374 | Rate of total endpoint energy plus half-level terms equals power. | The midpoint product rule and the two scale equations give H-D4 exactly, including \(-2(s,L_\nu u)\). | Agree at a converged coupled solve with the stated boundary conditions | Applies to dynamic subscales and fixed spaces/quadrature. The nonlinear coefficient τ does not need a time derivative. The BDF1 start has a separate nonnegative increment term. |
+| H24 — closure residual, 374 | Rate + dissipation + N − power is zero for skew forms/EMAC–VMS, but equals N for the other forms. | The same summed equations give rate + dissipation + N − power = 0 for **every** form. | Disagree | Without N, rate + dissipation − power = **−N**. Equivalently power − rate − dissipation = N. H-D4 specifies all terms and their signs. |
+| H25 — discrete exactness and momentum in time, 364–376 | Exact identities, up to solver tolerance; momentum balances for every scheme. | Pointwise cancellations and matched projections are exact in the computed inner product; the remaining integration-by-parts identities concern only polynomial FE fields. | Agree with qualifications | On affine Pk meshes, degree 3k suffices for the volume identities here, with sufficiently exact facet flux integration. Identical quadrature alone is not an integration-by-parts theorem on curved/non-polynomial geometry. Time schemes preserve the linear tested balance, including fluxes/reactions and their actual discrete time operator. |
+
+**Spec disagreements and qualifications.**
+
+**H-D1 — exact table entries, boundary corrections, and admissible tests (318, 368–372).** Define, for \(\chi=0\) (linear splitting) or \(\chi=1\) (nonlinear splitting),
+
+\[
+a_\chi=u+\chi s,\qquad D_\chi(w)=(d,w)-\chi(s,\nabla w)_h,\qquad
+B(v)=\int_{\partial\Omega}(u\cdot n)(u\cdot v),\qquad
+H(v)=\tfrac12\int_{\partial\Omega}|u|^2(v\cdot n).
+\]
+
+Here v is single-valued, piecewise differentiable, and \(B_N(v)\) restricts B to the outflow. Directly expanding the product derivative gives
+
+\[
+((a_\chi\cdot\nabla)u,v)+(u,(a_\chi\cdot\nabla)v)+D_\chi(u\cdot v)
+=(u,\nabla(u\cdot v))+(d,u\cdot v)=B(v).
+\tag{H-D1a}
+\]
+
+Every term involving s cancels at the same quadrature points. Only the last equality uses integration by parts, on the continuous FE polynomial product; internal facet fluxes cancel. This is why variable/non-polynomial τ and stored point values do not invalidate these particular identities on the specified affine meshes. For \(v=u\), (H-D1a) gives \(c_{nc}=-D_\chi(|u|^2)/2+B(u)/2\). With \(\phi=e_k\times x\), write \(w_k=u\cdot\phi\), \(J=(s,e_k\times u)\). Then
+
+\[
+(u,(a_\chi\cdot\nabla)\phi)=-\chi J,\qquad
+S_\phi=-(s,(a_\chi\cdot\nabla)\phi)=-J,
+\]
+
+because \(s\cdot(e_k\times s)=0\) pointwise. Finally,
+
+\[
+((\nabla u)a_\chi,e_k)=H(e_k)+\chi(s,\partial_k u),\qquad
+((\nabla u)a_\chi,\phi)=H(\phi)+\chi(s,(\phi\cdot\nabla)u).
+\tag{H-D1b}
+\]
+
+These three identities give the following **interior entries**, before adding the boundary corrections in the next table. They independently reproduce every entry of both chapter tables; set s=0 to recover the Galerkin cases.
+
+| Splitting | Form | Linear momentum | Angular momentum | Total convective energy defect \(\mathcal N\) |
+| --- | --- | --- | --- | --- |
+| Nonlinear | Non-conservative | \(-D_1(u_k)\) | \(-D_1(w_k)\) | \(-\tfrac12D_1(\lvert u\rvert ^2)\) |
+| Nonlinear | Conservative | 0 | 0 | \(+\tfrac12D_1(\lvert u\rvert ^2)\) |
+| Nonlinear | Skew 1 | \(-\tfrac12D_1(u_k)\) | \(-\tfrac12D_1(w_k)\) | 0 |
+| Nonlinear | Skew 2 | \(-\tfrac12D_1(u_k)\) | \(-\tfrac12D_1(w_k)\) | 0 |
+| Nonlinear | EMAC | \((s,\partial_k u)\) | \((s,(\phi\cdot\nabla)u)\) | \((s,(u\cdot\nabla)u)\) |
+| Nonlinear | EMAC–VMS | 0 | 0 | 0 |
+| Linear | Non-conservative | \(-D_0(u_k)\) | \(-D_0(w_k)-J\) | \(-\tfrac12D_0(\lvert u\rvert ^2)\) |
+| Linear | Conservative | 0 | \(-J\) | \(+\tfrac12D_0(\lvert u\rvert ^2)\) |
+| Linear | Skew 1 | \(-\tfrac12D_0(u_k)\) | \(-\tfrac12D_0(w_k)-J\) | 0 |
+| Linear | Skew 2 | \(-\tfrac12D_0(u_k)\) | \(-\tfrac12D_0(w_k)-J\) | 0 |
+| Linear | EMAC | 0 | \(-J\) | \((s,(\nabla u)u)=\tfrac12(s,\nabla\lvert u\rvert ^2)\) |
+| Linear | EMAC–VMS | 0 | 0 | 0 |
+
+| Form | Add to the linear-momentum entry | Add to the angular-momentum entry | Add to the energy entry | Additional term from the spec's outflow addition |
+| --- | --- | --- | --- | --- |
+| Non-conservative | \(B(e_k)\) | \(B(\phi)\) | \(B(u)/2\) | None |
+| Conservative | 0 | 0 | \(-B(u)/2\) | \(B_N(v)\) for v = \(e_k,\phi,u\) |
+| Skew 1 | \(B(e_k)/2\) | \(B(\phi)/2\) | 0 | \(B_N(v)/2\) for v = \(e_k,\phi,u\) |
+| Skew 2 | \(B(e_k)\) | \(B(\phi)\) | \(B(u)/2\) | None |
+| EMAC | \(B(e_k)+H(e_k)\) | \(B(\phi)+H(\phi)\) | \(B(u)\) | None |
+| EMAC–VMS | \(B(e_k)+H(e_k)\) | \(B(\phi)+H(\phi)\) | \(B(u)\) | None |
+
+Thus the conservative volume momentum entries, skew-1 volume resolved-energy cancellation, and symmetric-subgrid-stress force/torque cancellations are exact even on an open domain. Other replacements by the table entries require the indicated surface terms. In particular, with zero u on the Dirichlet part and only an outflow elsewhere, each of the first four forms has the usual \(B_N(u)/2\) energy flux after the additions. EMAC and EMAC–VMS have \(B(u)\) in this modified-pressure convention. The EMAC energy calculation uses
+
+\[
+c_E(a_\chi;u,u)=\chi(s,(u\cdot\nabla)u-(\nabla u)u)+B(u),\qquad
+\mathcal N=c_E(a_\chi;u,u)+(s,(\nabla u)u).
+\]
+
+For EMAC–VMS the separate identity \(\tilde T:Du=s\cdot N_E\) reduces the full energy defect to \(c_E(u;u,u)=B(u)\), for both splittings.
+
+All these convective boundary terms vanish if u=0 on the entire boundary. On periodic domains the linear-momentum and energy fluxes cancel, but the angular ones need not. An exact polynomial counterexample on the periodic unit square is \(u=(y(1-y),1)\), s=0, \(\phi=(-y,x)\). This is a continuous periodic P2 velocity, with d=0, yet
+
+\[
+c_{nc}(u;u,\phi)=-\int_0^1y(1-2y)\,dy=\tfrac16=B(\phi),
+\]
+
+whereas the interior entry \(-D_0(w_k)\) is zero. A general “periodic implies no angular flux” assertion is therefore false, including in the actual FE setting.
+
+For zero-mean pressure tests, the nonlinear equal-order momentum inference also uses \(D_1(1)=\int_{\partial\Omega}u\cdot n=0\) to extend the test to \(u_k\) minus its mean; it holds on the closed and periodic domains under discussion. In linear splitting the same argument gives \(D_0(u_k)=(s,\nabla u_k)\), not zero. Likewise \(J=0\) for global OSS because \(e_k\times u\in\hat V_h\). These are global projection statements, not arbitrary-patch ones.
+
+**Required qualification:** replace the blanket periodic-boundary sentence by the explicit flux conditions above. Also distinguish these algebraic defect evaluations from testing the solved momentum equation: \(e_k\) and \(\phi\) are not admissible homogeneous-Dirichlet tests, and \(\phi\) is not generally an admissible periodic test. Full momentum laws on those domains need the corresponding boundary reactions/fluxes (the chapter's \(B_R\)); zero boundary velocity does not imply zero pressure or viscous force on the wall.
+
+**H-D2 — the proposed stress is symmetric but is not linear in u (352).** At fixed stored s*, put
+
+\[
+s_{\rm expr}=\tau_t\bigl(R_{u,0}(u,P)+\chi_Ds_{\rm hist}/\delta t-M_h(u)s^*-\xi_h\bigr).
+\]
+
+Then the spec's actual stress is
+
+\[
+T^*=s_{\rm expr}\otimes u+u\otimes s_{\rm expr}+(u\cdot s_{\rm expr})I+S(s^*)
+=DS(s_{\rm expr})[u]+S(s^*).
+\]
+
+The cross stress is bilinear in its two arguments, and the first argument here is a nonlinear expression in the solve unknowns. Even with constant τ, \(R_{u,0}\) contains \(2Du\,u+du\), so T* is generically at least cubic in u. The extra dependence of τ on \(u+s^*\) reinforces the failure of linearity. Chapter §5.9 instead lags **every** occurrence of s in this stress, obtaining \(DS(s^*)[u]+S(s^*)\), affine in u with a constant right-hand-side term.
+
+The spec stress and its exact Newton variation are nevertheless symmetric. Consequently their contractions with \(D e_k\) and \(D\phi\) vanish pointwise, which is the actual force/torque argument; linearity is unnecessary for that cancellation. At the common fixed point \(s_{\rm expr}=s^*=s\), all stresses and residual terms recover (5.23)–(5.26), and the energy cancellation holds. With \(\chi_N=0\), (5.29) is recovered directly. For variable τ, this statement refers to the spec's weighted-projection extension of the subscale closure (H-D4).
+
+The energy coefficient check, for either splitting, is explicitly
+
+\[
+\begin{aligned}
+\tilde T:Du
+&=2s\cdot(Du)u+d(u\cdot s)+\chi_N\bigl(s\cdot(Du)s+\tfrac12d|s|^2\bigr)\\
+&=s\cdot\bigl(2(Du)u+du+\chi_N(Du+\tfrac12dI)s\bigr)=s\cdot N_E.
+\end{aligned}
+\]
+
+**Required correction:** remove the claim of linearity, and describe this as Newton differentiation of the substituted, symmetric stress. If the intent is to implement the chapter's linear stress matrix (5.37) alone, freeze s also in the cross terms; that would be a different iteration rule. Do not infer exact nonlinear momentum balances at every raw Newton iterate from symmetry alone: in ASGS the substituted time term \(D_ts_{\rm expr}(u,P,\xi)\) is nonlinear too, so its Newton equation enforces the linearized balance. The full balance follows at convergence of the inner solve, with its evaluated subscale and appropriate boundary terms.
+
+**H-D3 — distinguish the projected expression from the implicit local update (355–358).** At fixed u and τ, set \(X=R_{u,0}+\chi_Ds_{\rm hist}/\delta t\). The inner OSS projection satisfies
+
+\[
+(\tau_t\xi_h,w_h)=(\tau_t(X-M_hs^*),w_h),\qquad
+s_{\rm expr}=\tau_t(X-M_hs^*-\xi_h),\qquad (s_{\rm expr},w_h)=0.
+\]
+
+But step 3 solves \(s_{\rm new}=\tau_t(X-M_hs_{\rm new}-\xi_h)\). Subtracting gives
+
+\[
+(s_{\rm new},w_h)=-\bigl(\tau_t M_h(s_{\rm new}-s^*),w_h\bigr),
+\tag{H-D3}
+\]
+
+which is generally nonzero. A minimal scalar component example uses two equal quadrature weights, projection onto constants, τt=1, s*=0, \(X=(1,-1)\), \(M=(0,1)\). Then ξ=0 and \(s_{\rm expr}=(1,-1)\) is orthogonal, but the local solve gives \(s_{\rm new}=(1,-1/2)\), whose mean is 1/4. Re-evaluating τ during local sweeps introduces another mismatch; it cannot restore the missing identity in general.
+
+The local system itself is the correct rearrangement of the intended subscale equation and has the correct fixed point. The claim that its iterates remain orthogonal is the error. The current algorithm can retain that update, provided it promises orthogonality only for the matched expression after a converged inner solve and at convergence of the outer loop, and stores the final matched expression. Exact orthogonality of every implicit local update would require solving its projection consistently too: for fixed coefficients let \(W=(\tau_t^{-1}I+M_h)^{-1}\), impose \((W\xi_h,w_h)=(WX,w_h)\), and use \(s=W(X-\xi_h)\). In the positive definite regime this is a matrix-weighted projection, rather than the proposed lagged scalar-weighted projection. Equivalently solve the original projection with the current \(M_hs\) coupled. A raw Newton iterate of either nonlinear projection equation satisfies it only to its current residual, not identically.
+
+**H-D4 — energy identity, variable τ, and the diagnostic sign (374).** With ξ=ζ=0 in ASGS, or matched weighted projections in OSS, the discrete pressure-subscale contribution is
+
+\[
+Q_c=(\tau_c(d-\zeta_h),d)=(\tau_c(d-\zeta_h),d-\zeta_h)\ge0.
+\]
+
+The equality uses the pressure projection tested with ζ; it is not merely a consequence of velocity orthogonality. In OSS, velocity orthogonality gives \((s,\xi_h)=0\), removes \((D_tu,s)\), and, for orthogonal histories, removes \((D_ts,u)\). For ASGS the two cross time terms are retained. These cancellations work for arbitrary positive pointwise τ without differentiating τ or taking it outside an integral. Thus (A2) is unnecessary for the spec. The chapter's original unweighted OSS equation with variable τ would not preserve the range of its projector: it must actually be replaced by these weighted constraints to obtain this extension.
+
+For dynamic subscales, let bars denote the endpoint averages, and define
+
+\[
+\begin{aligned}
+E^n_{\rm ASGS}&=\tfrac12\|u^n+s^n\|_Q^2,\\
+E^n_{\rm OSS}&=\tfrac12(\|u^n\|_Q^2+\|s^n\|_Q^2),\\
+\mathcal D(\bar u,\bar s)&=a_\nu(\bar u,\bar u)+(\tau_m^{-1}\bar s,\bar s)_Q
+-2(\bar s,L_\nu\bar u)_Q+(\tau_c(\nabla\cdot\bar u-\bar\zeta_h),\nabla\cdot\bar u)_Q.
+\end{aligned}
+\]
+
+Testing the resolved equation with \((\bar u,\bar\pi_h)\), the subscale equation with \(\bar s\), and adding gives, on the zero-boundary/periodic energy domain,
+
+\[
+\boxed{\frac{E^{n+1}-E^n}{\delta t}+\mathcal D(\bar u,\bar s)+\mathcal N(\bar u,\bar s)
+=(\bar f,\bar u+\bar s)_Q.}
+\tag{H-D4}
+\]
+
+For the standard coupling, \(\mathcal N=c(a;\bar u,\bar u)+(\bar s,N_{\rm op}-(a\cdot\nabla)\bar u)_Q\). For EMAC–VMS it is \(G(\bar u)+(\bar s,N_E)_Q=0\) under these energy boundary conditions. The viscous cross term has coefficient **−2**: one copy comes from each scale. This signed cross term belongs in the balance even though its positivity is only a property of the combined dissipation under an inverse-estimate condition. The midpoint time identity is simply
+
+\[
+(\delta_t(u+s),\overline{u+s})_Q=(\|u^{n+1}+s^{n+1}\|_Q^2-\|u^n+s^n\|_Q^2)/(2\delta t).
+\]
+
+For OSS, orthogonal endpoints make this equal to the stated sum of energies. Endpoint extrapolation preserves orthogonality by linearity, starting from the projected BDF1 result. The half-level projection, residual, stored s at convergence, and τ must all describe the same state. Static subscales have no such two-scale dynamic midpoint identity. Nonzero Dirichlet data require boundary work/lifting terms; on outflow domains the fluxes in H-D1 and the specified boundary work must be retained.
+
+**Required correction:** define the closure residual as the entire left side of (H-D4) minus its right side, and require zero for **all** forms. To measure the predicted defect, use power − rate − \(\mathcal D=\mathcal N\), or label rate + \(\mathcal D\) − power as \(-\mathcal N\). The BDF1 startup instead adds \(\|\Delta(u+s)\|_Q^2/(2\delta t)\) in ASGS, and \((\|\Delta u\|_Q^2+\|\Delta s\|_Q^2)/(2\delta t)\) in OSS; excluding it from the midpoint-only check is correct.
+
+**H-D5 — natural conditions and the scope of the bubble assumption (310, 322).** The first four outflow additions and the resolved EMAC modified-pressure condition pass under the spec's zero-subscale-boundary convention. “EMAC–VMS integrates nothing by parts” is not an adequate explanation: \(-(\tilde T,Dv)\) is already a weak stress divergence. If a sufficiently regular s is allowed a nonzero trace, then
+
+\[
+-(\tilde T,Dv)=(\nabla\cdot\tilde T,v)-\langle\tilde T n,v\rangle,
+\]
+
+so this term changes the resolved natural traction to \((2\nu Du-PI-\tilde T)n=0\), before any further non-bubble subscale boundary contributions are considered. Under the prescribed bubble/no-subscale-flux model \(\tilde T n=0\), giving the condition printed in the spec. For a mere L² quadrature field the normal trace is not defined, and the omitted flux must be understood as part of that model, not proved from “volume term.” The stress-form sentence at 322 uses physical p for the first four forms; EMAC variants use P in the imposed condition, while reported physical stress still uses the post-processed p.
+
+**Chapter issues, separate from spec issues.** No sign or coefficient error was found in (5.1)–(5.29), the entries of Tables 5.1–5.2 under their flux convention, or the printed element matrices. The following statements or implementation qualifications do need correction.
+
+| Item | Chapter location | Finding and correction |
+| --- | --- | --- |
+| C01 — two different EMAC energy defects | §5.1, fourth bullet, p. 2 | The introduction identifies “the energy defect” as the Lamb-vector work \((s,\omega_h\times u)\). That is the **resolved convective production** of Proposition 5.3. With the consistent residual, the total-energy defect is \((s,(u\cdot\nabla)u)\), as correctly stated in Corollary 5.1 and Table 5.1. Label the introductory assertion accordingly. |
+| C02 — a volume stress can change natural traction | §5.9.3, final sentence, p. 15 | “The subgrid stress, being a volume term, adds none” is false without a zero normal stress trace or an explicitly omitted flux. H-D5 gives the missing \(-\tilde Tn\). The chapter advertises EMAC–VMS without (A1); that is valid for its volume conservation algebra, but cannot by itself imply the unchanged outflow condition. |
+| C03 — skew form and outflow | §5.9.1, paragraph after the element matrices, p. 14 | Using skew 1 as written does not add an explicit facet integral, but its natural condition differs from convective-form do-nothing. Without the spec's added half flux, the gradient-form condition is \(\nu\partial_nu-\pi n-\tfrac12(u\cdot n)u=0\). Conservative form similarly has the full flux. State this when using those matrices on outflow problems. This is a boundary qualification, not a wrong volume matrix. |
+| C04 — the symmetric Picard recipe is a different iteration | (5.32), §5.7.6 and §5.9.3 | With b the old resolved velocity, v the new one and fixed s, (5.32) uses \(\tfrac12DS(b+s)[v+s]\). The §5.9.3 recipe instead uses \(\tfrac12DS(b)[v]+DS(s)[v]+S(s)\). Their difference is \(\tfrac12DS(s)[v-b]\), generally nonzero. Both are symmetric and have the same fixed point; distinguish them rather than presenting the assembly recipe as (5.32). The analogous Newton recipe does reproduce (5.31), up to the explicitly suppressed fluxes. |
+| C05 — local OSS orthogonality is not inherited from global OSS | §5.3 after (5.16); §5.4 after (5.17); Proposition 5.6 | Orthogonality to global continuous FE functions does not imply \(\int_R s=0\) or \(\int_R x\times s=0\) for every element patch. Restriction to R would require testing against \(1_R e_k\) or \(1_R\phi\), which generally are not global FE functions. These deductions are valid on the whole domain when the tests belong to the projection space, or for an explicitly separate patchwise projector, not for the restriction of the globally projected solution. The global OSS space on a periodic domain generally excludes φ as well. The convective moment identities up to boundary flux remain valid independently of this issue. |
+| C06 — BDF is not universally extra dissipation of the physical energy | Remark 5.8, p. 12 | The midpoint assertion is correct; “Backward differentiation formulas add numerical dissipation” is too broad. BDF1 has the positive physical-energy increment term in H-D4. BDF2 has a positive remainder with a **two-level modified energy**, rather than the physical energy alone. BDF3 has no general nonnegative dissipation identity of this kind. Restrict the claim to the actual scheme and energy. |
+| C07 — residual equivalence is consistency, not equality at a discrete state | Remark 5.10 versus Remark 5.7(2), pp. 10, 12 | In physical pressure, \(R_u=f-\partial_tu-(u\cdot\nabla)u+L_\nu u-\nabla p_h-du-M_hs\). Thus calling (5.26) simply “the physical momentum residual” omits \(-du-M_hs\). Remark 5.7(2) already makes the correct distinction. Also \(\tau_m^{-1}\Vert s\Vert ^2\approx\tau_m\Vert \widetilde P R_u\Vert ^2\) is a quasi-static scale estimate, not a bound furnished by the dynamic energy identity without control of \(\partial_ts\). |
+| C08 — lagged OSS implementation needs a matched-projection qualification | Remark 5.9 and §5.9.3 | Lagging the projected residual or \(M_hs\) retains the intended coupled fixed point, but does not guarantee exact orthogonality of each subsequent implicit local update. H-D3 gives the obstruction even at constant τ. The chapter does not explicitly promise orthogonality at each local sweep, but implementations must not invoke the converged OSS cancellations during those unmatched sweeps. |
+
+For C06, the exact BDF2 identity with \(a=g^{n+1},b=g^n,c=g^{n-1}\) is
+
+\[
+(\tfrac32a-2b+\tfrac12c,a)
+=\tfrac14\bigl(\|a\|^2+\|2a-b\|^2-\|b\|^2-\|2b-c\|^2+\|a-2b+c\|^2\bigr).
+\]
+
+This identifies the modified energy precisely; it is not \((\|a\|^2-\|b\|^2)/2\) plus a universally nonnegative remainder.
+
+For completeness, the implementation section was checked directly, without trusting its transcription. In the following table each entry is the integrand, \(A=N^A\), \(B=N^B\), and b is the old resolved velocity. \(K_{ij}^{AB}=c(a;Be_j,Ae_i)\), \(D_{ij}^{AB}=c(Be_j;b,Ae_i)\).
+
+| Form | K integrand re-derived | D integrand re-derived | Printed §5.9 |
+| --- | --- | --- | --- |
+| Non-conservative | \(\delta_{ij}A a_l\partial_lB\) | \(AB\partial_jb_i\) | Both agree |
+| Conservative | \(-\delta_{ij}B a_l\partial_lA\) | \(-B b_i\partial_jA\) | Both agree |
+| Skew 1 | \(\tfrac12\delta_{ij}(A a_l\partial_lB-B a_l\partial_lA)\) | \(\tfrac12(AB\partial_jb_i-Bb_i\partial_jA)\) | Both agree |
+| Skew 2 | \(\delta_{ij}A(a_l\partial_lB+\tfrac12(\nabla\cdot a)B)\) | \(A(B\partial_jb_i+\tfrac12b_i\partial_jB)\) | Both agree |
+| EMAC | \(A\partial_iB\,a_j+\delta_{ij}A(a_l\partial_lB+(\nabla\cdot a)B)\) | \(A(B\partial_i b_j+B\partial_j b_i+b_i\partial_jB)\) | Both agree |
+
+The additional subscale-divergence contribution is \(-\delta_{ij}(s,\nabla(AB))\), with factor 1/2 for skew 2, as printed. Expanding \(-DS(W)[Be_j]:D(Ae_i)\) gives
+
+\[
+-B\bigl(W_l\partial_lA\,\delta_{ij}+W_i\partial_jA+W_j\partial_iA\bigr),
+\]
+
+which verifies (5.37). Moving the constant stress to the right gives \(s_i s_l\partial_lA+|s|^2\partial_iA/2\), also with the printed sign. The Newton RHS in (5.36) is positive \(c(b;b,v)\); the equation itself has the correct negative subtraction on the left. The local ASGS backward-Euler matrix in §5.9.3 agrees with H20. None of these verified matrices supplies the additional derivative of \(s_{\rm expr}\) required by the spec's different substituted-subscale Newton iteration.
+
+Remaining chapter improvements are qualifications rather than errors in the verified equations: define the quadrature divergence pairing explicitly if exact discrete Lemma 5.2 is intended; state the weighted-projection extension before dropping (A2); and retain fluxes in the energy assertions of Remark 5.12 outside the homogeneous/periodic energy setting. Sufficient inverse bounds are \(c_1k^4>2C_{\rm inv}^2\) (Laplacian) and \(c_1k^4>4C_{\rm inv}^2\) (stress), with the chapter's **unsquared** inverse-estimate constant. This differs in notation from the spec's earlier constant defined directly in a squared norm inequality.
+
+---
+
 **Check of the Phase 0 answers — 21 October 2026**
 
 Reviewed `docs/formulation_spec.md`, SHA-256 `bce98772729e2c9e799f3317fffb71716a55ae86ca53b4d2815612b9ea5e390f`, against the addendum pass below. Every change from the previous revision is wording; no equation changed. I checked the Time schemes section, the Fixed choices time-scheme row, the eight-cases table and the algorithm, plus every remaining history-level reference.
