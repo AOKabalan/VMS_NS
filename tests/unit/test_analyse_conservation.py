@@ -177,7 +177,7 @@ def test_tables_failures_and_plot_on_a_synthetic_tree(tmp_path: Path) -> None:
     write_run(
         results,
         "gresho",
-        "gresho_skew_symmetric_1_asgs_nonlinear",
+        "gresho_visc_skew_symmetric_1_asgs_nonlinear",
         1,
         steps(1, converged=False),
         [],
@@ -250,7 +250,8 @@ def test_tables_failures_and_plot_on_a_synthetic_tree(tmp_path: Path) -> None:
     assert nonconservative["linear_defect_predicted_scaled"] == pytest.approx(2e-3 / 0.16, rel=1e-6)
     assert nonconservative["defects_within"] is True
     assert gresho["gresho_conservative_oss_linear"]["defects_within"] is False
-    failed = gresho["gresho_skew_symmetric_1_asgs_nonlinear"]
+    (failed,) = [row for row in tables["gresho_visc"] if row["status"] == "failed"]
+    assert failed["run"] == "gresho_visc_skew_symmetric_1_asgs_nonlinear"
     assert (failed["status"], failed["failed_step"], failed["inner_iterations_max"]) == (
         "failed",
         1,
@@ -271,9 +272,23 @@ def test_tables_failures_and_plot_on_a_synthetic_tree(tmp_path: Path) -> None:
     markdown = (output / "gresho.md").read_text()
     assert "| gresho_conservative_oss_linear | completed | 2 |" in markdown
     summary = (output / "summary.md").read_text()
-    assert "gresho_skew_symmetric_1_asgs_nonlinear: failed, 0 of 100 steps converged" in summary
+    assert (
+        "gresho_visc_skew_symmetric_1_asgs_nonlinear: failed, 0 of 100 steps converged" in summary
+    )
     assert "step 1 did not converge: stalled" in summary
     assert "![Long Gresho runs](gresho_long.png)" in summary
     assert (output / "gresho_long.png").stat().st_size > 10_000
-    for name in ("gresho_long", "gresho_refined", "taylor_green"):
+    assert [row["run"] for row in tables["gresho_visc_refined"]] == [
+        "gresho_visc_refined_emac_vms_asgs"
+    ]
+    assert [row["run"] for row in tables["gresho_refined"]] == ["gresho_refined_emac_vms_oss"]
+    assert {name: len(rows) for name, rows in tables.items()} == {
+        "gresho": 12,
+        "gresho_visc": 12,
+        "gresho_long": 5,
+        "gresho_refined": 1,
+        "gresho_visc_refined": 1,
+        "taylor_green": 24,
+    }
+    for name in ANALYSIS.FAMILIES:
         assert (output / f"{name}.csv").exists() and (output / f"{name}.md").exists()

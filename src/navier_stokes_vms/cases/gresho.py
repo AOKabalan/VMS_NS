@@ -1,6 +1,7 @@
 """Gresho vortex: a steady piecewise Euler solution in a walled box (spec: Gresho vortex).
 
-At the fallback viscosity the Euler fields are reference fields, not an exact viscous solution.
+Viscosity is a case parameter (default 1e-6; viscous ASGS runs use 1e-3). At either positive
+viscosity the Euler fields are reference fields, not exact solutions of the viscous problem.
 """
 
 import math
@@ -18,7 +19,7 @@ LOWER = (-0.5, -0.5)
 UPPER = (0.5, 0.5)
 # The authorized fallback for ν = 0, where τ_c = 0 at rest leaves ζ rows of the frozen-τ OSS
 # Jacobian identically zero, so the first Newton update does not exist (spec: Gresho vortex).
-VISCOSITY = 1e-6
+DEFAULT_PARAMETERS = {"viscosity": 1e-6}
 CORE_RADIUS = 0.2
 VORTEX_RADIUS = 0.4
 FRAME = 0.45
@@ -63,15 +64,15 @@ def frame(x: Expr) -> Expr:
 
 
 def build(config: Config) -> Problem:
-    """(−0.5, 0.5)², ν = 1e-6, f = 0, four no-slip walls that are also force boundaries."""
-    case_parameters(config, {})
+    """(−0.5, 0.5)², configurable ν, f = 0, four no-slip/force walls; Euler reference fields."""
+    viscosity = case_parameters(config, DEFAULT_PARAMETERS)["viscosity"]
     cells = mesh_loading.builtin_cells(config, DEFAULT_CELLS)
     mesh, tags = mesh_loading.rectangle(cells, LOWER, UPPER)
     return Problem(
         mesh=mesh,
         boundary_conditions={name: Dirichlet(lambda _x, _t: ufl.zero(2)) for name in tags},
         boundary_tags=tags,
-        viscosity=VISCOSITY,
+        viscosity=viscosity,
         forcing=lambda _x, _t: ufl.zero(2),
         initial_velocity=at_initial_time(velocity),
         exact_velocity=velocity,

@@ -33,15 +33,22 @@ def expected_names() -> set[str]:
     ]
     long_forms = ("nonconservative", "conservative", "skew_symmetric_1", "emac", "emac_vms")
     return {
-        *(f"gresho_{c}" for c in combinations),
+        *(f"gresho_{f}_oss_{p}" for f in FORMS for p in ("linear", "nonlinear")),
+        *(f"gresho_visc_{f}_asgs_{p}" for f in FORMS for p in ("linear", "nonlinear")),
         *(f"gresho_long_{form}" for form in long_forms),
-        *(f"gresho_refined_emac_vms_{space}" for space in ("asgs", "oss")),
+        "gresho_refined_emac_vms_oss",
+        "gresho_visc_refined_emac_vms_asgs",
         *(f"taylor_green_{c}" for c in combinations),
     }
 
 
 def test_committed_files_are_exactly_the_generated_matrix(tmp_path: Path) -> None:
+    # Regeneration must remove the old ASGS runs so the queue cannot pick them up.
+    retired = [f"gresho_{f}_asgs_{p}" for f in FORMS for p in ("linear", "nonlinear")]
+    for name in [*retired, "gresho_refined_emac_vms_asgs"]:
+        (tmp_path / f"{name}.toml").write_text("retired")
     paths = GENERATOR.write_configs(tmp_path)
+    assert {path.stem for path in tmp_path.glob("*.toml")} == expected_names()
     committed = sorted(FOLDER.glob("*"))
     assert [path.name for path in committed] == sorted(path.name for path in paths)
     assert {path.stem for path in committed} == expected_names()
@@ -59,7 +66,14 @@ def test_every_configuration_is_valid_with_a_unique_run_name() -> None:
         assert config.run_name == path.stem
         family = next(
             prefix
-            for prefix in ("gresho_long", "gresho_refined", "gresho", "taylor_green")
+            for prefix in (
+                "gresho_visc_refined",
+                "gresho_visc",
+                "gresho_long",
+                "gresho_refined",
+                "gresho",
+                "taylor_green",
+            )
             if config.run_name.startswith(f"{prefix}_")
         )
         steps[family] += round(config.time.t_end / config.time.dt)
@@ -74,21 +88,43 @@ def test_every_configuration_is_valid_with_a_unique_run_name() -> None:
         assert solver.picard_iterations_before_newton == 0
         assert (solver.outer_rtol, solver.outer_max_iterations) == (1e-11, 100)
         assert (solver.inner_rtol, solver.subscale_rtol) == (1e-12, 1e-13)
+        assert solver.inner_max_iterations == 200
+        if config.case == "gresho":
+            viscous = family.startswith("gresho_visc")
+            assert dict(config.case_parameters) == {"viscosity": 1e-3 if viscous else 1e-6}
+            assert stabilization.subscale_space == ("asgs" if viscous else "oss")
+            assert config.output.diagnostics == GENERATOR.GRESHO_DIAGNOSTICS
+            if family in ("gresho_long", "gresho_refined", "gresho_visc_refined"):
+                assert stabilization.scale_splitting == "nonlinear"
+            cells, dt, end = {
+                "gresho": (32, 0.005, 0.5),
+                "gresho_visc": (32, 0.005, 0.5),
+                "gresho_long": (32, 0.01, 10.0),
+                "gresho_refined": (64, 0.0025, 0.5),
+                "gresho_visc_refined": (64, 0.0025, 0.5),
+            }[family]
+            assert config.mesh.cells == (cells, cells)
+            assert (config.time.dt, config.time.t_end) == (dt, end)
         check_diagnostics_known(config, DIAGNOSTICS)
     assert steps == {
-        "gresho": 2400,
+        "gresho": 1200,
+        "gresho_visc": 1200,
         "gresho_long": 5000,
-        "gresho_refined": 400,
+        "gresho_refined": 200,
+        "gresho_visc_refined": 200,
         "taylor_green": 2400,
     }
+    assert sum(steps.values()) == 10_200
 
 
 @pytest.mark.parametrize(
     "name",
     [
         "gresho_emac_vms_oss_nonlinear",
+        "gresho_visc_emac_vms_asgs_nonlinear",
         "gresho_long_emac",
-        "gresho_refined_emac_vms_asgs",
+        "gresho_refined_emac_vms_oss",
+        "gresho_visc_refined_emac_vms_asgs",
         "taylor_green_conservative_asgs_linear",
     ],
 )
@@ -96,8 +132,10 @@ def test_family_settings_and_case_support(name: str) -> None:
     config = load_config(FOLDER / f"{name}.toml")
     family = {
         "gresho_emac_vms_oss_nonlinear": ("gresho", 32, 0.005, 0.5),
+        "gresho_visc_emac_vms_asgs_nonlinear": ("gresho", 32, 0.005, 0.5),
         "gresho_long_emac": ("gresho", 32, 0.01, 10.0),
-        "gresho_refined_emac_vms_asgs": ("gresho", 64, 0.0025, 0.5),
+        "gresho_refined_emac_vms_oss": ("gresho", 64, 0.0025, 0.5),
+        "gresho_visc_refined_emac_vms_asgs": ("gresho", 64, 0.0025, 0.5),
         "taylor_green_conservative_asgs_linear": ("taylor_green_2d", 32, 0.005, 0.5),
     }[name]
     assert (config.case, config.mesh.cells[0], config.time.dt, config.time.t_end) == family
@@ -114,5 +152,6 @@ def test_family_settings_and_case_support(name: str) -> None:
         assert dict(config.case_parameters) == {"viscosity": 0.01}
         assert angular == []
     else:
+        assert problem.viscosity == (1e-3 if name.startswith("gresho_visc_") else 1e-6)
         assert problem.monitor_region is not None and len(problem.force_boundaries) == 4
         assert len(angular) == 3

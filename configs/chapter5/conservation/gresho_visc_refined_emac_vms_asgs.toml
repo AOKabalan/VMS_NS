@@ -1,7 +1,8 @@
 case = "gresho"
-run_name = "gresho_refined_emac_vms_asgs"
+run_name = "gresho_visc_refined_emac_vms_asgs"
 
 [case_parameters]
+viscosity = 0.001
 
 [mesh]
 cells = [
@@ -40,7 +41,7 @@ newton_tau = "frozen"
 picard_iterations_before_newton = 0
 inner_rtol = 1e-12
 inner_atol = 1e-12
-inner_max_iterations = 30
+inner_max_iterations = 200
 outer_rtol = 1e-11
 outer_max_iterations = 100
 subscale_update = "accelerated"

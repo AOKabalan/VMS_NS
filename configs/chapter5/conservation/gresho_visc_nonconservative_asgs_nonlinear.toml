@@ -1,7 +1,8 @@
 case = "gresho"
-run_name = "gresho_skew_symmetric_2_asgs_linear"
+run_name = "gresho_visc_nonconservative_asgs_nonlinear"
 
 [case_parameters]
+viscosity = 0.001
 
 [mesh]
 cells = [
@@ -23,13 +24,13 @@ startup = "lower_order"
 method = "vms"
 subscale_space = "asgs"
 subscale_dynamics = "dynamic"
-scale_splitting = "linear"
+scale_splitting = "nonlinear"
 c1 = 4.0
 c2 = 2.0
 pressure_subscale = true
 
 [convection]
-form = "skew_symmetric_2"
+form = "nonconservative"
 
 [viscosity]
 form = "stress"
@@ -40,7 +41,7 @@ newton_tau = "frozen"
 picard_iterations_before_newton = 0
 inner_rtol = 1e-12
 inner_atol = 1e-12
-inner_max_iterations = 30
+inner_max_iterations = 200
 outer_rtol = 1e-11
 outer_max_iterations = 100
 subscale_update = "accelerated"

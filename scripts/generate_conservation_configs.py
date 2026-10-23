@@ -68,6 +68,7 @@ SOLVER = SolverOptions(
     newton_tau="frozen",
     picard_iterations_before_newton=0,
     inner_rtol=1e-12,
+    inner_max_iterations=200,
     outer_rtol=1e-11,
     outer_max_iterations=100,
     subscale_rtol=1e-13,
@@ -84,12 +85,14 @@ def run_config(
     space: str,
     splitting: str,
     diagnostics: tuple[str, ...],
+    *,
+    viscosity: float = 1e-6,
 ) -> Config:
     """One run with the common P1/P1 stress, dynamic-subscale, Crank–Nicolson settings."""
     return Config(
         case=case,
         run_name=run_name,
-        case_parameters=MappingProxyType({"viscosity": 0.01} if case == "taylor_green_2d" else {}),
+        case_parameters=MappingProxyType({"viscosity": viscosity}),
         mesh=MeshOptions(cells=(cells, cells)),
         discretization=DiscretizationOptions(velocity_degree=1, pressure_degree=1),
         time=TimeOptions(scheme="crank_nicolson", dt=dt, t_end=t_end, startup="lower_order"),
@@ -108,13 +111,13 @@ def run_config(
 
 
 def conservation_configs() -> list[Config]:
-    """The 55 runs of plan Phase 12b in family order: 24 + 5 + 2 + 24."""
+    """The 55 runs of plan Phase 12b: 12 OSS + 12 viscous ASGS + 5 long + 1 + 1 refined + 24."""
     matrix = [
         (form, space, splitting) for form in FORMS for space in SPACES for splitting in SPLITTINGS
     ]
     configs = [
         run_config(
-            f"gresho_{form}_{space}_{splitting}",
+            f"{prefix}_{form}_{space}_{splitting}",
             "gresho",
             32,
             0.005,
@@ -123,8 +126,11 @@ def conservation_configs() -> list[Config]:
             space,
             splitting,
             GRESHO_DIAGNOSTICS,
+            viscosity=viscosity,
         )
-        for form, space, splitting in matrix
+        for prefix, space, viscosity in (("gresho", "oss", 1e-6), ("gresho_visc", "asgs", 1e-3))
+        for form in FORMS
+        for splitting in SPLITTINGS
     ]
     configs += [
         run_config(
@@ -142,7 +148,7 @@ def conservation_configs() -> list[Config]:
     ]
     configs += [
         run_config(
-            f"gresho_refined_emac_vms_{space}",
+            f"{prefix}_refined_emac_vms_{space}",
             "gresho",
             64,
             0.0025,
@@ -151,8 +157,9 @@ def conservation_configs() -> list[Config]:
             space,
             "nonlinear",
             GRESHO_DIAGNOSTICS,
+            viscosity=viscosity,
         )
-        for space in SPACES
+        for prefix, space, viscosity in (("gresho", "oss", 1e-6), ("gresho_visc", "asgs", 1e-3))
     ]
     configs += [
         run_config(
@@ -165,6 +172,7 @@ def conservation_configs() -> list[Config]:
             space,
             splitting,
             TAYLOR_GREEN_DIAGNOSTICS,
+            viscosity=0.01,
         )
         for form, space, splitting in matrix
     ]
@@ -174,13 +182,17 @@ def conservation_configs() -> list[Config]:
 
 
 def write_configs(folder: Path) -> list[Path]:
-    """Write every configuration as <run_name>.toml; existing files are overwritten."""
+    """Write the matrix and remove the 13 retired near-inviscid ASGS configurations."""
     folder.mkdir(parents=True, exist_ok=True)
     paths = []
     for config in conservation_configs():
         path = folder / f"{config.run_name}.toml"
         path.write_text(config_to_toml(config), encoding="utf-8")
         paths.append(path)
+    retired = [f"gresho_{form}_asgs_{splitting}" for form in FORMS for splitting in SPLITTINGS]
+    retired.append("gresho_refined_emac_vms_asgs")
+    for name in retired:
+        (folder / f"{name}.toml").unlink(missing_ok=True)
     return paths
 
 

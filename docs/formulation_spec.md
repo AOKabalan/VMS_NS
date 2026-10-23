@@ -542,15 +542,20 @@ C_1=C_2-20(0.2)+4\ln0.2.
 
 The vorticity ∂₁u₂ − ∂₂u₁ is 10, 2/r − 10, and 0 in the three regions. The pressure is continuous at both interfaces, with p′ = u\_θ²/r; hence ∇·u = 0 and (u·∇)u + ∇p = 0 region by region. Evaluate the central branch without dividing by r. Pressure errors use the physical pressure and its existing separate mean normalization.
 
-Viscosity is ν = 0 by owner decision. Let β = c1·k⁴ν/h² + c2·k|a|/h. In the resting exterior, ν = 0 and a = 0 give β = 0, τ\_m = ∞, τ\_t = (α0/δt + β)⁻¹ = δt/α0 for dynamic subscales, and τ\_c = h²β/(c1·k⁴) = 0. The implemented residual and diagnostics use finite reciprocal/dynamic combinations. τ\_c is generally nonzero inside the moving vortex even at ν = 0.
+Viscosity is the Gresho case parameter `case_parameters.viscosity`, default ν = 10⁻⁶. This is the authorized fallback for the nominally inviscid OSS families: at ν = 0 the frozen-τ OSS Jacobian has identically zero ζ rows in the resting exterior and the first linear solve fails. The viscous ASGS families use ν = 10⁻³. At either positive viscosity, with f = 0 unchanged, the Euler fields above are reference fields, not exact solutions of the unforced viscous problem.
 
-Acceptance at ν = 0 (owner decision K-D1, resolving the Phase 12b-0 gate):
+Let β = τ\_m⁻¹ = c1·k⁴ν/h² + c2·k|a|/h. In the resting exterior, ν = 0 and a = 0 give β = 0, τ\_m = ∞, τ\_t = (α0/δt + β)⁻¹ = δt/α0 for dynamic subscales, and τ\_c = h²β/(c1·k⁴) = 0. The implemented residual and diagnostics use finite reciprocal/dynamic combinations. τ\_c is generally nonzero inside the moving vortex even at ν = 0.
 
-- With frozen τ (`newton_tau = "frozen"`), a complete step on a tiny mesh must be finite: residual, Jacobian, solve and every diagnostic, for ASGS and OSS and both splittings.
+**Dynamic ASGS limitation (owner decision Q1).** Where a = 0 and ν ≈ 0, τ\_m⁻¹ approaches zero (exactly zero in the inviscid limit). The dynamic ASGS subscale absorbs ∂ₜu_h, so its time-derivative coupling cancels the resolved mass. After elimination the effective resolved mass factor is (α0/δt)(1 − α0τ\_t/δt), which vanishes when τ\_m⁻¹ = 0. This is an accepted limitation of the method, not a solver problem; raising iteration limits does not remove the cancellation. The inviscid Gresho families therefore use OSS only: `gresho_{form}_oss_{split}`, `gresho_long_{form}` and `gresho_refined_emac_vms_oss`. ASGS is exercised separately by `gresho_visc_{form}_asgs_{split}` and `gresho_visc_refined_emac_vms_asgs`, at ν = 10⁻³ with the same mesh/time/diagnostic settings as their corresponding short OSS runs.
+
+Acceptance (owner decision K-D1, updated by Q1):
+
+- With frozen τ (`newton_tau = "frozen"`), a complete step on a tiny mesh must be finite: residual, Jacobian, solve and every diagnostic, for both OSS splittings at ν = 10⁻⁶ and both ASGS splittings at ν = 10⁻³.
+- Keep the strict expected convergence failure for nonlinear dynamic ASGS at ν ≤ 10⁻⁴ as documentation of the method limitation; the existing test exercises the ν = 10⁻⁶ fallback. Linear ASGS at the fallback remains a regression check, not a matrix family.
 - With exact τ the Jacobian at rest is non-finite, because the derivative of |a| is undefined at a = 0 for every ν (Inner linearization). The unit tests keep an explicit expected-failure check for it.
 - Exact-τ Jacobians are tested only at states with nonzero advection speed, as in Phase 12a.
 - No regularization of |a| and no generalized derivative.
-- ν = 0 stands. ν = 10⁻⁶, with f = 0 unchanged, replaces it only if a frozen-τ step is non-finite. If the fallback is used, record it: the fields above are then Euler reference fields, not an exact steady solution of the unforced viscous problem.
+- All Phase 12b configurations use `inner_max_iterations = 200` (owner decision Q2); the general solver default is unchanged.
 
 The monitor region is the near-wall frame max(|x|, |y|) ≥ 0.45. Report both region norms and all four wall forces. The exact initial vortex vanishes outside r = 0.4, but the discrete velocity and subscales are not forced to remain zero in the frame. Momentum and angular-momentum drifts must be interpreted with those monitors and reactions, rather than asserted to vanish from the initial support alone.
 

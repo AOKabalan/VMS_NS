@@ -62,7 +62,8 @@ DIAGNOSTICS = (
 )
 STALLS = (
     "frozen-τ Newton stalls in the second outer iteration for nonlinear dynamic ASGS at "
-    "ν ≤ 1e-4, including ν = 0 and the fallback; open owner question in the progress log"
+    "ν ≤ 1e-4, including ν = 0 and the fallback; accepted method limitation (owner Q1): "
+    "the subscale absorbs ∂ₜu_h and the resolved mass cancels as τ_m⁻¹ → 0"
 )
 
 
@@ -84,7 +85,7 @@ def gresho_config(
         solver=SolverOptions(
             newton_tau=newton_tau,
             inner_rtol=1e-12,
-            inner_max_iterations=100,
+            inner_max_iterations=200,
             outer_rtol=1e-11,
             outer_max_iterations=100,
             subscale_rtol=1e-13,
@@ -167,15 +168,19 @@ def test_case_declares_walls_frame_and_fallback_viscosity() -> None:
     # The 20×20 cell edges lie on the frame boundary, so the indicator integrates exactly.
     frame_area = fd.assemble(problem.monitor_region(x) * fd.dx(domain=problem.mesh, degree=3))
     assert frame_area == pytest.approx(1 - 0.9**2, rel=1e-13)
-    with pytest.raises(ValueError, match="case_parameters: viscosity not used by case 'gresho'"):
-        build_problem(replace(gresho_config(), case_parameters={"viscosity": 0.1}))
+    viscous = build_problem(replace(gresho_config(), case_parameters={"viscosity": 1e-3}))
+    assert viscous.viscosity == 1e-3
+    assert viscous.exact_velocity is gresho.velocity and viscous.exact_pressure is gresho.pressure
+    assert viscous.forcing(fd.SpatialCoordinate(viscous.mesh), 0.0) == ufl.zero(2)
+    with pytest.raises(ValueError, match="case_parameters: unused not used by case 'gresho'"):
+        build_problem(replace(gresho_config(), case_parameters={"unused": 0.1}))
 
 
 def test_zero_viscosity_makes_the_frozen_oss_jacobian_singular_at_rest(tmp_path: Path) -> None:
     """Why the case uses the fallback: τ_c = 0 at rest empties every ζ row supported there."""
     config = gresho_config(space="oss")
     counts = {}
-    for viscosity in (0.0, gresho.VISCOSITY):
+    for viscosity in (0.0, 1e-6):
         problem = replace(build_problem(config), viscosity=viscosity)
         stepper = TimeStepper(config, problem, tmp_path / str(viscosity), LOGGER)
         matrix = jacobian_at_rest(stepper)
@@ -185,27 +190,32 @@ def test_zero_viscosity_makes_the_frozen_oss_jacobian_singular_at_rest(tmp_path:
         first_zeta = sum(space.sub(i).dim() for i in range(3))
         counts[viscosity] = int(np.sum(np.all(dense[first_zeta:] == 0, axis=1)))
     assert counts[0.0] > 0
-    assert counts[gresho.VISCOSITY] == 0
+    assert counts[1e-6] == 0
 
 
 @pytest.mark.parametrize(
-    "space,splitting",
+    "space,splitting,viscosity",
     [
-        ("asgs", "linear"),
+        ("asgs", "linear", 1e-6),
         pytest.param(
             "asgs",
             "nonlinear",
+            1e-6,
             marks=pytest.mark.xfail(raises=ConvergenceError, strict=True, reason=STALLS),
         ),
-        ("oss", "linear"),
-        ("oss", "nonlinear"),
+        ("oss", "linear", 1e-6),
+        ("oss", "nonlinear", 1e-6),
+        ("asgs", "linear", 1e-3),
+        ("asgs", "nonlinear", 1e-3),
     ],
 )
 def test_frozen_tau_step_from_rest_is_finite_K_D1(
-    tmp_path: Path, space: str, splitting: str
+    tmp_path: Path, space: str, splitting: str, viscosity: float
 ) -> None:
     """Residual, Jacobian, solve and every diagnostic stay finite through a Crank–Nicolson step."""
-    config = gresho_config(space=space, splitting=splitting)
+    config = replace(
+        gresho_config(space=space, splitting=splitting), case_parameters={"viscosity": viscosity}
+    )
     stepper = TimeStepper(config, build_problem(config), tmp_path, LOGGER)
     assert np.all(np.isfinite(entries(jacobian_at_rest(stepper))))
     assert math.isfinite(stepper._step_solver._inner.residual_norm())

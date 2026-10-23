@@ -1196,7 +1196,7 @@ Deviations:
 - `matplotlib`, already in the Firedrake environment, is now a declared dependency for the plot.
 - K-D1 probes beyond the tiny mesh: 32×32 runs of three steps with raised iteration limits, into the session scratch folder, were used to diagnose open questions 1 and 2. They are not matrix runs. Apart from them, only the three authorized prefixes ran at matrix resolution.
 
-Open questions:
+Open questions at the end of the original implementation (Q1 and Q2 resolved by the owner follow-up below):
 
 1. **Nonlinear dynamic ASGS on Gresho does not converge with frozen τ, so K-D1 cannot be met for it.**
    - The second outer iteration's inner Newton stalls with a relative residual of about 0.1 for 500 iterations, on 8×8 and 32×32, at ν = 0, 1e-6, 1e-5 and 1e-4.
@@ -1205,3 +1205,53 @@ Open questions:
    - As generated, the 6 `gresho_*_asgs_nonlinear` runs and `gresho_refined_emac_vms_asgs` will fail in their first step. Keep them as recorded failures, or change the method for them (for example exact τ after the first outer iteration, or Picard)? Exact τ cannot start from rest.
 2. **`inner_max_iterations` for ASGS Gresho.** The owner's settings leave the default of 30, so the 6 `gresho_*_asgs_linear` runs will stop in step 1 although they converge given about 140 iterations. Raise it, for example to 200, for the Gresho family, or keep the prescribed default?
 3. Phase 12b-2 is ready apart from questions 1 and 2. Regenerate with `python scripts/generate_conservation_configs.py` after any change to the generator, and launch with the README tmux command after the validation queue. tmux is not installed on this machine.
+
+## Phase 12b-1: owner decisions Q1 and Q2 (2026-10-23)
+
+Decisions and implementation:
+
+- **Q1 resolved: dynamic ASGS on inviscid Gresho is an accepted limitation of the method, not a solver problem.** At a = 0 and ν ≈ 0, τ_m⁻¹ → 0 (exactly zero in the inviscid limit). The subscale absorbs ∂ₜu_h and the resolved mass cancels: τ_t → δt/α₀, so (α₀/δt)(1 − α₀τ_t/δt) → 0. Raising iteration limits does not remove this cancellation. The spec's Gresho section, the Phase 12b addendum and the plan now record this explanation and supersede the original all-splitting inviscid acceptance requirement.
+- The inviscid families now use OSS only: 12 `gresho_{form}_oss_{split}`, the same 5 `gresho_long_{form}`, and `gresho_refined_emac_vms_oss`. They retain ν = 1e-6, the authorized fallback for the singular OSS system at ν = 0.
+- The 12 `gresho_visc_{form}_asgs_{split}` runs use ν = 1e-3, 32×32, dt = 0.005, T = 0.5 and the same Gresho diagnostics. `gresho_visc_refined_emac_vms_asgs` uses 64×64, dt = 0.0025 and T = 0.5. These 13 configurations replace the old near-inviscid ASGS files; regeneration also removes those retired names.
+- Gresho viscosity is now a case parameter with default 1e-6. The case docstring and README explicitly identify the Euler fields as reference fields, not exact viscous solutions, including at ν = 1e-3. No solver equation or linearization changed.
+- **Q2 resolved:** every generated Phase 12b configuration explicitly uses `inner_max_iterations = 200`; the general solver default is unchanged.
+- Matrix tests check the exact files, removal of retired runs, unique names, settings, viscosities, diagnostics and steps. Gresho tests exercise both viscous ASGS splittings through BDF1 and Crank–Nicolson, and retain the strict nonlinear ASGS xfail at ν = 1e-6 documenting the observed ν ≤ 1e-4 limitation. The analysis and its synthetic-tree test separate `gresho_visc` and `gresho_visc_refined` from the inviscid families.
+
+The revised matrix remains **55 runs and 10,200 steps**:
+
+| Family | Runs | Steps |
+| --- | --- | --- |
+| Ordinary OSS Gresho | 12 | 1200 |
+| Viscous ASGS Gresho | 12 | 1200 |
+| Long OSS Gresho | 5 | 5000 |
+| Refined OSS Gresho | 1 | 200 |
+| Refined viscous ASGS Gresho | 1 | 200 |
+| Taylor–Green | 24 | 2400 |
+
+Authorized timing prefix, one core with OMP_NUM_THREADS=1:
+
+- `gresho_visc_emac_vms_asgs_nonlinear`, changing only T to 0.05 (ten steps). Every step converged with the regenerated settings, including `inner_max_iterations = 200`; 9–11 outer iterations and 37–57 total inner iterations per step.
+- First step: 16.93 s; second step (first Crank–Nicolson): 2.77 s; steps 3–10 mean: 0.6084 s. Steps 2–10 mean including the first CN compilation: 0.8486 s. Full run wall time: 29.36 s including setup, compilation, diagnostics and output.
+- From step 2, max |energy-budget residual| = 1.27e-12 and max absolute momentum-budget component = 9.97e-13. Gresho momentum residuals are wall reactions, reported rather than asserted to vanish.
+- Config, console and complete run artifacts are under `/tmp/vms_phase12b_decisions_timing/`. Initial attempts stopped before time stepping because of read-only home caches; redirecting `FIREDRAKE_CACHE_DIR` and `MPLCONFIGDIR` to `/tmp` allowed the single ten-step prefix to complete. No repository `results/` was read or written.
+
+Revised cost estimate, serial on one core, superseding the original 2.0–2.3 h estimate:
+
+| Family | Extrapolation | Cost |
+| --- | --- | --- |
+| Ordinary OSS Gresho | 1200 × 0.53 s (existing prefix) | 10.6 min |
+| Viscous ASGS Gresho | 1200 × 0.61 s (new prefix, after compilation) | 12.2 min |
+| Long OSS Gresho | 5000 × 0.51 s (existing prefix) | 42.5 min |
+| Refined OSS Gresho | 200 × (4–5) × 0.53 s | 7.1–8.8 min |
+| Refined viscous ASGS Gresho | 200 × (4–5) × 0.61 s | 8.1–10.2 min |
+| Taylor–Green | 2400 × 1.09 s (existing prefix) | 43.6 min |
+| Setup/startup/compilation allowance | 55 × (3–25) s | 2.8–22.9 min |
+
+Total: about **127–151 min, rounded to 2.1–2.6 h**. The refined-mesh assumption is 4–5× per-step cost for roughly four times the unknowns at similar iteration counts. Other forms and later steps remain unmeasured; costs can change with iteration counts. These are serial estimates, not measured four-rank queue timings.
+
+Gates:
+
+- `ruff check src tests scripts`: passed. `ruff format --check src tests scripts`: passed, 68 files already formatted. Logs: `/tmp/vms_phase12b_decisions_ruff_check.log` and `/tmp/vms_phase12b_decisions_ruff_format.log`.
+- `OMP_NUM_THREADS=1 pytest tests/unit -n 2`: **687 passed, 1 xfailed in 191.91 s**. The xfail is strict and documents the accepted near-inviscid nonlinear ASGS limitation. Pytest temporary/cache directories and the full log (`/tmp/vms_phase12b_decisions_unit.log`) are under `/tmp`; Firedrake and Matplotlib caches were redirected there too.
+- The unit gate includes byte-for-byte comparison of regenerated and committed configurations, the six family counts and settings, both viscous ASGS step checks and the analysis grouping. `git diff --check` passed.
+- The slow verification suite and the full conservation queue were not run, respecting the Phase 12b-1 unit-scale restriction. Phase 12b-2 remains owner launch only. This follow-up stops after committing the decisions and implementation.

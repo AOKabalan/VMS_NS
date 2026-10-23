@@ -20,7 +20,14 @@ from matplotlib.figure import Figure
 from navier_stokes_vms.config import Config, load_config
 
 ROOT = Path(__file__).resolve().parents[1]
-FAMILIES = ("gresho", "gresho_long", "gresho_refined", "taylor_green")
+FAMILIES = (
+    "gresho",
+    "gresho_visc",
+    "gresho_long",
+    "gresho_refined",
+    "gresho_visc_refined",
+    "taylor_green",
+)
 CLOSURE_LIMIT = 1e-9
 EMAC_VMS_LIMIT = 1e-12
 DEFECT_LIMIT = 1e-9
@@ -58,8 +65,8 @@ def run_scales(initial: Mapping[str, float]) -> Scales | None:
 
 
 def family(run_name: str) -> str:
-    """gresho_long and gresho_refined before gresho; taylor_green for the periodic runs."""
-    for prefix in ("gresho_long", "gresho_refined", "gresho", "taylor_green"):
+    """Match the most specific family first, including the viscous refined Gresho run."""
+    for prefix in sorted(FAMILIES, key=len, reverse=True):
         if run_name.startswith(f"{prefix}_"):
             return prefix
     raise ValueError(f"run {run_name!r} belongs to no conservation family")
