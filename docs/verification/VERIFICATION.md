@@ -1,3 +1,64 @@
+**Phase 12b-0 — conservation-run spec and plan — 23 October 2026**
+
+Checked the revised 23-page `~/04_applications/FEops_prep/VMS_masters_thesis/chapter5_preview.pdf` before work: SHA-256 `c4995958c5e410591261f676aae661f5854def033feb534dc930e40668491784` matches the owner reference. Read the chapter, README, plan rules/Phase 12, formulation spec and final Phase 12a log. The supplied change list has SHA-256 `47c80d9a72f09bf151c9dea792752d1244b75214230f1ff20512103a039c205f`; the renumbering note has SHA-256 `a30a226c01e4ed331243ce46f6691cb0274ad5bad61dd76cf44478c691663eec`. Both source documents are retained unchanged.
+
+**Verdict: the added Gresho and momentum-budget equations pass; Phase 12b-1 is blocked by its finite exact-τ Jacobian requirement at a=0.** The authorized positive-viscosity fallback does not remove that nondifferentiability. The relative analysis scales also need definition, including zero initial momentum and zero predicted defects. Neither an alternative derivative nor an analysis normalization has been selected in code.
+
+Applied the document additions and the 55-run plan only. No source, test, configuration or runner changes; no run-matrix simulation or access to repository `results/`. A process check saw no matching simulation/validation/MPI process, but the owner's queue was assumed active. Independent algebra was supplemented by a symbolic radial check and four 8×8 residual/Jacobian assemblies using the existing solver, all under `/tmp` with OMP_NUM_THREADS=1. Required lint and full-unit checks are recorded in the progress log.
+
+Notation: u=u_h, s=ũ, χ=χ_N; Dχ(w)=(div u,w)−χ(s,∇w)_h; φ=e_k×x (φ=(−y,x) in 2D). All discrete products use the common quadrature.
+
+| Item | Spec says | Source says / independent derivation | Agree / Disagree | Note |
+| --- | --- | --- | --- | --- |
+| K01 — source and numbering | Use the new 23-page PDF; fixed-coupling tables are 5.2–5.3. | Checked chapter pp. 9–12 (§5.7), 12–17 (§5.8), 18 (Tables 5.2–5.4), and 19–21 (§5.10). Definition 5.1 is unchanged in name. | Agree | New and historical references are explicitly separated. |
+| K02 — Gresho divergence | u=v(r)e_θ, with v=5r, 2−5r, 0. | In Cartesian form u=g(r)(−y,x), so div u=−y g′x/r+x g′y/r=0. The central branch is smooth and divergence-free at r=0. | Agree | Both interface velocity jumps vanish; there is no distributional normal-flux jump. |
+| K03 — Euler balance and forcing | f=0, steady Euler reference in all three regions. | (u·∇)u=−v²e_r/r. The listed pressure gives p′=25r, 25r−20+4/r, 0, respectively, equal to v²/r. | Agree | The radial symbolic residual is exactly zero in each region. Velocity and pressure continuity exclude interface delta terms in the Euler equation. |
+| K04 — pressure continuity | C₂=−12.5b²+20b−4ln b; C₁=C₂−20a+4ln a, a=1/5, b=2/5. | Substitution gives p_mid(b)=0=p_out(b) and p_in(a)=p_mid(a); p′ also matches at both radii. | Agree | Additive gauge handled separately by existing physical-pressure error normalization. |
+| K05 — vorticity | 10, 2/r−10, 0. | ω=(rv)′/r=v′+v/r gives the three values. At the center u=(−5y,5x) gives ω=10 directly. | Agree | Vorticity jumps are allowed; continuous velocity gives no delta sheet in its first derivative. |
+| K06 — momentum budget and midpoint | M_k=(u+χ_A s,e_k); r_M,k=(M_kⁿ⁺¹−M_kⁿ)/δt+D_k−F_k. | Test the resolved equation with (v,q)=(e_k,0). Every derivative of v vanishes. CN uses 2(ū−uⁿ)/δt=(uⁿ⁺¹−uⁿ)/δt for each scale, so the mass contribution is exactly the endpoint difference of M. | Agree | D is the actual form including any outflow term. Valid for all six forms and both splittings at convergence. No energy-style discrete product rule is needed. |
+| K07 — ASGS and OSS moments | Include s for ASGS, omit it for OSS. | ASGS retains (D_t s,e_k). OSS omits that term in its assembled equation; matched weighted projection also gives (s,e_k)=0 on the whole periodic domain. Midpoint extrapolation preserves this cancellation from zero initial s. | Agree | Omitting s from the ASGS budget is incorrect. Keep the old resolved-only linear_momentum diagnostic unchanged. |
+| K08 — boundary reaction and sign | Periodic r_M=0; with Dirichlet walls r_M is the consistent reaction and is only reported. | Partition a constant FE test into free and boundary-node contributions. The free residual vanishes; the remaining boundary residual sums to F_h(e_k)=r_M,k. In the smooth balance this sign is ∫σn, force on the fluid. | Agree | This is a residual-defined reaction, not the existing fluid-on-body stress integral. Zero wall velocity does not make a constant test admissible or the reaction zero. |
+| K09 — inviscid parameters | At ν=0, a=0: τ_m=∞, τ_t=δt/α₀, τ_c=0. | With β=C₁ν/h²+C₂|a|/h, the finite combinations are τ_m⁻¹=β, τ_t=(α₀/δt+β)⁻¹, τ_c=h²β/C₁. | Agree, locally | τ_c is generally nonzero in the moving interior. Finite coefficients do not imply a differentiable exact-τ residual or a full-rank zero-weight OSS pressure projection. |
+| K10 — finite Jacobians and fallback | Phase 12b-1 requests finite frozen- and exact-τ Jacobians; ν=10⁻⁶ is the fallback. | Exact differentiation of |a| is undefined at zero. Existing 8×8 Gresho assembly has a finite residual and frozen Jacobian at both ν=0 and 10⁻⁶, but 252 non-finite exact-Jacobian entries at each viscosity. | Disagree / gate | K-D1. No regularization or generalized derivative is authorized. The existing rest-state unit test explicitly expects exact-τ failure. |
+| K11 — predicted momentum defects | Add Tables 5.2–5.3 predictions using Dχ. | Integration by parts gives D_nc(e_k)=−Dχ(u_k). For angular momentum, with J=(s,(u·∇)φ), D_nc(φ)=−Dχ(u·φ)+(χ−1)J and D_c(φ)=(χ−1)J. Skew forms halve the divergence term. EMAC adds χ(s,(φ·∇)u); its linear-momentum prediction is χ(s,∂_k u). | Agree | This reproduces every momentum entry. Minimal symmetric stress gives zero rigid-test contributions. Periodicity cancels linear, not angular, fluxes. |
+| K12 — Gresho monitors | Report norms in max(|x|,|y|)≥0.45; do not enforce a zero strip. | The exact support r≤0.4 misses this frame, but interpolation, time evolution and subscales need not retain an exactly empty strip. | Agree | Region norms and wall reactions qualify drift interpretation. No automatic conservation assertion follows from initial support. |
+| K13 — consistent splitting scope | No new consistent-splitting implementation. | Lemma 5.3 gives c_c(a;s,v)=−(s,(a·∇)v). However the natural conservative residual (5.25) adds (div U)u to the implemented residual. | Agree with qualification | “Coincides” in change-list §C.3 is true for the resolved convective expression, not the full discrete scheme. The plan says so; no existing equation changes. |
+| K14 — matrix | Four families, 24+5+2+24 configurations. | Independent enumeration gives 55 runs and 10,200 steps. TG is fully periodic in its existing case builder. | Agree | No periodic angular diagnostics; retain the prescribed tolerances and failed configurations. Costs await authorized prefixes after the gate. |
+| K15 — relative reports | Relative budgets, relative defect differences, and drifts relative to initial values. | The decisions do not define the scale/floor. Gresho's exact initial linear momentum is zero by odd symmetry, as is periodic Taylor–Green's. EMAC–VMS predictions are identically zero. | Undefined / owner decision | Dividing by these references is not a valid relative error. K-D2; no denominator is silently chosen. |
+
+**Disagreements and open definitions**
+
+**K-D1 — finite exact-τ Jacobian at rest.** Write λ=α₀/δt+C₁ν/h²>0 and c=C₂/h>0. Then τ_t(a)=1/(λ+c|a|), and
+
+```latex
+\frac{\tau_t(\varepsilon b)-\tau_t(0)}{\varepsilon}
+=-\frac{c\,|\varepsilon|\,|b|}
+        {\varepsilon\,\lambda(\lambda+c|\varepsilon|\,|b|)}.
+```
+
+The two one-sided limits have opposite signs. Positive viscosity changes λ, but does not create a derivative. τ_c also contains a nonzero multiple of |a|. The actual assembled composite residual could have additional cancellations at particular states, but the currently specified automatic derivative evaluates the norm derivative at zero, and the requested Gresho initial state exposes non-finite entries.
+
+The probe `/tmp/vms_phase12b_tau_probe.py` constructs only the piecewise initial velocity, zero forcing and four homogeneous walls, using the existing TimeStepper: 8×8 P1/P1, stress form, dynamic linear ASGS, default skew-1, dt=0.005, first BDF1 solve level. It initializes the solver and assembles the unmodified residual and boundary-conditioned Jacobian; it performs no time solve. Results in `/tmp/vms_phase12b_tau_probe.log`:
+
+| ν | τ Jacobian treatment | Residual finite | Jacobian finite | Non-finite matrix entries |
+| --- | --- | --- | --- | --- |
+| 0 | frozen | yes | yes | 0 |
+| 0 | exact | yes | no | 252 |
+| 10⁻⁶ | frozen | yes | yes | 0 |
+| 10⁻⁶ | exact | yes | no | 252 |
+
+The spec's existing Inner linearization section and `tests/unit/test_asgs_solver.py::test_start_from_rest_handles_the_tau_derivative` already document this limitation. The run matrix uses frozen τ, so this conflict does not require changing its chosen method. Recommended owner resolution: require finite frozen-τ Gresho steps and diagnostics, retain an explicit expected-failure check for exact τ at rest, and test exact Jacobians only at states with nonzero advection speed. Alternatively, an owner-specified regularization or generalized derivative would change the iteration and require its own spec decision. Nothing in this pass implements either alternative. A complete ν=0 step (including OSS and diagnostics) remains pending; finite ASGS assembly alone does not settle the final viscosity choice.
+
+**K-D2 — undefined relative scales.** Before implementing the requested relative analysis, specify the budget/defect normalization and the zero-reference rule for drifts. In particular, (M(t)−M(0))/M(0) is undefined for the exact initial linear momentum in both families, and a relative measured/predicted error cannot divide by the EMAC–VMS zero prediction. Choosing a unit floor, an absolute-error fallback, or a characteristic physical scale gives different reported diagnostics; the supplied decisions select none. Existing absolute budget equations remain unambiguous and unchanged.
+
+**Other qualifications, without new equations.** The positive-viscosity fallback keeps the Euler fields as references rather than exact viscous solutions: in the annulus Δu=(v″+v′/r−v/r²)e_θ=−2e_θ/r², so their unforced viscous residual is nonzero. The near-wall τ_c=0 assertion is local to a=0. The conservative consistent-splitting comparison in §C.3 is restricted to its resolved convective expression, as in chapter Remark 5.8; its residual is different.
+
+**Chapter issues**
+
+No new chapter equation issue is needed to explain these blockers: K-D1 is a conflict between the implementation acceptance test and the already acknowledged norm derivative; K-D2 is missing analysis normalization. The renumbered Definition 5.1 and Tables 5.2–5.3 retain the verified equations. This pass does not reopen the owner's two Phase 11b prose corrections or edit the chapter.
+
+---
+
 **Phase 11b — minimal EMAC–VMS closure and conservation corrections — 23 October 2026**
 
 Reviewed the revised 19-page `~/04_applications/FEops_prep/VMS_masters_thesis/chapter5_preview.pdf` after first checking its SHA-256: `720be75921b3956325668b85cac1641428b0fb626e9e4ca4bf67e5d248b014bc`, exactly the supplied value. Applied items 1–5 of `docs/phase11b_spec_changes.md`, SHA-256 `4bb90f5d7784b6d6253bff03ba53ef71e10a5a092e3e886d2cec07b1308729e2`, including the explicit owner decisions. The resulting `docs/formulation_spec.md` has SHA-256 `f7912ddf478fc276284a061b7d66123b8102ce7dd1d7269e4fcab059c1b339b0`. The supplied change list is retained unchanged. The chapter's equations were re-derived, not accepted on agreement with the change list. PDF pages 12–13 were also inspected as rendered images.

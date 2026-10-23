@@ -301,7 +301,9 @@ Initial data: ũ⁰ = 0, which also satisfies the initial orthogonality OSS need
 
 ## Convective forms (Chapter 5)
 
-These sections specify Chapter 5 of the thesis (revised chapter5\_preview.pdf, 19 pages, SHA-256 720be75921b3956325668b85cac1641428b0fb626e9e4ca4bf67e5d248b014bc): five convective forms, EMAC–VMS, and the conservation checks; numbers (5.x) refer to that chapter.
+These sections specify Chapter 5 of the thesis (revised chapter5\_preview.pdf, 23 pages, SHA-256 c4995958c5e410591261f676aae661f5854def033feb534dc930e40668491784): five convective forms, EMAC–VMS, and the conservation checks; numbers (5.x) refer to that chapter.
+
+The master formulation uses the fixed coupling discussed in chapter §5.7: its common subscale convective coupling is exactly the conservative form's fine-scale part (Lemma 5.3). Minimal EMAC–VMS is the separate replacement in §5.8.
 
 Index convention. The chapter defines (∇v)ᵢⱼ = ∂ᵢvⱼ; UFL's grad uses the transpose, grad(v)\[i, j\] = ∂vᵢ/∂xⱼ. Implement every term from the table below, never by transcribing a chapter formula into UFL letter by letter; test U10 catches a swapped convention.
 
@@ -334,7 +336,7 @@ c_{E}(a;u,v) &= (2(\nabla^s u)\, a,\, v) + ((\nabla\cdot a)\, u,\, v)
 | EMAC | emac | None | Yes | (a·∇)u\_h + (∇u\_h)u\_h | P\_h |
 | EMAC–VMS | emac\_vms | None | No | (a·∇)u\_h + (∇u\_h)u\_h | P\_h |
 
-Outflow terms (ours): they give the first four forms the same natural condition, ν∂\_n u − p n = 0, or (2ν∇ˢu − p I)n = 0 with stress viscosity. The EMAC resolved operator is a volume form, so its natural condition comes from the viscous and pressure terms: ν∂\_n u − P n = 0, or (2ν∇ˢu − P I)n = 0 with stress viscosity. For EMAC–VMS, −(T̃, ∇ˢv) would add −T̃n to the traction if the subscale had a trace; under the zero-subscale-boundary convention T̃n = 0, and the condition is that of stress-form EMAC (chapter Remark 5.12). In physical pressure it is (2ν∇ˢu − p I)n + ½|u|²n = 0. Results on outflow problems carry this difference.
+Outflow terms (ours): they give the first four forms the same natural condition, ν∂\_n u − p n = 0, or (2ν∇ˢu − p I)n = 0 with stress viscosity. The EMAC resolved operator is a volume form, so its natural condition comes from the viscous and pressure terms: ν∂\_n u − P n = 0, or (2ν∇ˢu − P I)n = 0 with stress viscosity. For EMAC–VMS, −(T̃, ∇ˢv) would add −T̃n to the traction if the subscale had a trace; under the zero-subscale-boundary convention T̃n = 0, and the condition is that of stress-form EMAC (chapter Remark 5.14). In physical pressure it is (2ν∇ˢu − p I)n + ½|u|²n = 0. Results on outflow problems carry this difference.
 
 Divergence of the subscale. With a = u\_h + ũ, skew-symmetric 2 and EMAC need ∇·ũ, which stored point values cannot provide. Following chapter Remark 5.3, this spec takes as the definition
 
@@ -352,7 +354,7 @@ Under Crank–Nicolson, p\_h^(n+½) = P\_h^(n+½) + ½|ū\_h|² with ū\_h = (
 
 Viscous form. Two options: "laplacian" (default), ν(∇u\_h, ∇v\_h) with L\_ν v = νΔ\_h v; and "stress", 2ν(∇ˢu\_h, ∇ˢv\_h) with L\_ν v = 2ν∇·(∇ˢv) element by element. L\_ν enters L\_a and L\*\_a in place of νΔ\_h; it is formally self-adjoint, with the same element-boundary convention. Thus the residual contains +L\_ν u\_h and the adjoint coupling contains −(ũ, L\_ν v\_h). The stress form is required for angular-momentum checks (chapter §5.4: the Laplacian form adds ν∫(∇×u\_h)\_k) and for EMAC–VMS; its natural outflow condition uses p for the first four forms and P for EMAC and EMAC–VMS, as above. Forces always use the physical σ = −p I + ν(∇u + ∇uᵀ). The U5 eigenvalue check must also pass for the stress form on the test meshes.
 
-Linearization. EMAC and EMAC–VMS use Newton only, with no Picard warm-up in Phase 12a. The standard and symmetric Picard variants of chapter §5.7.7 are deferred: freezing an advector alone does not linearize the kinetic-pressure term or the substituted stress. Any future warm-up must specify its symmetric affine equation, for example (5.38) for c\_E and a fully lagged subscale in T̃. The other forms keep Newton and Picard as before; Picard freezes a in c and in the ∇·a pairing.
+Linearization. EMAC and EMAC–VMS use Newton only, with no Picard warm-up in Phase 12a. The standard and symmetric Picard variants of chapter §5.8.6 are deferred: freezing an advector alone does not linearize the kinetic-pressure term or the substituted stress. Any future warm-up must specify its symmetric affine equation, for example (5.42) for c\_E and a fully lagged subscale in T̃. The other forms keep Newton and Picard as before; Picard freezes a in c and in the ∇·a pairing.
 
 ## EMAC–VMS (chapter Definition 5.1)
 
@@ -369,7 +371,7 @@ Resolved equation, for all v\_h, q\_h, at the solve level:
 
 Compared with the master formulation, c(a; u\_h, v\_h) becomes c\_E(u\_h; u\_h, v\_h), with advection velocity u\_h, and the convective subscale coupling −(ũ, (a·∇)v\_h) becomes −(T̃, ∇ˢv\_h). The standard convective coupling must not be added as well.
 
-Minimal subgrid stress and residual, with χ\_N = 1 for nonlinear and 0 for linear splitting (chapter (5.23), (5.26), (5.32)):
+Minimal subgrid stress and residual, with χ\_N = 1 for nonlinear and 0 for linear splitting (chapter (5.27), (5.30), (5.36)):
 
 ```latex
 \begin{aligned}
@@ -383,7 +385,7 @@ There is no isotropic subgrid stress. The resolved equation uses P\_h, but the r
 
 The velocity subscale is the master relation ũ = τ\_t (R\_u + χ\_D ũ\_hist/δt − ξ\_h), with τ evaluated at a = u\_h + χ\_Nũ; ξ\_h, ζ\_h and the switches χ\_A, χ\_D are as for the other cases. There is no new local solve. Step 3 is the master accelerated update with G = grad(u\_h) in the UFL convention and physical p\_h as above, including its singularity and OSS-orthogonality qualifications.
 
-Define G(v) = c\_E(u\_h; u\_h, v) − (T̃, ∇ˢv). For one common subscale field its equivalent expansion (5.28) is
+Define G(v) = c\_E(u\_h; u\_h, v) − (T̃, ∇ˢv). For one common subscale field its equivalent expansion (5.32) is
 
 ```latex
 G(v)=c_E(u_h;u_h,v)-\big(\tilde u,(a\cdot\nabla)v+(\nabla v)u_h\big).
@@ -401,15 +403,15 @@ The second term is `inner(us, dot(grad(v), a) + dot(uh, grad(v)))` in UFL. The e
 \end{aligned}
 ```
 
-It uses 2(∇ˢu\_h)u\_h = (u\_h·∇)u\_h + (∇u\_h)u\_h and ũ·(∇ˢu\_h)ũ = ũ·(ũ·∇)u\_h. With c\_E(u\_h; u\_h, u\_h) = 0 under the energy-flux conditions below, G(u\_h) + (ũ, N) = 0, giving (5.31). Also ∇ˢe\_k = ∇ˢφ = 0 for φ = e\_k × x, so the subgrid stress gives zero force and torque for arbitrary point values of ũ, without a bubble assumption. The resolved EMAC contribution is boundary fluxes only; with u\_h zero on the boundary, G(e\_k) = G(φ) = 0. These algebraic statements do not by themselves supply admissible tests for the solved momentum equations.
+It uses 2(∇ˢu\_h)u\_h = (u\_h·∇)u\_h + (∇u\_h)u\_h and ũ·(∇ˢu\_h)ũ = ũ·(ũ·∇)u\_h. With c\_E(u\_h; u\_h, u\_h) = 0 under the energy-flux conditions below, G(u\_h) + (ũ, N) = 0, giving (5.35). Also ∇ˢe\_k = ∇ˢφ = 0 for φ = e\_k × x, so the subgrid stress gives zero force and torque for arbitrary point values of ũ, without a bubble assumption. The resolved EMAC contribution is boundary fluxes only; with u\_h zero on the boundary, G(e\_k) = G(φ) = 0. These algebraic statements do not by themselves supply admissible tests for the solved momentum equations.
 
 Assembly and iteration (owner decision). Build T̃ directly as `outer(us_expr, uh) + outer(uh, us_expr) + chiN*outer(us_expr, us_expr)`, with the substituted subscale expression in every slot, and differentiate through it for Newton. In the residual and τ only, keep the master's stored advector a\* = u\_h + χ\_Nũ\*. The resolved c\_E uses u\_h alone. Do not assemble the expanded coupling with a\*: it mixes ũ\_expr and ũ\* and need not give a symmetric stress during iteration. The expansion is an algebraic test with one common ũ.
 
-T̃ and its Newton derivative are symmetric at every iterate. The substituted stress is nonlinear in u\_h; it would be affine if the subscale were fully lagged (chapter Remark 5.9). Symmetry removes the convective force/torque contribution, up to resolved EMAC fluxes, at every Newton iterate and in its linearization (Proposition 5.10). Full momentum balances, including the ASGS subscale time term, and the energy balance require convergence of the coupled iteration. In particular, the energy cancellation uses the same ũ in T̃ and a, as obtained at outer convergence. The optional matrix-weighted projection described in the master algorithm is outside Phase 12.
+T̃ and its Newton derivative are symmetric at every iterate. The substituted stress is nonlinear in u\_h; it would be affine if the subscale were fully lagged (chapter Remark 5.11). Symmetry removes the convective force/torque contribution, up to resolved EMAC fluxes, at every Newton iterate and in its linearization (Proposition 5.12). Full momentum balances, including the ASGS subscale time term, and the energy balance require convergence of the coupled iteration. In particular, the energy cancellation uses the same ũ in T̃ and a, as obtained at outer convergence. The optional matrix-weighted projection described in the master algorithm is outside Phase 12.
 
 Linear splitting (χ\_N = 0): T̃ = ũ⊗u\_h + u\_h⊗ũ and a = u\_h in the residual. The same pointwise energy identity holds without the quadratic term. The subscale is an expression throughout, and no outer loop is needed.
 
-Consistency (Proposition 5.6). At ũ = 0 this is exactly resolved EMAC. Under the chapter's zero-trace model, comparison with the standard nonlinear convective coupling gives a difference ((∇·U)u\_h, v) + (½∇|u\_h|², v), up to boundary fluxes, with U = u\_h + ũ. Pointwise ∇·U = 0 removes the first term and a continuous pressure change absorbs the second. This compares convective forms, not discrete schemes: the continuity equation imposes only orthogonality of ∇·U to Q\_h, and ½|u\_h|² generally does not belong to Q\_h.
+Consistency (Proposition 5.8). At ũ = 0 this is exactly resolved EMAC. Under the chapter's zero-trace model, comparison with the standard nonlinear convective coupling gives a difference ((∇·U)u\_h, v) + (½∇|u\_h|², v), up to boundary fluxes, with U = u\_h + ũ. Pointwise ∇·U = 0 removes the first term and a continuous pressure change absorbs the second. This compares convective forms, not discrete schemes: the continuity equation imposes only orthogonality of ∇·U to Q\_h, and ½|u\_h|² generally does not belong to Q\_h.
 
 ## Conservation checks
 
@@ -421,7 +423,7 @@ Defect functionals, assembled from the forms actually used by the code:
 - Angular momentum: D\_φ = c(a; u\_h, φ) − (ũ, (a·∇)φ), with φ = e\_k × x (2D: φ = (−y, x)); for EMAC–VMS, G(φ).
 - Total convective energy defect: 𝒩 = c(a; u\_h, u\_h) + (ũ, N − (a·∇)u\_h) for the first five forms; for EMAC–VMS, 𝒩 = G(u\_h) + (ũ, N). Include the selected outflow term in c.
 
-Their interior predicted values are chapter Tables 5.1 and 5.2 (zero in every column for minimal EMAC–VMS), with the divergence pairing for the selected splitting. In particular, writing D\_χ(w) = (∇·u\_h, w) − χ\_N(ũ, ∇w), the energy column is:
+Their interior predicted values are chapter Tables 5.2 and 5.3 (zero in every column for minimal EMAC–VMS), with the divergence pairing for the selected splitting. In particular, writing D\_χ(w) = (∇·u\_h, w) − χ\_N(ũ, ∇w), the energy column is:
 
 | Form | Nonlinear splitting | Linear splitting |
 | --- | --- | --- |
@@ -433,13 +435,25 @@ Their interior predicted values are chapter Tables 5.1 and 5.2 (zero in every co
 
 Here the argument of D\_χ is the scalar u\_h·u\_h. The resolved-scale EMAC production (ũ, ω\_h × u\_h) is a different quantity (Proposition 5.3), not 𝒩.
 
+Predicted momentum defects. Report these alongside the measured `linear_momentum_defect` and `angular_momentum_defect`, using the same solve-level fields and common quadrature. Write w = u\_h·φ and J = (ũ, (u\_h·∇)φ); in 2D φ = (−y, x) and J = ∫(u\_h,1 ũ₂ − u\_h,2 ũ₁). The chapter's Tables 5.2 and 5.3 give:
+
+| Form | D\_k, nonlinear | D\_φ, nonlinear | D\_k, linear | D\_φ, linear |
+| --- | --- | --- | --- | --- |
+| Non-conservative | −D\_1(u\_h,k) | −D\_1(w) | −D\_0(u\_h,k) | −D\_0(w) − J |
+| Conservative | 0 | 0 | 0 | −J |
+| Skew-symmetric 1 or 2 | −½D\_1(u\_h,k) | −½D\_1(w) | −½D\_0(u\_h,k) | −½D\_0(w) − J |
+| EMAC | (ũ, ∂\_k u\_h) | (ũ, (φ·∇)u\_h) | 0 | −J |
+| EMAC–VMS | 0 | 0 | 0 | 0 |
+
+The boundary qualifications below also apply to these predictions. Use matching subscales after convergence; during nonlinear iteration the stored advector and substituted subscale can differ.
+
 Boundary scope. With u\_h = 0 on all of ∂Ω, all convective fluxes vanish, including for arbitrary quadrature-point ũ. On periodic domains the linear-momentum and energy fluxes cancel, but the angular-momentum fluxes generally do not: φ is not periodic. Use the explicit boundary corrections in the Phase 11a verification (H-D1) otherwise; the corrections are unchanged by the minimal stress. Run angular-defect checks only with zero boundary u\_h or compactly supported flows. For full momentum balances, use a strip of elements in which the solution and subscales vanish, as in the compact Gresho setting, so admissible cutoff tests reproduce e\_k and φ on the active region; account for imposed forces, wall reactions or fluxes if they remain. Homogeneous velocity data alone do not make rigid tests admissible.
 
 OSS moments. The identities ∫ũ = 0 and ∫x × ũ = 0 apply on the whole domain only when the corresponding rigid test belongs to the unconstrained projection space, not on arbitrary patches. In particular φ is not in a periodic projection space. These cancellations require matched converged states; do not use them during unmatched local sweeps.
 
 Variable τ. Chapter assumption (A2), constant τ, is unnecessary for this weighted model (Remark 5.6). Matched τ-weighted velocity projection gives (ũ, ξ\_h) = 0, and the pressure projection gives (τ\_c(d − ζ\_h), ζ\_h) = 0, where d = ∇·u\_h. Therefore (τ\_c(d − ζ\_h), d) = (τ\_c(d − ζ\_h), d − ζ\_h) ≥ 0 with positive quadrature. ASGS uses ξ\_h = ζ\_h = 0 and requires no projection or constant-τ assumption. This variable-weight formulation is not obtained by multiplying an unchanged unweighted OSS projector by a variable τ.
 
-Crank–Nicolson closure. For dynamic subscales, from step 2 onward, use the one-leg midpoint scheme for both scales, fixed FE spaces and quadrature, and the energy-flux/test conditions above. At a converged step let ū, s̄, P̄ (or p̄), ζ̄ and τ̄ be the solve-level fields; let uⁿ, sⁿ and uⁿ⁺¹, sⁿ⁺¹ be the endpoint states. The exact discrete counterpart of (5.20), or (5.31) for EMAC–VMS, is
+Crank–Nicolson closure. For dynamic subscales, from step 2 onward, use the one-leg midpoint scheme for both scales, fixed FE spaces and quadrature, and the energy-flux/test conditions above. At a converged step let ū, s̄, P̄ (or p̄), ζ̄ and τ̄ be the solve-level fields; let uⁿ, sⁿ and uⁿ⁺¹, sⁿ⁺¹ be the endpoint states. The exact discrete counterpart of (5.20), or (5.35) for EMAC–VMS, is
 
 ```latex
 \begin{aligned}
@@ -459,15 +473,34 @@ r&=\mathrm{rate}+\mathcal D+\mathcal N_{\rm pred}-\mathrm{power}=0,\\
 
 Here a\_ν(u,u) is ν‖∇u‖² or 2ν‖∇ˢu‖². Every term of 𝒟 and 𝒩 is evaluated at the midpoint, and f̄ is the prescribed endpoint-average force. The residual r must vanish for every convective form, including those with nonzero 𝒩. Equivalently Eⁿ⁺¹ − Eⁿ + δt(𝒟 − power) = −δt𝒩. Do not replace τ\_m by τ\_t in the dissipation. The viscous cross term has coefficient −2. The weighted pressure term above is the implemented meaning of the chapter's (τ\_c P̃(d), d).
 
-The BDF1 startup is excluded from this midpoint check: it adds ‖Δ(u+s)‖²/(2δt) for ASGS or (‖Δu‖² + ‖Δs‖²)/(2δt) for OSS. BDF2 has a two-level modified-energy identity; no general analogous dissipation claim is made for BDF3 (Remark 5.10). A per-step total linear-momentum balance uses the same integrator on u\_h and ũ, or the whole-domain OSS moment cancellation when admissible. With mixed integrators and nonzero subscale moments the tested discrete quantity mixes the two time operators.
+The BDF1 startup is excluded from this midpoint check: it adds ‖Δ(u+s)‖²/(2δt) for ASGS or (‖Δu‖² + ‖Δs‖²)/(2δt) for OSS. BDF2 has a two-level modified-energy identity; no general analogous dissipation claim is made for BDF3 (Remark 5.12). A per-step total linear-momentum balance uses the same integrator on u\_h and ũ, or the whole-domain OSS moment cancellation when admissible. With mixed integrators and nonzero subscale moments the tested discrete quantity mixes the two time operators.
 
 Diagnostics must retain the existing names and meanings; add these defect and budget quantities alongside them. Capture the old endpoint before shifting history and keep solve-level and endpoint state explicit, particularly for midpoint pressure, dissipation and power. Algebraic defects may be computed at arbitrary matching fields; the per-step closure is a solved-equation check.
 
-Required Chapter 5 tests (implementation deferred to Phase 12a):
+Momentum budget (`momentum_budget`). As for `energy_budget`, accept it only for Crank–Nicolson with dynamic VMS subscales and leave the BDF1 startup columns blank. From step 2, for each component k, define
+
+```latex
+\begin{aligned}
+M_k^j &= (u_h^j+\chi_A\tilde u^j,e_k)_h,\\
+\mathrm{rate}_{M,k} &= (M_k^{n+1}-M_k^n)/\delta t,\\
+D_k &= c(\bar a;\bar u_h,e_k)
+       \quad\text{or }G(e_k)\text{ for EMAC--VMS},\\
+F_k &= (\bar f,e_k)_h,\qquad
+r_{M,k}=\mathrm{rate}_{M,k}+D_k-F_k.
+\end{aligned}
+```
+
+M uses endpoint fields; D and F use the converged solve-level fields, with the same endpoint-average forcing as the equation. D is the actual assembled defect, including the selected outflow term, rather than its interior prediction. The ASGS subscale moment must be included; OSS uses only the resolved moment, as in its discrete equation. Retain the existing `linear_momentum` diagnostic's resolved-velocity meaning.
+
+Since derivatives of e\_k vanish, the viscous, pressure, pressure-subscale and viscous-subscale terms contribute zero. On periodic domains e\_k is admissible, so r\_M = 0 to solve tolerance. With Dirichlet walls it is not admissible: r\_M is the consistent boundary reaction, defined by evaluating the unmodified velocity residual on the constant extension of the prescribed boundary test. Equivalently it is the sum of the residual reactions at constrained velocity degrees of freedom, up to the remaining free-equation residual. Its sign is the force on the fluid. It is reported, not asserted to vanish. It need not equal the negative of the existing `force` diagnostic, which evaluates the physical stress traction directly and reports fluid-on-body force. Homogeneous boundary data alone do not remove reactions.
+
+Monitor-region diagnostics (`region_velocity_l2`, `region_subscale_l2`). An optional case-supplied region in `Problem` defines R\_monitor; requesting either norm without that region is invalid. Report √∫\_Rmonitor|u\_h|² and √∫\_Rmonitor|ũ|², using the common quadrature and the same velocity/subscale time levels as the existing kinetic-energy diagnostics. The subscale norm requires VMS. These are observations of the zero-strip assumption, not constraints on the fields or conservation assertions.
+
+Required Chapter 5 tests (implemented in Phase 12a):
 
 | Test | Requirement |
 | --- | --- |
-| T1 | Stress and expansion (5.28) give identical G(v) for random u\_h and one common arbitrary quadrature-point ũ, for both splittings. |
+| T1 | Stress and expansion (5.32) give identical G(v) for random u\_h and one common arbitrary quadrature-point ũ, for both splittings. |
 | T2 | With zero boundary u\_h, G(e\_k), G(φ) and G(u\_h) + (ũ,N) vanish, including nonzero ũ at boundary-adjacent quadrature points. No bubble assumption is needed for these algebraic tests. |
 | T3 | T̃ : ∇ˢu\_h = ũ·N pointwise, with χ\_N on the quadratic contraction. |
 | T4 | Setting ũ = 0 gives G(v) = c\_E(u\_h;u\_h,v). |
@@ -476,28 +509,75 @@ Required Chapter 5 tests (implementation deferred to Phase 12a):
 
 Relation to the thesis chapter. The index-convention table and divergence pairing specify the discrete interpretation of the chapter. For degree k the bound is τ\_m ≤ h²/(c1·k⁴·ν); the chapter's c1 > 2C²\_inv (Laplacian) and c1 > 4C²\_inv (stress) are sufficient conditions with c1 replaced by c1·k⁴, while U5 checks positivity directly on the test meshes. The master's local solvability and unmatched-sweep orthogonality limitations apply also to minimal EMAC–VMS.
 
+## Gresho vortex (Phase 12b)
+
+Domain Ω = (−0.5, 0.5)², built-in triangular mesh, no-slip on all four walls, zero forcing, and the constant-pressure null space active. All four walls are force boundaries. Set the initial velocity to the interpolated exact Euler velocity below; the reference fields are steady for every t. With r = √(x²+y²),
+
+```latex
+u_\theta(r)=
+\begin{cases}
+5r,& r<0.2,\\
+2-5r,&0.2\le r<0.4,\\
+0,&r\ge0.4,
+\end{cases}
+\qquad
+u(x,y)=
+\begin{cases}
+(-5y,5x),&r<0.2,\\
+u_\theta(r)(-y/r,x/r),&r\ge0.2,
+\end{cases}
+```
+
+```latex
+p(r)=
+\begin{cases}
+12.5r^2+C_1,&r<0.2,\\
+12.5r^2-20r+4\ln r+C_2,&0.2\le r<0.4,\\
+0,&r\ge0.4,
+\end{cases}
+\quad
+C_2=-12.5(0.4)^2+20(0.4)-4\ln0.4,\quad
+C_1=C_2-20(0.2)+4\ln0.2.
+```
+
+The vorticity ∂₁u₂ − ∂₂u₁ is 10, 2/r − 10, and 0 in the three regions. The pressure is continuous at both interfaces, with p′ = u\_θ²/r; hence ∇·u = 0 and (u·∇)u + ∇p = 0 region by region. Evaluate the central branch without dividing by r. Pressure errors use the physical pressure and its existing separate mean normalization.
+
+Viscosity is ν = 0 by owner decision. Let β = c1·k⁴ν/h² + c2·k|a|/h. In the resting exterior, ν = 0 and a = 0 give β = 0, τ\_m = ∞, τ\_t = (α0/δt + β)⁻¹ = δt/α0 for dynamic subscales, and τ\_c = h²β/(c1·k⁴) = 0. The implemented residual and diagnostics use finite reciprocal/dynamic combinations; a unit-scale check must verify finite residuals, Jacobians and every diagnostic. τ\_c is generally nonzero inside the moving vortex even at ν = 0. If the zero-viscosity case cannot be evaluated without non-finite quantities, the owner authorizes ν = 10⁻⁶, retaining f = 0; record the choice. At positive viscosity the fields above remain Euler reference fields, not an exact steady solution of the unforced viscous problem.
+
+The finite exact-τ Jacobian requirement at a = 0 is unresolved: as specified under Inner linearization, the derivative of |a| is undefined there, including when ν > 0. The Phase 12b-0 verification records the failing unit-scale assembly at both viscosities. No regularization or generalized derivative is authorized by this fallback; resolve the acceptance requirement before Phase 12b-1.
+
+The monitor region is the near-wall frame max(|x|, |y|) ≥ 0.45. Report both region norms and all four wall forces. The exact initial vortex vanishes outside r = 0.4, but the discrete velocity and subscales are not forced to remain zero in the frame. Momentum and angular-momentum drifts must be interpreted with those monitors and reactions, rather than asserted to vanish from the initial support alone.
+
 ## Chapter 5 references
 
-Numbers refer to the revised 19-page PDF identified above; the former isotropic-stress variant is retained in the chapter for comparison and is not implemented.
+Active references use the revised 23-page PDF identified above. The previous column refers to the 19-page Phase 11b PDF (SHA-256 720be75921b3956325668b85cac1641428b0fb626e9e4ca4bf67e5d248b014bc). The full-stress variant is retained in the chapter for comparison and is not implemented.
 
 | Item | Previous chapter | Revised chapter |
 | --- | --- | --- |
-| EMAC–VMS definition | Definition 5.1 | Definition 5.1, minimal closure |
-| Subgrid stress | (5.23) | (5.23), no isotropic part |
-| Residual | (5.26), N\_E | (5.26), N = (a·∇)u\_h + (∇u\_h)u\_h |
-| Linear splitting | (5.29) | (5.32) |
-| EMAC–VMS energy balance | (5.28) | (5.31) |
-| Total balance and corollary | (5.20), Corollary 5.1 | Unchanged |
-| Projection assumption / (A2) | — | Remark 5.6 |
-| Consistency of forms | — | Proposition 5.6 |
-| Momenta, energy, linear splitting, iteration | Propositions 5.6–5.9 | Propositions 5.7–5.10 |
-| Former M\_h variant | Definition 5.1, Remark 5.9 | §5.7.6, (5.33)–(5.35), not implemented |
-| Linearization and eliminated subscale | — | §5.7.7, Remark 5.9 |
-| Time integration | Remark 5.8 | Remark 5.10 |
-| Stabilization | Remark 5.10 | Remark 5.11 |
-| Boundary conditions and pressure | — | Remark 5.12 |
-| Implementation stress matrix | §5.9.3, (5.37) | §5.9.3, (5.41) |
-| Forms, Remarks 5.1–5.3, Lemma 5.2, Tables 5.1–5.2 | (5.3)–(5.7) and stated labels | Unchanged |
+| Fixed coupling versus consistent splitting | Remark 5.2 | Remark 5.2, §5.7, Lemma 5.3 |
+| Consistent-splitting natural residual and defects | — | (5.25)–(5.26), Propositions 5.6–5.7, Table 5.1 |
+| Fixed-coupling defect tables / properties | Tables 5.1–5.3 | Tables 5.2–5.4 |
+| EMAC symmetric stress and identity | S(w): (5.21), Lemma 5.3, (5.22) | S(w): (5.22), Lemma 5.4, (5.23); new identity (5.24) |
+| EMAC–VMS definition | §5.7, Definition 5.1 | §5.8, Definition 5.1, minimal closure |
+| Minimal subgrid stress | (5.23) | (5.27), no isotropic part |
+| Resolved equation and G | (5.24)–(5.25) | (5.28)–(5.29) |
+| Physical-pressure residual | (5.26) | (5.30), N = (a·∇)u\_h + (∇u\_h)u\_h |
+| G as stress and expanded coupling | (5.27)–(5.28) | (5.31)–(5.32) |
+| Consistency of forms | Proposition 5.6, (5.29)–(5.30) | Proposition 5.8, (5.33)–(5.34) |
+| EMAC–VMS energy balance | (5.31) | (5.35) |
+| Linear splitting | (5.32) | (5.36) |
+| Momenta, energy, linear splitting, iteration | Propositions 5.7–5.10 | Propositions 5.9–5.12 |
+| Momentum boundary scope | §5.7.3 | §5.8.2 |
+| Full-stress M\_h variant | §5.7.6, (5.33)–(5.35) | §5.8.5, (5.37)–(5.39), not implemented |
+| Interpretation / eliminated subscale | Remarks 5.8–5.9 | Remarks 5.10–5.11 |
+| Linearization, DS and symmetric Picard | §5.7.7, (5.36)–(5.38) | §5.8.6, (5.40)–(5.42) |
+| Time integration / stabilization | Remarks 5.10–5.11 | Remarks 5.12–5.13 |
+| Boundary conditions and pressure | Remark 5.12 | Remark 5.14 |
+| Summary / implementation | §§5.8–5.9 | §§5.9–5.10 |
+| Implementation Picard / Newton | (5.39)–(5.40) | (5.43)–(5.44) |
+| Implementation stress matrix | §5.9.3, (5.41) | §5.10.3, (5.45) |
+| Forms, continuity and total energy | (5.1)–(5.20), Lemma 5.2, Corollary 5.1 | Unchanged |
+| Projection assumption / (A2) | Remark 5.6 | Unchanged |
 
 ## Errata
 

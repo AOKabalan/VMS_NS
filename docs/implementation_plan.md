@@ -413,7 +413,7 @@ Phase 10a delivers everything below except the long runs: reference data in `dat
 
 ## Phase 12 — Chapter 5
 
-The Phase 11b spec and verification at commit 1fa820d govern this phase. The reference chapter is the 19-page PDF with SHA-256 720be75921b3956325668b85cac1641428b0fb626e9e4ca4bf67e5d248b014bc. Its two prose issues are handled by the owner; no chapter edits belong here. The divergence pairing makes skew-symmetric 2 and EMAC available with nonlinear splitting. The former restriction on those forms is superseded.
+The formulation spec governs this phase. Phase 12a used the Phase 11b spec at commit 1fa820d; Phase 12b updates it against the 23-page chapter PDF with SHA-256 c4995958c5e410591261f676aae661f5854def033feb534dc930e40668491784. docs/chapter5_renumbering.md records the reference changes. No chapter edits belong here. The divergence pairing makes skew-symmetric 2 and EMAC available with nonlinear splitting. The former restriction on those forms is superseded.
 
 ### 12a: implementation and algebraic tests
 
@@ -426,16 +426,51 @@ Four stages, each tested and committed before the next:
 
 Run ruff check, ruff format --check and the unit suite at each stage. Use at most two pytest workers while the validation queue runs (two is also the default for this work). Tests and regression outputs go under /tmp; do not read or write the repository's results/. Run no validation simulations in 12a. The slow verification suite is eligible only once the queue is finished, and its execution must still respect the unit-scale restriction for this phase. A budget stop is allowed only after a tested, committed stage; report the remaining stages.
 
-### 12b: conservation runs (planned, not launched in 12a)
+### 12b: conservation runs
 
-Configuration briefs below are the future files in configs/chapter5/conservation/. A {form} suffix ranges over all six choices; {space} is ASGS or OSS and {split} is linear or nonlinear. Use stress viscosity for the comparison, positive common quadrature, dynamic subscales, and Newton without warm-up for the EMAC variants. Include force power, momentum defects and the midpoint closure residual.
+**12b-0, documents.** Add the Gresho reference, momentum budget, predicted momentum defects and region norms to the spec; independently verify the equations, boundaries, zero-viscosity limits and chapter references. Commit only after ruff check, ruff format check and the full unit suite pass. The Phase 12b-0 verification is a gate: resolve any equation, iteration or diagnostic-definition disagreement before implementation.
 
-| Configuration family | Settings and purpose | Estimated cost on 4 ranks | Queue placement |
-| --- | --- | --- | --- |
-| gresho_{form}_{space}_{split}.toml | 32×32 initial mesh, CN dt=0.005, T=0.5; all three balances. The case must enforce/check a zero strip for the solution and subscales throughout the run, not merely at initialization. Define its forcing and admissible cutoff tests before launching. | Planning allowance 1–10 min each, 24 configs; 0.4–4 h total | After the existing validation queue and a unit-scale check of the strip conditions |
-| taylor_green_{form}_{space}_{split}.toml | Periodic 2D, 32×32 P1/P1, ν=0.01, CN dt=0.005, T=0.5; linear momentum and energy only. No periodic angular-momentum assertion. | Planning allowance 1–10 min each, 24 configs; 0.4–4 h total | After Gresho; shortest measured cost first |
+**12b-1, implementation and unit tests.** Commit each numbered step separately with ruff check, ruff format check and the full unit suite passing. Assume the owner's validation queue is active even when ps cannot see it. Use OMP_NUM_THREADS=1 and at most two pytest workers; every test/probe output goes under /tmp. Do not read or write the repository's results/.
 
-Every configuration checks rate + dissipation + predicted defect − power from step 2 onward, including nonzero predicted defects. Refinement runs (64×64 and halved dt) follow only if the first batch warrants them. The ranges are provisional workload estimates, not measurements of the new formulations; time a short prefix before scheduling full runs.
+1. Add cases/gresho.py with piecewise UFL Euler reference fields, f=0, four no-slip/force walls and the frame max(|x|,|y|)≥0.45. Check divergence, Euler residual, pressure continuity, derived forcing, and a tiny ν=0 step with finite residual, frozen/exact-τ Jacobians and all diagnostics. Use the authorized ν=10⁻⁶ fallback if needed and record it. **Gate question:** exact τ has no derivative at a=0 for either viscosity; the verification records non-finite assembled entries, and no replacement derivative is selected.
+2. Add momentum_budget with the energy_budget restrictions and explicit endpoint/solve-level state; add predicted D_k and D_φ; add both optional-region norms and their validation. Check periodic midpoint momentum closure from step 2 for all 24 form/space/splitting combinations, all predicted defects, a finite Gresho reaction and known region norms. Gresho does not enforce a zero strip.
+3. Generate and commit the exact 55-file matrix below with a small script; test file membership, configuration validity and unique run names. Time approximately ten steps on one core in /tmp for one ordinary Gresho, one long-Gresho and one Taylor–Green configuration. Record measured timings and the extrapolation to the full matrix, including the refined mesh assumption. These prefixes are the only matrix-related simulations authorized for the agent.
+4. Generalize scripts/run_validation_queue.sh to accept a config directory and runner while preserving its default behavior, completion detection, interrupted-folder handling and one-line run logging. Document a tmux command in the README. Test with a temporary dry run.
+5. Add scripts/analyse_conservation.py and test it on a synthetic tree in /tmp. Write per-family CSV/Markdown tables for maximum normalized energy/momentum closure from step 2, measured versus predicted defects, M/L/E drifts, final region norms and wall forces, iterations and failures. Plot long-Gresho energy, both momenta and L² velocity error, one curve per form. **Definition still needed:** the relative scales, and treatment of zero initial moments or zero predicted defects, are not fixed by the supplied decisions; do not invent denominators.
+
+Common settings for all 55 configurations:
+
+| Setting | Value |
+| --- | --- |
+| Elements | P1/P1 |
+| Viscous form | stress |
+| Pressure subscale | on; τ_c-off cases excluded |
+| Velocity subscales | dynamic |
+| Time scheme | Crank–Nicolson with BDF1 startup |
+| Linearization | Newton, no Picard warm-up |
+| newton_tau | frozen |
+| outer_rtol / outer_max_iterations | 1e-11 / 100 |
+| inner_rtol | 1e-12 |
+| subscale_rtol | 1e-13 |
+
+In the matrix, {form} ranges in order over nonconservative, conservative, skew_symmetric_1, skew_symmetric_2, emac, emac_vms; {space} over asgs, oss; and {split} over linear, nonlinear. All files are in configs/chapter5/conservation/, named after their unique run names with the .toml suffix.
+
+| Configuration family | Matrix / count | Mesh and viscosity | Time / steps per run | Diagnostics |
+| --- | --- | --- | --- | --- |
+| gresho_{form}_{space}_{split} | 6 × 2 × 2 = 24 | 32×32; ν=0, or the documented authorized fallback | dt=0.005, T=0.5 / 100 | Gresho set below |
+| gresho_long_{form} | nonconservative, conservative, skew_symmetric_1, emac, emac_vms; OSS nonlinear / 5 | 32×32; same Gresho viscosity | dt=0.01, T=10 / 1000 | Gresho set; Charnyi et al. 2017 Fig. 2 comparison |
+| gresho_refined_emac_vms_{space} | emac_vms, asgs/oss, nonlinear / 2 | 64×64; same Gresho viscosity | dt=0.0025, T=0.5 / 200 | Gresho set |
+| taylor_green_{form}_{space}_{split} | 6 × 2 × 2 = 24 | Existing fully periodic taylor_green_2d, 32×32, ν=0.01 | dt=0.005, T=0.5 / 100 | Taylor–Green set below |
+
+The Gresho diagnostic set includes resolved/subscale kinetic energy, resolved linear/angular momentum, energy_budget, momentum_budget, measured/predicted linear/angular/energy defects, force on all walls, both region norms, velocity/physical-pressure error and divergence. The Taylor–Green set includes resolved/subscale kinetic energy, linear momentum, both budgets, measured/predicted linear/energy defects and velocity error. No angular quantity is requested on the periodic domain.
+
+The matrix contains 10,200 time steps in total: 2400 ordinary Gresho, 5000 long Gresho, 400 refined Gresho and 2400 Taylor–Green. Cost estimates await the authorized prefix measurements in step 3; the former unmeasured 4-rank allowances are superseded, not treated as measurements.
+
+Expected outcomes are reported, never tuned: |r|≤1e-9 times the budget scale for every converged run from step 2; periodic |r_M|≤1e-9 times its scale; EMAC–VMS measured D_k, D_φ and 𝒩≤1e-12 relative; other measured/predicted defects agree to 1e-9 relative. Normalization requires the definition noted in step 5. Preserve nonconverging configurations and iteration counts. For Gresho report M, L, E and velocity-error evolution with wall forces and region norms as context. In ASGS the new momentum budget uses u_h+ũ, while the existing linear_momentum diagnostic continues to report u_h.
+
+**12b-2, owner launch only.** Place this queue after the current validation queue. The owner launches it in tmux using the README command completed in step 4; the agent never launches it. Include every generated configuration, retaining failures. A later authorized phase reads the resulting tree.
+
+**Consistent splitting: no code in this phase.** Chapter §5.7 distinguishes its own natural residual (5.25) from the implemented fixed-coupling residual. For the conservative form the resolved convective expression coincides with fixed coupling, but its natural residual adds (∇·U)u_h; equality of that resolved expression does not equate the full discrete schemes. Consistent non-conservative splitting generally conserves none of the three quantities. Consistent skew splitting needs ∇·ũ in the pointwise residual. Full consistent EMAC convection is the unimplemented full-stress variant in §5.8.5, whose energy-matched subscale model also differs from the natural-residual choice in §5.7. Minimal EMAC–VMS remains Definition 5.1 in §5.8.
 
 ### 12c: stabilization comparison (planned, not launched in 12a)
 
@@ -449,4 +484,4 @@ Use the same mesh, velocity/pressure pair, time scheme, stabilization constants 
 | manufactured_{model}_p{k}_n{n}.toml | Manufactured spatial solution, k=1,2; n=8,16,32; short small-dt runs, physical-pressure and velocity convergence rates | Allow 0.5–2 h for 18 runs; verify temporal error is negligible | Before cylinder, after the cavity comparison |
 | taylor_green_3d_re1600_{model}.toml (optional) | Requires a new 3D case and a separate resolution/time-horizon decision; compare resolved and subscale energy/dissipation | Not responsibly bounded before a unit-scale timing probe; potentially tens of hours | Last, separate optional batch; not part of the current queue |
 
-Do not add these future runs to the active queue or launch them during 12a. Refine costs and finalize the Gresho strip and optional 3D configuration before the respective run phases.
+Do not add these future runs to the active queue or launch them during 12a. Refine costs before each run phase; the Gresho frame is monitored as specified in 12b, and the optional 3D configuration still requires a decision.

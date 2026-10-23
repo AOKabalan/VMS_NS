@@ -1088,3 +1088,31 @@ Deviations from spec or plan:
 Open questions:
 - Should `energy_budget` also cover Galerkin under Crank–Nicolson (ũ = 0), or a BDF2 modified-energy closure? The spec defines neither, and neither was implemented.
 - Planning note for 12b: nonlinear splitting needed many outer iterations at outer_rtol = 1e-11 on the 4×4 P2 test case: 35–47 per step for conservative and EMAC with ASGS, 13–25 otherwise. Nonlinear EMAC ASGS without τ_c did not reach 1e-11 in 100 outer iterations (probe only).
+
+## Phase 12b-0: conservation-run spec and plan (2026-10-23)
+
+Done:
+
+- Verified the revised 23-page chapter hash, c4995958c5e410591261f676aae661f5854def033feb534dc930e40668491784, before starting. Read the required sources and checked the active chapter references against the PDF; the supplied change list and renumbering note are retained unchanged.
+- Updated formulation_spec.md with the piecewise Gresho Euler solution, ν=0 limits and authorized fallback, the midpoint momentum budget and consistent wall-reaction sign, both predicted momentum-defect columns and both region monitors. Existing diagnostics keep their meanings.
+- Replaced the provisional 12b plan with the owner matrix: 55 configurations, 10,200 steps, prescribed solver settings, a monitored rather than enforced zero strip, five implementation commits, and an owner-only queue launch after the current queue.
+- Added verification pass K01–K15 with independent derivations, a symbolic radial calculation and a reproducible tiny assembly probe. The equations pass; implementation is gated by the exact-τ acceptance conflict and missing relative-normalization definitions.
+
+Tests:
+
+- Activated /home/ali/venv-firedrake/bin/activate. With OMP_NUM_THREADS=1, ruff check and ruff format --check on src, tests and scripts passed (60 files formatted); the full unit suite passed: 623 tests in 186.43 seconds, using -n 2. Logs and pytest temporary/cache directories are under /tmp/vms_phase12b_*.
+- Symbolic checks in /tmp/vms_phase12b_symbolic.log: radial Euler residual exactly zero in all three regions, velocity and pressure jumps exactly zero at r=1/5 and 2/5, and vorticity exactly 10, 2/r−10, 0.
+- /tmp/vms_phase12b_tau_probe.py assembled four 8×8 P1/P1 dynamic linear ASGS Gresho initial states through the existing TimeStepper, without advancing time. Residuals and frozen-τ Jacobians are finite at ν=0 and ν=10⁻⁶. Exact-τ Jacobians contain 252 non-finite entries at either viscosity. The existing rest-state test already expects this exact-τ failure.
+- git diff --check passed. No slow suite, run-matrix runs or timing prefixes were launched.
+
+Deviations:
+
+- Stopped before Phase 12b-1, as required by the disagreement gate. No source, test, config or script changes. The finite exact-τ acceptance requirement cannot be met at the resting exterior by the permitted viscosity fallback; no derivative or equation was changed to hide the conflict.
+- Qualified change-list §C.3: consistent conservative convection agrees with fixed coupling in the resolved convective expression, while chapter (5.25)'s natural residual differs. The ν=10⁻⁶ fallback would retain Euler reference fields, not exact unforced viscous fields.
+- No matching owner validation/MPI process was visible; assumed a run was active anyway. Did not read or write repository results/. Firedrake checks required the usual authorized MPI sandbox escalation.
+
+Open questions:
+
+- K-D1: may the Gresho test require finite frozen-τ steps and diagnostics while retaining the expected exact-τ failure at a=0, with exact-Jacobian tests at nonzero advectors? Otherwise the owner must specify a regularization or generalized derivative. ν=10⁻⁶ alone does not fix it.
+- K-D2: define scales for relative budget/defect reports and the rule for zero-reference drifts. Both exact initial linear momenta are zero, and EMAC–VMS predicted defects are zero; no denominator has been chosen.
+- All five Phase 12b-1 implementation steps remain. Costs and the exact 12b-2 launch command await the gated prefix measurements and queue implementation; the previous unmeasured allowances are not presented as estimates for this new matrix.
