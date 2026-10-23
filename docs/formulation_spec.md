@@ -542,11 +542,51 @@ C_1=C_2-20(0.2)+4\ln0.2.
 
 The vorticity ∂₁u₂ − ∂₂u₁ is 10, 2/r − 10, and 0 in the three regions. The pressure is continuous at both interfaces, with p′ = u\_θ²/r; hence ∇·u = 0 and (u·∇)u + ∇p = 0 region by region. Evaluate the central branch without dividing by r. Pressure errors use the physical pressure and its existing separate mean normalization.
 
-Viscosity is ν = 0 by owner decision. Let β = c1·k⁴ν/h² + c2·k|a|/h. In the resting exterior, ν = 0 and a = 0 give β = 0, τ\_m = ∞, τ\_t = (α0/δt + β)⁻¹ = δt/α0 for dynamic subscales, and τ\_c = h²β/(c1·k⁴) = 0. The implemented residual and diagnostics use finite reciprocal/dynamic combinations; a unit-scale check must verify finite residuals, Jacobians and every diagnostic. τ\_c is generally nonzero inside the moving vortex even at ν = 0. If the zero-viscosity case cannot be evaluated without non-finite quantities, the owner authorizes ν = 10⁻⁶, retaining f = 0; record the choice. At positive viscosity the fields above remain Euler reference fields, not an exact steady solution of the unforced viscous problem.
+Viscosity is ν = 0 by owner decision. Let β = c1·k⁴ν/h² + c2·k|a|/h. In the resting exterior, ν = 0 and a = 0 give β = 0, τ\_m = ∞, τ\_t = (α0/δt + β)⁻¹ = δt/α0 for dynamic subscales, and τ\_c = h²β/(c1·k⁴) = 0. The implemented residual and diagnostics use finite reciprocal/dynamic combinations. τ\_c is generally nonzero inside the moving vortex even at ν = 0.
 
-The finite exact-τ Jacobian requirement at a = 0 is unresolved: as specified under Inner linearization, the derivative of |a| is undefined there, including when ν > 0. The Phase 12b-0 verification records the failing unit-scale assembly at both viscosities. No regularization or generalized derivative is authorized by this fallback; resolve the acceptance requirement before Phase 12b-1.
+Acceptance at ν = 0 (owner decision K-D1, resolving the Phase 12b-0 gate):
+
+- With frozen τ (`newton_tau = "frozen"`), a complete step on a tiny mesh must be finite: residual, Jacobian, solve and every diagnostic, for ASGS and OSS and both splittings.
+- With exact τ the Jacobian at rest is non-finite, because the derivative of |a| is undefined at a = 0 for every ν (Inner linearization). The unit tests keep an explicit expected-failure check for it.
+- Exact-τ Jacobians are tested only at states with nonzero advection speed, as in Phase 12a.
+- No regularization of |a| and no generalized derivative.
+- ν = 0 stands. ν = 10⁻⁶, with f = 0 unchanged, replaces it only if a frozen-τ step is non-finite. If the fallback is used, record it: the fields above are then Euler reference fields, not an exact steady solution of the unforced viscous problem.
 
 The monitor region is the near-wall frame max(|x|, |y|) ≥ 0.45. Report both region norms and all four wall forces. The exact initial vortex vanishes outside r = 0.4, but the discrete velocity and subscales are not forced to remain zero in the frame. Momentum and angular-momentum drifts must be interpreted with those monitors and reactions, rather than asserted to vanish from the initial support alone.
+
+## Conservation-run normalization (Phase 12b)
+
+Owner decision K-D2. The Phase 12b analysis normalizes by fixed characteristic scales of each run, never by a value that can be zero, such as an initial momentum or a predicted defect. These scales apply to the analysis script only; the Phase 12a unit tests keep their own criteria.
+
+With E(0) = ½‖u\_h(0)‖², the kinetic energy of the interpolated initial velocity (ũ⁰ = 0, so it is also the initial ASGS and OSS budget energy), and d the dimension:
+
+```latex
+U_c=\sqrt{2E(0)/|\Omega|},\qquad L_c=|\Omega|^{1/d}.
+```
+
+| Quantity | Scale |
+| --- | --- |
+| Linear momentum | M\_c = \|Ω\|U\_c |
+| Angular momentum | A\_c = \|Ω\|U\_c L\_c |
+| Energy | E(0) |
+| Force | F\_c = \|Ω\|U\_c²/L\_c |
+| Torque | F\_c L\_c |
+| Power | P\_c = \|Ω\|U\_c³/L\_c |
+
+Each closure residual, defect and drift is reported both in absolute terms and divided by its scale:
+
+- closures: r/P\_c and r\_M,k/F\_c;
+- measured defects: D\_k/F\_c, D\_φ/(F\_c L\_c), 𝒩/P\_c;
+- drifts: (M(t) − M(0))/M\_c, (A(t) − A(0))/A\_c, (E(t) − E(0))/E(0).
+
+A measured defect is compared with its prediction by |measured − predicted| divided by the same scale, reported next to the predicted value in the same units. Never divide by the prediction.
+
+The Phase 12b expectations read with these scales:
+
+- |r| ≤ 10⁻⁹ P\_c for every converged run from step 2;
+- |r\_M,k| ≤ 10⁻⁹ F\_c on Taylor–Green;
+- EMAC–VMS measured D\_k, D\_φ and 𝒩 at most 10⁻¹² of their scales;
+- the other forms: |measured − predicted| ≤ 10⁻⁹ of their scales.
 
 ## Chapter 5 references
 

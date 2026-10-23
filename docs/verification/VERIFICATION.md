@@ -1,3 +1,16 @@
+**Phase 12b-0 gate resolution — owner decisions K-D1 and K-D2 — 23 October 2026**
+
+The owner resolved both open items of the Phase 12b-0 pass. The spec (Gresho vortex; Conservation-run normalization) and plan 12b-1 steps 1, 2 and 5 now record the decisions; no equation of the master formulation, the budgets or the defect tables changed.
+
+| Item | Decision | Check | Note |
+| --- | --- | --- | --- |
+| K-D1 — exact τ at rest | Accept the recommended resolution: at ν=0 a complete frozen-τ step (residual, Jacobian, solve, every diagnostic) must be finite for ASGS and OSS and both splittings on a tiny mesh; keep an expected-failure check for exact τ at rest; test exact-τ Jacobians only at nonzero advection; no regularization of \|a\|; ν=10⁻⁶ only if a frozen-τ step is non-finite. | Consistent with K10: the frozen-τ ASGS assembly was finite at ν=0, and the 252 non-finite exact-τ entries are now the expected failure. The decision no longer asks for a derivative of \|a\| at 0. | Still to be shown in 12b-1 step 1: a full solve, OSS and nonlinear splitting. For OSS at ν=0, τ_c=0 in resting cells, so the ζ projection has zero weight there; a non-finite or failed frozen-τ step would trigger the fallback. |
+| K-D2 — relative scales | Fixed run scales from E(0)=½‖u_h(0)‖²: U_c=√(2E(0)/\|Ω\|), L_c=\|Ω\|^(1/d); M_c=\|Ω\|U_c, A_c=M_c L_c, F_c=\|Ω\|U_c²/L_c, torque F_c L_c, P_c=\|Ω\|U_c³/L_c, energy E(0). Absolute and scaled values; measured−predicted divided by the same scale, never by the prediction. | Dimensions: M_c=[L^d·U], A_c adds L; F_c=M_c/(L_c/U_c) is the momentum rate, so r_M and D_k share it; D_φ is a torque; P_c=E(0)-scale/(L_c/U_c) up to the factor ½, matching r and 𝒩. E(0)=½\|Ω\|U_c² by construction. | No denominator can vanish while u_h(0)≠0. Exact values: Gresho E(0)=2π/75≈0.0838, U_c≈0.409, L_c=1; Taylor–Green on (0,2π)², E(0)=π², U_c=1/√2, L_c=2π (the interpolants differ slightly). The analysis needs E(0), M(0), A(0) and \|Ω\| from each run. |
+
+The Phase 12a unit tests keep their criteria; these scales apply to the analysis script only.
+
+---
+
 **Phase 12b-0 — conservation-run spec and plan — 23 October 2026**
 
 Checked the revised 23-page `~/04_applications/FEops_prep/VMS_masters_thesis/chapter5_preview.pdf` before work: SHA-256 `c4995958c5e410591261f676aae661f5854def033feb534dc930e40668491784` matches the owner reference. Read the chapter, README, plan rules/Phase 12, formulation spec and final Phase 12a log. The supplied change list has SHA-256 `47c80d9a72f09bf151c9dea792752d1244b75214230f1ff20512103a039c205f`; the renumbering note has SHA-256 `a30a226c01e4ed331243ce46f6691cb0274ad5bad61dd76cf44478c691663eec`. Both source documents are retained unchanged.
