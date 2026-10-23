@@ -15,6 +15,13 @@ PRESSURE_UNKNOWNS = {
 }
 
 
+def physical_pressure(pressure: Expr, u_h: Expr, form: str) -> Expr:
+    """p_h = P_h + ½|u_h|² for a P unknown, else the unknown itself (spec: EMAC pressure)."""
+    if PRESSURE_UNKNOWNS[form] == "P":
+        return pressure + ufl.inner(u_h, u_h) / 2
+    return pressure
+
+
 def divergence_pairing(u_h: Expr, u_sub: Expr, w: Expr, dx: Measure) -> Form:
     """(∇·(u_h + ũ), w) := (∇·u_h, w) − (ũ, ∇w) (spec: Convective forms)."""
     return (ufl.div(u_h) * w - ufl.inner(u_sub, ufl.grad(w))) * dx

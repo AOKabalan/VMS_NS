@@ -23,6 +23,7 @@ from navier_stokes_vms.discretization.quadrature import (
     volume_measure,
 )
 from navier_stokes_vms.discretization.time_schemes import StepCoefficients, step_coefficients
+from navier_stokes_vms.formulation.convective_forms import PRESSURE_UNKNOWNS, physical_pressure
 from navier_stokes_vms.formulation.galerkin import SolveLevel, galerkin_residual
 from navier_stokes_vms.formulation.oss_projections import projection_equations
 from navier_stokes_vms.formulation.stabilization_parameters import (
@@ -214,6 +215,21 @@ class TimeStepper:
                 if isinstance(bc, Dirichlet)
             ]
         self._area = fd.assemble(fd.Constant(1.0) * self._dx)
+        # EMAC variants keep the unknown and its null space on P; every reported pressure is the
+        # physical p_h at the solve-level velocity, with its own zero mean (spec: EMAC pressure).
+        self._physical_pressure = physical_pressure(
+            self._pressure, self._velocity, config.convection.form
+        )
+        self._pressure_offset = fd.Constant(0.0)
+        self._reported_pressure = self._pressure
+        reported_pressure: Expr = self._pressure
+        if PRESSURE_UNKNOWNS[config.convection.form] == "P":
+            # Degree max(k_p, 2k_u) contains P_h and ½|u_h|² on affine cells, so nothing is lost.
+            output_degree = max(config.discretization.pressure_degree, 2 * k)
+            self._reported_pressure = fd.Function(
+                fd.FunctionSpace(mesh, "CG", output_degree), name="pressure"
+            )
+            reported_pressure = self._physical_pressure - self._pressure_offset
         inner = InnerSolver(
             self._solution, newton, picard, frozen, bcs, null_space, config.solver, jacobian
         )
@@ -230,7 +246,7 @@ class TimeStepper:
         self._diagnostic_state = DiagnosticState(
             problem=problem,
             velocity=self._history[0],
-            pressure=self._pressure,
+            pressure=reported_pressure,
             velocity_time=self._t_new,
             pressure_time=self._pressure_time,
             dx=self._dx,
@@ -263,8 +279,8 @@ class TimeStepper:
 
     @property
     def pressure(self) -> fd.Function:
-        """Pressure of the last completed step, at its solve level."""
-        return self._pressure
+        """Reported pressure of the last completed step at its solve level, physical for EMAC."""
+        return self._reported_pressure
 
     def run(self, after_step: Callable[[int, float], bool] | None = None) -> None:
         """Integrate from t = 0 to t_end, writing iteration logs, diagnostics and fields."""
@@ -309,7 +325,7 @@ class TimeStepper:
         self._set_level(step, coefficients)
         t = self._time(step)
         result = self._step_solver.solve()
-        self._remove_pressure_mean()
+        self._normalize_pressure()
         for outer in result.iterations:
             for row in outer.inner.iterations:
                 logs.inner.write(
@@ -385,12 +401,17 @@ class TimeStepper:
         )
         vtk_every = self._config.output.vtk_every
         if vtk_every and (step % vtk_every == 0 or last):
-            self._fields.write(self._history[0], self._pressure, t, float(self._pressure_time))
+            self._fields.write(self._history[0], self.pressure, t, float(self._pressure_time))
 
-    def _remove_pressure_mean(self) -> None:
+    def _normalize_pressure(self) -> None:
         if self._zero_mean_pressure:
             mean = fd.assemble(self._pressure * self._dx) / self._area
             self._pressure.assign(self._pressure - mean)
+        if self._reported_pressure is not self._pressure:
+            if self._zero_mean_pressure:
+                physical_mean = fd.assemble(self._physical_pressure * self._dx) / self._area
+                self._pressure_offset.assign(physical_mean)
+            self._reported_pressure.interpolate(self._physical_pressure - self._pressure_offset)
 
     def _set_level(self, step: int, coefficients: StepCoefficients) -> None:
         self._t_old.assign(self._time(step - 1))
@@ -429,7 +450,7 @@ class TimeStepper:
     def _fail(self, step: int, result: StepSolveResult) -> None:
         solve_time = float(self._pressure_time)
         self._endpoint.assign(self._velocity)
-        self._fields.write(self._endpoint, self._pressure, solve_time, solve_time)
+        self._fields.write(self._endpoint, self.pressure, solve_time, solve_time)
         self._logger.error("Step %d: %s. Iteration history:", step, result.failure_reason)
         for outer in result.iterations:
             self._logger.error(

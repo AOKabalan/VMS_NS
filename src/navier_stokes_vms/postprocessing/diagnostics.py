@@ -15,11 +15,14 @@ from navier_stokes_vms.problem.problem_definition import Problem
 
 @dataclass(frozen=True)
 class DiagnosticState:
-    """What a diagnostic reads after a step: endpoint velocity and solve-level pressure."""
+    """What a diagnostic reads after a step: endpoint velocity and solve-level pressure.
+
+    The pressure is the physical p_h, P_h + ½|u_h|² for EMAC variants (spec: EMAC pressure).
+    """
 
     problem: Problem
     velocity: fd.Function
-    pressure: fd.Function
+    pressure: Expr
     velocity_time: fd.Constant
     pressure_time: fd.Constant
     dx: Measure
@@ -100,7 +103,7 @@ def _velocity_gradient_error_l2(state: DiagnosticState) -> float:
 
 
 def _pressure_error_l2(state: DiagnosticState) -> float:
-    x = fd.SpatialCoordinate(state.pressure.function_space().mesh())
+    x = fd.SpatialCoordinate(state.problem.mesh)
     error = state.pressure - state.problem.exact_pressure(x, state.pressure_time)
     if state.pressure_null_space:
         area = fd.assemble(fd.Constant(1.0) * state.error_dx)
