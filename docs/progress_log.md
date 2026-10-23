@@ -1128,11 +1128,17 @@ Done:
   - The case runs at ν = 1e-6, the authorized fallback (evidence under Deviations).
   - Newton now honours `inner_max_iterations` above PETSc's default `snes_max_it` of 50.
 - Step 2 (95a9f8f): `momentum_budget`, `linear_momentum_defect_predicted`, `angular_momentum_defect_predicted`, `region_velocity_l2` and `region_subscale_l2`, with their configuration rules.
-- Step 3: `scripts/generate_conservation_configs.py` writes the 55 resolved configurations into `configs/chapter5/conservation/`. All use the owner's common settings; every other field keeps its default, including `inner_max_iterations = 30` and `vtk_every = 10`.
+- Step 3 (94f70ea): `scripts/generate_conservation_configs.py` writes the 55 resolved configurations into `configs/chapter5/conservation/`. All use the owner's common settings; every other field keeps its default, including `inner_max_iterations = 30` and `vtk_every = 10`.
+
+- Step 4: `scripts/run_validation_queue.sh` takes `--configs DIR`, `--runner validation|simulation` and `--dry-run`. The default validation behaviour is unchanged: same order (checked on all 16 validation configs), completion test, interrupted-folder move, log line and end marker.
+  - Simulation runs count as finished once `run_info.json` records an exit status, so non-converged runs stay as recorded failures.
+  - The log and end marker are named after the config directory (`conservation_queue.log`, `CONSERVATION_DONE`), so this queue never touches `VALIDATION_DONE`.
+  - The script was replaced atomically (written beside it, then `mv`), so a queue already running keeps reading the old file.
+  - README: the options and a tmux launch command. tmux is not installed on this machine; the command string was checked with `sh -c` and a dry run.
 
 Tests:
 
-- Steps 1–3: ruff check and ruff format --check clean; `OMP_NUM_THREADS=1 pytest tests/unit -n 2`: 634 passed and 1 xfailed at step 1, 666 passed and 1 xfailed at step 2.
+- Steps 1–3: ruff check and ruff format --check clean; `OMP_NUM_THREADS=1 pytest tests/unit -n 2`: 634 passed and 1 xfailed at step 1, 666 and 1 at step 2, 672 and 1 at step 3, 680 and 1 at step 4.
 - Gresho:
   - The Euler residual, divergence and vorticity vanish to round-off at degree-8 quadrature; the fields do not depend on t.
   - Velocity and pressure jump by less than 1e-10 across r = 0.2 and 0.4; the constants are checked.
