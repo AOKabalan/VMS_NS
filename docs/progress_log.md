@@ -1116,3 +1116,71 @@ Open questions:
 - K-D1: may the Gresho test require finite frozen-τ steps and diagnostics while retaining the expected exact-τ failure at a=0, with exact-Jacobian tests at nonzero advectors? Otherwise the owner must specify a regularization or generalized derivative. ν=10⁻⁶ alone does not fix it.
 - K-D2: define scales for relative budget/defect reports and the rule for zero-reference drifts. Both exact initial linear momenta are zero, and EMAC–VMS predicted defects are zero; no denominator has been chosen.
 - All five Phase 12b-1 implementation steps remain. Costs and the exact 12b-2 launch command await the gated prefix measurements and queue implementation; the previous unmeasured allowances are not presented as estimates for this new matrix.
+
+## Phase 12b-1: conservation-run implementation (2026-10-23)
+
+Owner decisions K-D1 and K-D2 were recorded first (3546130): spec sections Gresho vortex and Conservation-run normalization, plan 12b-1 steps 1, 2 and 5, and a verification note.
+
+Done:
+
+- Step 1 (8e87e19), Gresho case:
+  - `cases/gresho.py`: piecewise Euler fields, f = 0, four no-slip force walls, and the frame max(|x|,|y|) ≥ 0.45 as the new optional `Problem.monitor_region` indicator.
+  - The case runs at ν = 1e-6, the authorized fallback (evidence under Deviations).
+  - Newton now honours `inner_max_iterations` above PETSc's default `snes_max_it` of 50.
+- Step 2 (95a9f8f): `momentum_budget`, `linear_momentum_defect_predicted`, `angular_momentum_defect_predicted`, `region_velocity_l2` and `region_subscale_l2`, with their configuration rules.
+- Step 3: `scripts/generate_conservation_configs.py` writes the 55 resolved configurations into `configs/chapter5/conservation/`. All use the owner's common settings; every other field keeps its default, including `inner_max_iterations = 30` and `vtk_every = 10`.
+
+Tests:
+
+- Steps 1–3: ruff check and ruff format --check clean; `OMP_NUM_THREADS=1 pytest tests/unit -n 2`: 634 passed and 1 xfailed at step 1, 666 passed and 1 xfailed at step 2.
+- Gresho:
+  - The Euler residual, divergence and vorticity vanish to round-off at degree-8 quadrature; the fields do not depend on t.
+  - Velocity and pressure jump by less than 1e-10 across r = 0.2 and 0.4; the constants are checked.
+  - The frame area is exactly 0.19 on a 20×20 mesh, and the interpolated vortex has zero frame norm.
+- K-D1 on an 8×8 mesh with the run-matrix tolerances and `inner_max_iterations = 100`:
+  - Frozen τ, ν = 1e-6: the Jacobian at rest and at the end is finite, BDF1 plus one Crank–Nicolson step converge, and every diagnostic of the Gresho set is finite. This holds for ASGS linear and for OSS linear and nonlinear.
+  - Nonlinear ASGS is a strict xfail (open question 1).
+  - Exact τ at rest: non-finite Jacobian entries, and the run stops with the `newton_tau = 'exact'` message.
+- Momentum budget:
+  - Periodic Taylor–Green, 8×8, δt = 0.05, with a uniform background flow and a uniform force.
+  - All 24 form/space/splitting combinations: from step 2, |r_M,k| ≤ 1e-10 × max(|rate|, |D_k|, |F_k|). Rates come from independently assembled endpoint moments and forces from the exact integral.
+  - The ASGS subscale moment is significant; ∫ũ = 0 for OSS. A mutation dropping the ASGS moment is caught.
+- Predicted defects equal the independent T5 table references for all 24 combinations; EMAC–VMS predictions are exactly zero.
+- Matrix: the committed files are byte-identical to a fresh generation; the 55 run names are unique; the step counts are 2400 + 5000 + 400 + 2400; settings, diagnostic names and case support are checked.
+
+Timing prefixes: the three authorized ten-step runs of committed configurations, on one core with OMP_NUM_THREADS=1, results in /tmp/vms_phase12b1_timing.
+
+| Configuration | Outer / inner iterations per step | First step (s) | Later steps, mean (s) | Run wall (s) | max \|r\|, max \|r_M\| |
+| --- | --- | --- | --- | --- | --- |
+| gresho_emac_vms_oss_nonlinear | 5–6 / 9–12 | 12.7 (cold kernel cache) | 0.53 | 20.0 | 5.4e-14, 6.1e-15 |
+| gresho_long_emac_vms | 5–7 / 10–14 | 1.1 | 0.51 | 6.2 | 3.0e-14, 3.7e-15 |
+| taylor_green_emac_vms_asgs_nonlinear | 11–14 / 20–32 | 3.7 | 1.09 | 14.2 | 1.4e-11, 3.0e-12 |
+
+Extrapolation, serial on one core. These are estimates, not measurements of the other configurations:
+
+- Ordinary Gresho: 2400 steps × 0.53 s ≈ 21 min.
+- Long Gresho: 5000 × 0.51 s ≈ 43 min.
+- Refined Gresho: assumes 4× the unknowns costs 4–5× per step at similar iteration counts, so 400 × 2.1–2.7 s ≈ 14–18 min.
+- Taylor–Green: 2400 × 1.09 s ≈ 44 min, probably an upper value since nonlinear ASGS EMAC–VMS is among the costliest.
+- Startup is 3–15 s per run.
+- Total ≈ 2.0–2.3 h. ASGS Gresho runs end early under the prescribed limits (open questions 1 and 2).
+
+Deviations:
+
+- **Gresho viscosity ν = 1e-6, the authorized fallback.** At ν = 0 the frozen-τ OSS Jacobian at the interpolated initial state (8×8, P1/P1, stress) has 18 identically zero ζ rows: τ_c = 0 wherever a = 0. Its rank is 467 of 486, and the first linear solve fails with DIVERGED_LINEAR_SOLVE for both splittings. At ν = 1e-6 the rank is 485, the pressure constant being the only missing direction, and OSS converges in 4–9 inner iterations per step. The Euler fields are therefore reference fields, not an exact viscous solution; README and the case docstring say so.
+- **Frozen-τ Newton at ν ≈ 0 converges only linearly for dynamic ASGS.** In the resting fluid τ_t → δt/α₀, so the effective resolved mass (α₀/δt)(1 − α₀τ_t/δt) nearly cancels, and the dropped τ derivative is no longer small beside it.
+  - Linear ASGS needs 40–57 inner iterations per step on 8×8 and 114–136 on 32×32, at ν = 0 and 1e-6 alike.
+  - The PETSc default `snes_max_it = 50` silently capped Newton below larger `inner_max_iterations`. The fix passes the option; every existing configuration uses at most 50, so its behaviour is unchanged.
+  - The K-D1 unit test sets `inner_max_iterations = 100`.
+- The generic coarse-mesh case test now accepts UFL's zero as a forcing: Gresho's f = 0 has no integral to assemble.
+- The T5 test also checks the predicted momentum columns. Its new significance check excludes J for OSS, where (u_h·∇)φ lies in the FE space and orthogonality makes J vanish.
+- K-D1 probes beyond the tiny mesh: 32×32 runs of three steps with raised iteration limits, into the session scratch folder, were used to diagnose open questions 1 and 2. They are not matrix runs. Apart from them, only the three authorized prefixes ran at matrix resolution.
+
+Open questions:
+
+1. **Nonlinear dynamic ASGS on Gresho does not converge with frozen τ, so K-D1 cannot be met for it.**
+   - The second outer iteration's inner Newton stalls with a relative residual of about 0.1 for 500 iterations, on 8×8 and 32×32, at ν = 0, 1e-6, 1e-5 and 1e-4.
+   - It converges at ν = 1e-3 (18–19 outer iterations per step) and at ν = 1e-2.
+   - Residual, Jacobian and diagnostics stay finite. The test records the case as a strict xfail.
+   - As generated, the 6 `gresho_*_asgs_nonlinear` runs and `gresho_refined_emac_vms_asgs` will fail in their first step. Keep them as recorded failures, or change the method for them (for example exact τ after the first outer iteration, or Picard)? Exact τ cannot start from rest.
+2. **`inner_max_iterations` for ASGS Gresho.** The owner's settings leave the default of 30, so the 6 `gresho_*_asgs_linear` runs will stop in step 1 although they converge given about 140 iterations. Raise it, for example to 200, for the Gresho family, or keep the prescribed default?
