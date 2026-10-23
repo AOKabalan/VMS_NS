@@ -44,6 +44,23 @@ pressure is written at t^(n+½). An invalid configuration stops the run before a
 written, with a message naming the offending fields. If a nonlinear solve does not converge, the
 run writes the last state to `fields/`, logs the iteration history and exits with status 1.
 
+`[convection] form` selects the convective form of the spec section "Convective forms
+(Chapter 5)": `nonconservative`, `conservative`, `skew_symmetric_1` (default),
+`skew_symmetric_2`, `emac` or `emac_vms`. `[viscosity] form` is `laplacian` (default) or
+`stress`. `emac_vms` requires `stabilization.method = "vms"` and `viscosity.form = "stress"`.
+`emac` and `emac_vms` require Newton with `picard_iterations_before_newton = 0`. Every form
+works with both scale splittings and with Galerkin, except `emac_vms` with Galerkin.
+
+With `emac` and `emac_vms` the pressure unknown is the modified pressure P_h, and the null space
+and its zero-mean normalization act on P_h. Every reported pressure is the physical
+p_h = P_h + ½|u_h|², with u_h the velocity of the solve. For Crank–Nicolson that is the half-level
+velocity, not an average of the endpoint corrections. When the null space is active, p_h gets its
+own zero mean. `pressure_error_l2` and `force` use this expression directly.
+`fields/pressure.pvd` and `TimeStepper.pressure` hold it exactly in continuous Lagrange of degree
+max(k_p, 2k_u), not projected onto the pressure space. With an outflow boundary, the natural
+condition of these two forms is written in P_h, so their outflow results differ from the other
+four forms.
+
 Available diagnostics: `kinetic_energy`, `subscale_kinetic_energy` (VMS only),
 `linear_momentum`, `angular_momentum`, `force`, `divergence_l2`, and, for cases with an exact
 solution, `velocity_error_l2`, `velocity_gradient_error_l2` and `pressure_error_l2`.
@@ -54,6 +71,39 @@ A case declares `Problem.force_boundaries`, a tuple of boundary names; `force` w
 −∫σn ds with σ = −pI + ν(∇u + ∇uᵀ), without coefficient normalization. A force request without
 declared boundaries is rejected. Forces on an individual open face depend on the pressure gauge;
 closed-boundary forces do not.
+
+Conservation diagnostics (spec: Conservation checks) are assembled from the forms the run uses,
+at the converged solve-level state (`pressure_time`):
+
+- `linear_momentum_defect` (`_x`, `_y`, `_z`) is D_k = c(a; u_h, e_k), and G(e_k) for
+  EMAC–VMS.
+- `angular_momentum_defect` is D_φ = c(a; u_h, φ) − (ũ, (a·∇)φ) with φ = e_k × x, and G(φ)
+  for EMAC–VMS. It is a scalar in 2D, with φ = (−y, x).
+- `convective_energy_defect` is 𝒩 = c(a; u_h, u_h) + (ũ, N − (a·∇)u_h), and G(u_h) + (ũ, N)
+  for EMAC–VMS.
+
+Here c includes the selected outflow term, a = u_h + ũ* is the advector of the residual, and ũ is
+the substituted subscale; Galerkin has ũ = 0. The defects include boundary fluxes: they equal the
+chapter Tables 5.1–5.2 only with u_h = 0 on the whole boundary. On periodic domains the
+linear-momentum and energy fluxes cancel but the angular-momentum fluxes do not.
+
+`energy_budget` is the per-step Crank–Nicolson closure. It is accepted only for Crank–Nicolson
+with dynamic VMS subscales. Its columns are:
+
+- `rate`: (E^(n+1) − E^n)/δt, with E = ½‖u_h + ũ‖² for ASGS and ½(‖u_h‖² + ‖ũ‖²) for OSS at the
+  endpoints.
+- The half-level dissipation terms `viscous` (ν‖∇u_h‖² or 2ν‖∇ˢu_h‖²), `subscale`
+  ((τ_m⁻¹ũ, ũ), with τ_m and not τ_t), `viscous_cross` (−2(ũ, L_ν u_h)) and `pressure_subscale`
+  ((τ_c(∇·u_h − ζ_h), ∇·u_h)), and their sum `dissipation` 𝒟.
+- `power`: (f, u_h + ũ) with the endpoint-average force.
+- `defect_predicted`: 𝒩_pred from Tables 5.1–5.2.
+- `defect_measured`: 𝒩_meas = power − rate − 𝒟.
+- `residual`: r = rate + 𝒟 + 𝒩_pred − power.
+
+With u_h = 0 on the whole boundary, or for the energy on periodic domains, r vanishes to solver
+tolerance for every form. The terms are captured after the solve, before the histories advance.
+The backward-Euler startup step is excluded and its columns are blank: it would add
+‖Δ(u_h + ũ)‖²/(2δt) for ASGS, or (‖Δu_h‖² + ‖Δũ‖²)/(2δt) for OSS.
 
 In `diagnostics.csv`, `time` labels the endpoint velocity diagnostics; `pressure_time` labels
 the pressure error and force (including its velocity gradient). For Crank–Nicolson, these use

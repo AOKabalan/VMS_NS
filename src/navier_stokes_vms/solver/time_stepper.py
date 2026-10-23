@@ -39,6 +39,9 @@ from navier_stokes_vms.formulation.vms import (
     vms_terms,
 )
 from navier_stokes_vms.postprocessing.diagnostics import (
+    CONSERVATION_DIAGNOSTICS,
+    Conservation,
+    ConservationFields,
     DiagnosticState,
     diagnostic_columns,
     evaluate_diagnostics,
@@ -121,7 +124,7 @@ class TimeStepper:
         chi = switches(stabilization) if stabilization.method == "vms" else None
         u_sub_history = None
         a, a_hat = u, frozen
-        tau_t = tau_c = tau_t_hat = tau_c_hat = None
+        tau_m = tau_t = tau_c = tau_t_hat = tau_c_hat = None
         xi, zeta = (projections + [None, None])[:2]
         w, r = (projection_tests + [None, None])[:2]
         if chi is not None:
@@ -133,8 +136,8 @@ class TimeStepper:
             if chi.is_nonlinear:
                 u_sub_iterate = fd.Function(quadrature_space)
                 a, a_hat = u + u_sub_iterate, frozen + u_sub_iterate
-            tau_t, tau_c = self._parameters(a, nu, level, chi)
-            tau_t_hat, tau_c_hat = self._parameters(a_hat, nu, level, chi)
+            tau_m, tau_t, tau_c = self._parameters(a, nu, level, chi)
+            _, tau_t_hat, tau_c_hat = self._parameters(a_hat, nu, level, chi)
 
         def coupled(a: Expr, u_h: Expr, tau_t: Expr | None, tau_c: Expr | None) -> ufl.Form:
             form = galerkin_residual(u, p, v, q, a, u_h, nu, level, self._dx, outflow_ds, **forms)
@@ -236,6 +239,31 @@ class TimeStepper:
         self._step_solver = StepSolver(
             inner, self._solution, self._iterate, self._dx, config.solver
         )
+        self._conservation = None
+        requested = [name for name in config.output.diagnostics if name in CONSERVATION_DIAGNOSTICS]
+        if requested:
+            self._conservation = Conservation(
+                requested,
+                ConservationFields(
+                    velocity=u,
+                    advector=a,
+                    subscale=self._u_sub,
+                    endpoint_velocity=self._history[0],
+                    endpoint_subscale=None if self._subscales is None else self._subscales.latest,
+                    zeta=zeta,
+                    tau_m=tau_m,
+                    tau_c=tau_c,
+                    forcing=level.forcing,
+                    viscosity=nu,
+                    dt=config.time.dt,
+                    dx=self._dx,
+                    outflow_ds=outflow_ds,
+                    convective_form=config.convection.form,
+                    viscous_form=config.viscosity.form,
+                    is_nonlinear=chi is not None and chi.is_nonlinear,
+                    is_asgs=chi is None or chi.is_asgs,
+                ),
+            )
         subscale_velocity = self._u_sub
         subscale_time = self._pressure_time if self._u_sub is not None else None
         if self._subscales is not None:
@@ -256,6 +284,7 @@ class TimeStepper:
             ds=self._ds,
             subscale_velocity=subscale_velocity,
             subscale_time=subscale_time,
+            conservation=self._conservation,
         )
         self._fields = FieldWriter(folder)
         self._folder = folder
@@ -367,6 +396,8 @@ class TimeStepper:
                 wall_time=time.perf_counter() - started,
             )
             self._fail(step, result)
+        if self._conservation is not None:
+            self._conservation.capture(coefficients.scheme == "crank_nicolson")
         self._advance(coefficients)
         values = evaluate_diagnostics(self._config.output.diagnostics, self._diagnostic_state)
         subscale_time = self._diagnostic_state.subscale_time
@@ -387,7 +418,9 @@ class TimeStepper:
             converged=True,
             wall_time=time.perf_counter() - started,
         )
-        summary = "".join(f", {name} {value:.6e}" for name, value in values.items())
+        summary = "".join(
+            f", {name} {value:.6e}" for name, value in values.items() if value is not None
+        )
         self._logger.info(
             "step %d, t = %.6g, %s: %d outer, %d inner, %d local iteration(s), residual %.3e%s",
             step,
@@ -481,12 +514,12 @@ class TimeStepper:
 
     def _parameters(
         self, a: Expr, nu: float, level: SolveLevel, chi: Switches
-    ) -> tuple[Expr, Expr]:
+    ) -> tuple[Expr, Expr, Expr]:
         stabilization = self._config.stabilization
         k = self._config.discretization.velocity_degree
         tau_m, tau_c = stabilization_parameters(a, nu, k, stabilization.c1, stabilization.c2)
         tau_t = dynamic_parameter(tau_m, level.alpha0, level.dt) if chi.is_dynamic else tau_m
-        return tau_t, tau_c if stabilization.pressure_subscale else ufl.zero()
+        return tau_m, tau_t, tau_c if stabilization.pressure_subscale else ufl.zero()
 
     def _time(self, steps: float) -> float:
         return float(f"{steps * self._config.time.dt:.15g}")

@@ -1,5 +1,6 @@
 """Global diagnostics on interpolated analytic fields and their time-stepper wiring."""
 
+import csv
 import logging
 from dataclasses import replace
 from pathlib import Path
@@ -9,11 +10,19 @@ import pytest
 import ufl
 
 from navier_stokes_vms.cases import build_problem
-from navier_stokes_vms.config import Config, MeshOptions, StabilizationOptions, TimeOptions
+from navier_stokes_vms.config import (
+    Config,
+    DiscretizationOptions,
+    MeshOptions,
+    OutputOptions,
+    StabilizationOptions,
+    TimeOptions,
+)
 from navier_stokes_vms.discretization.function_spaces import subscale_space
 from navier_stokes_vms.discretization.quadrature import boundary_measure, volume_measure
 from navier_stokes_vms.discretization.time_schemes import step_coefficients
 from navier_stokes_vms.postprocessing.diagnostics import (
+    ENERGY_BUDGET_TERMS,
     DiagnosticState,
     check_diagnostics_supported,
     diagnostic_columns,
@@ -204,3 +213,63 @@ def test_force_boundaries_are_checked_even_for_cases_with_exact_solutions() -> N
     problem = replace(problem, boundary_conditions={}, force_boundaries=("missing",))
     with pytest.raises(ValueError, match="boundary 'missing' does not exist"):
         check_problem(problem)
+
+
+@pytest.mark.parametrize("dimension", [2, 3])
+def test_conservation_columns_expand_like_the_momenta(dimension: int) -> None:
+    problem = analytic_state(dimension).problem
+    names = (
+        "linear_momentum_defect",
+        "angular_momentum_defect",
+        "convective_energy_defect",
+        "energy_budget",
+    )
+    axes = "xyz"[:dimension]
+    angular = [f"angular_momentum_defect_{a}" for a in axes] if dimension == 3 else []
+    assert diagnostic_columns(names, problem) == (
+        *(f"linear_momentum_defect_{a}" for a in axes),
+        *(angular or ["angular_momentum_defect"]),
+        "convective_energy_defect",
+        *(f"energy_budget_{term}" for term in ENERGY_BUDGET_TERMS),
+    )
+
+
+def test_galerkin_defects_in_3d_use_the_solve_level_convective_form(tmp_path: Path) -> None:
+    """Without subscales D(w) = c(u; u, w) with the selected outflow term; all fields at t^(n+½)."""
+    config = Config(
+        case="ethier_steinman_3d",
+        run_name="defects",
+        mesh=MeshOptions(cells=(2, 2, 2)),
+        discretization=DiscretizationOptions(velocity_degree=2, pressure_degree=1),
+        time=TimeOptions(scheme="crank_nicolson", dt=0.01, t_end=0.02),
+        stabilization=StabilizationOptions(method="none"),
+        output=OutputOptions(
+            vtk_every=0,
+            diagnostics=(
+                "linear_momentum_defect",
+                "angular_momentum_defect",
+                "convective_energy_defect",
+            ),
+        ),
+    )
+    stepper = TimeStepper(config, build_problem(config), tmp_path, logging.getLogger(__name__))
+    stepper.run()
+    u, dx = stepper._velocity, stepper._dx
+    x = fd.SpatialCoordinate(u.function_space().mesh())
+
+    def defect(w: ufl.core.expr.Expr) -> float:
+        return fd.assemble(
+            (ufl.inner(ufl.dot(ufl.grad(u), u), w) - ufl.inner(ufl.dot(ufl.grad(w), u), u)) / 2 * dx
+        )
+
+    with (tmp_path / "diagnostics.csv").open() as stream:
+        row = list(csv.DictReader(stream))[-1]
+    for k, axis in enumerate("xyz"):
+        e = ufl.as_vector([x[i].dx(k) for i in range(3)])
+        assert float(row[f"linear_momentum_defect_{axis}"]) == pytest.approx(
+            defect(e), rel=1e-10, abs=1e-14
+        )
+        assert float(row[f"angular_momentum_defect_{axis}"]) == pytest.approx(
+            defect(ufl.cross(e, x)), rel=1e-10, abs=1e-14
+        )
+    assert float(row["convective_energy_defect"]) == pytest.approx(0.0, abs=1e-14)

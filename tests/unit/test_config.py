@@ -456,3 +456,41 @@ def test_galerkin_accepts_every_form_except_emac_vms(
 def test_chapter5_restrictions_name_the_fields(tmp_path: Path, text: str, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         load_text(tmp_path, text)
+
+
+CN_DYNAMIC = (
+    STATIC_ASGS.replace('"static"', '"dynamic"')
+    + '[time]\nscheme = "crank_nicolson"\n[output]\ndiagnostics = ["energy_budget"]\n'
+)
+
+
+def test_energy_budget_is_accepted_for_crank_nicolson_with_dynamic_subscales(
+    tmp_path: Path,
+) -> None:
+    assert load_text(tmp_path, CN_DYNAMIC).output.diagnostics == ("energy_budget",)
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        (
+            CN_DYNAMIC.replace('"crank_nicolson"', '"bdf2"'),
+            "energy_budget with time.scheme = 'bdf2', .*subscale_dynamics = 'dynamic'",
+        ),
+        (
+            CN_DYNAMIC.replace('"dynamic"', '"static"'),
+            "energy_budget with .*stabilization.subscale_dynamics = 'static'",
+        ),
+        (
+            GALERKIN + '\n[time]\nscheme = "crank_nicolson"\n[output]\n'
+            'diagnostics = ["energy_budget"]\n',
+            "energy_budget with .*stabilization.method = 'none'",
+        ),
+    ],
+    ids=["bdf2", "static", "galerkin"],
+)
+def test_energy_budget_needs_the_midpoint_scheme_for_both_scales(
+    tmp_path: Path, text: str, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        load_text(tmp_path, text)

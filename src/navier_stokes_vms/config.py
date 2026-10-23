@@ -205,6 +205,18 @@ def validate_config(config: Config) -> None:
         raise ValueError(
             "output.diagnostics: subscale_kinetic_energy requires stabilization.method = 'vms'"
         )
+    if "energy_budget" in config.output.diagnostics and (
+        config.time.scheme != "crank_nicolson"
+        or config.stabilization.method != "vms"
+        or config.stabilization.subscale_dynamics != "dynamic"
+    ):
+        # The per-step closure is the midpoint identity of both scales (spec: Conservation checks).
+        raise ValueError(
+            f"output.diagnostics: energy_budget with time.scheme = {config.time.scheme!r}, "
+            f"stabilization.method = {config.stabilization.method!r}, "
+            f"stabilization.subscale_dynamics = {config.stabilization.subscale_dynamics!r}: "
+            "needs 'crank_nicolson' with dynamic VMS subscales"
+        )
     solver = config.solver
     if solver.picard_iterations_before_newton > 0 and solver.linearization != "newton":
         raise ValueError(

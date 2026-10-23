@@ -106,3 +106,54 @@ def convection_form(
 ) -> Form:
     """Resolved volume convection plus its outflow term (spec: Convective forms)."""
     return resolved_convection(a, u_h, u, v, dx, form) + outflow_term(u_h, u, v, outflow_ds, form)
+
+
+def convective_defect(
+    a: Expr,
+    u_h: Expr,
+    w: Expr,
+    u_sub: Expr | None,
+    dx: Measure,
+    outflow_ds: Measure | None,
+    form: str,
+    nonlinear: bool,
+) -> Form:
+    """D(w) = c(a; u_h, w) − (ũ, (a·∇)w), or G(w) for EMAC–VMS (spec: Conservation checks)."""
+    defect = convection_form(a, u_h, u_h, w, dx, outflow_ds, form)
+    if u_sub is None:
+        return defect
+    return defect + convective_subscale_coupling(a, u_h, w, u_sub, dx, form, nonlinear)
+
+
+def energy_defect(
+    a: Expr,
+    u_h: Expr,
+    u_sub: Expr | None,
+    dx: Measure,
+    outflow_ds: Measure | None,
+    form: str,
+    nonlinear: bool,
+) -> Form:
+    """𝒩 = D(u_h) + (ũ, N), the total convective energy defect (spec: Conservation checks)."""
+    defect = convective_defect(a, u_h, u_h, u_sub, dx, outflow_ds, form, nonlinear)
+    if u_sub is None:
+        return defect
+    return defect + ufl.inner(u_sub, residual_convection(a, u_h, form)) * dx
+
+
+def predicted_energy_defect(
+    u_h: Expr, u_sub: Expr, dx: Measure, form: str, nonlinear: bool
+) -> Form:
+    """Interior 𝒩 of chapter Tables 5.1–5.2, with D_χ(w) = (∇·u_h, w) − χ_N(ũ, ∇w)."""
+    pairing_subscale = u_sub if nonlinear else ufl.zero(u_h.ufl_shape)
+    pairing = divergence_pairing(u_h, pairing_subscale, ufl.inner(u_h, u_h), dx)
+    if form == "nonconservative":
+        return -0.5 * pairing
+    if form == "conservative":
+        return 0.5 * pairing
+    if form == "emac":
+        transfer = ufl.dot(ufl.grad(u_h), u_h) if nonlinear else ufl.dot(u_h, ufl.grad(u_h))
+        return ufl.inner(u_sub, transfer) * dx
+    if form not in PRESSURE_UNKNOWNS:
+        raise ValueError(f"unknown convective form: {form!r}")
+    return Form([])
