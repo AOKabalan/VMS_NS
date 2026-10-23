@@ -237,6 +237,7 @@ A case module exposes one function, `build(config) -> Problem`. `Problem` holds 
 | `exact_velocity`, `exact_pressure` | `(x, t) -> UFL` or `None` | For errors and exact-history startup |
 | `reference_values` | `dict` or `None` | Validation targets |
 | `force_boundaries` | `tuple[str, ...]`, default empty | Named boundaries measured separately by the force diagnostic |
+| `monitor_region` | `(x) -> UFL` or `None` | Indicator of an optional monitor region, 1 inside and 0 outside (Phase 12b) |
 
 - `x` is `SpatialCoordinate(mesh)`; `t` is a Firedrake `Constant` owned by the time stepper. `Dirichlet.value` is also `(x, t) -> UFL`.
 - When a case has an exact solution, the forcing is derived from it symbolically with UFL (`f = ∂t u + u·∇u − νΔu + ∇p`, with time handled through `ufl.variable`), never typed by hand. Every case with an exact solution checks that its velocity is divergence-free.

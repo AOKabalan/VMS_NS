@@ -201,3 +201,9 @@ def test_start_from_rest_handles_the_tau_derivative(tmp_path: Path, newton_tau: 
         assert (tmp_path / "fields" / "velocity.pvd").exists()
         with (tmp_path / "time_steps.csv").open() as stream:
             assert list(csv.DictReader(stream))[-1]["converged"] == "False"
+
+
+def test_newton_honours_inner_max_iterations_above_the_petsc_default(tmp_path: Path) -> None:
+    config = asgs_config(1, replace(SolverOptions(), inner_max_iterations=80))
+    stepper = TimeStepper(config, build_problem(config), tmp_path, LOGGER)
+    assert stepper._step_solver._inner._newton.snes.getTolerances()[3] == 80

@@ -5,6 +5,7 @@ from collections.abc import Callable
 from navier_stokes_vms.cases import (
     cylinder_dfg_2d,
     ethier_steinman_3d,
+    gresho,
     kovasznay,
     lattice_vortex,
     lid_driven_cavity,
@@ -20,6 +21,7 @@ CASES: dict[str, Callable[[Config], Problem]] = {
     "lattice_vortex": lattice_vortex.build,
     "lid_driven_cavity": lid_driven_cavity.build,
     "ethier_steinman_3d": ethier_steinman_3d.build,
+    "gresho": gresho.build,
     "kovasznay": kovasznay.build,
     "manufactured_spatial": manufactured_spatial.build,
     "manufactured_temporal": manufactured_temporal.build,

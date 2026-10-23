@@ -123,6 +123,15 @@ For all-Dirichlet problems, each solve level checks the interpolated boundary fl
 data whose net flux exceeds 1e-10 times the integral of its absolute normal flux.
 In 3D, results with VMS depend on the process count at the level of the quadrature error.
 
+The `gresho` case is the piecewise steady Euler vortex of the spec section "Gresho vortex
+(Phase 12b)" on (−0.5, 0.5)², default mesh 32×32, with f = 0 and four no-slip walls, all
+declared for force measurements. It runs at ν = 1e-6, the authorized fallback for ν = 0: at
+ν = 0, τ_c vanishes where the fluid is at rest, and the frozen-τ OSS Jacobian then has identically
+zero ζ rows. Velocity and pressure errors are measured against the Euler fields, which are then
+reference fields rather than an exact viscous solution. A case may declare
+`Problem.monitor_region`, an indicator (1 inside, 0 outside) evaluated at quadrature points;
+Gresho declares the near-wall frame max(|x|, |y|) ≥ 0.45.
+
 ## Validation
 
 Three validation cases compare against published data: `lid_driven_cavity` (Ghia, Ghia and

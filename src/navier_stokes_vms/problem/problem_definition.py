@@ -34,6 +34,7 @@ class Problem:
     exact_pressure: SpaceTimeExpression | None = None
     reference_values: Mapping[str, float] | None = None
     force_boundaries: tuple[str, ...] = ()
+    monitor_region: Callable[[Expr], Expr] | None = None
 
 
 def exact_solution_forcing(

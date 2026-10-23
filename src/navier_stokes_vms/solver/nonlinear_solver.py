@@ -183,6 +183,8 @@ class InnerSolver:
             **self._options.petsc,
             "snes_type": snes_type,
             "snes_linesearch_type": "basic",
+            # PETSc's own limit of 50 would otherwise stop Newton before inner_max_iterations.
+            "snes_max_it": self._options.inner_max_iterations,
         }
         problem = fd.NonlinearVariationalProblem(residual, self._solution, self._bcs, J=jacobian)
         return fd.NonlinearVariationalSolver(

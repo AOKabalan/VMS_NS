@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import ufl
 from firedrake.mesh import MeshGeometry
+from ufl.constantvalue import Zero
 from ufl.core.expr import Expr
 
 from navier_stokes_vms.cases import CASES, build_problem
@@ -164,7 +165,9 @@ def test_each_case_builds_on_a_coarse_mesh(case: str) -> None:
     x = fd.SpatialCoordinate(problem.mesh)
     initial_gap = problem.initial_velocity(x) - problem.exact_velocity(x, fd.Constant(0.0))
     assert l2_norm(initial_gap, problem.mesh) == 0.0
-    assert math.isfinite(l2_norm(problem.forcing(x, fd.Constant(0.4)), problem.mesh))
+    forcing = problem.forcing(x, fd.Constant(0.4))
+    # Gresho's f = 0 is UFL's zero, which has no integral to assemble.
+    assert isinstance(forcing, Zero) or math.isfinite(l2_norm(forcing, problem.mesh))
 
 
 @pytest.mark.parametrize("case", ["taylor_green_2d", "kovasznay"])
