@@ -18,6 +18,7 @@ from navier_stokes_vms.formulation.convective_forms import (
     convection_form,
     convective_subscale_coupling,
     divergence_pairing,
+    full_stress,
     minimal_stress,
     outflow_term,
     residual_convection,
@@ -100,6 +101,7 @@ def test_forms_against_component_indices(
         )
         + sum(u[i].dx(i) * uv for i in range(dimension)),
     }
+    expected["emac_vms_full"] = expected["emac_vms"]
     same(resolved_convection(a, u, u, v, dx, form), expected[form] * dx)
     expected_residual = ufl.as_vector(
         [
@@ -112,6 +114,16 @@ def test_forms_against_component_indices(
             for j in range(dimension)
         ]
     )
+    if form == "emac_vms_full":
+        # N_E = 2(∇ˢu)u + (∇·u)u + (∇ˢu + ½(∇·u)I)ũ, chapter Eq. (5.38).
+        div_u = sum(u[i].dx(i) for i in range(dimension))
+        expected_residual = ufl.as_vector(
+            [
+                sum((u[j].dx(i) + u[i].dx(j)) * (u[i] + sub[i] / 2) for i in range(dimension))
+                + div_u * (u[j] + sub[j] / 2)
+                for j in range(dimension)
+            ]
+        )
     same(
         ufl.inner(residual_convection(a, u, form), v) * dx,
         ufl.inner(expected_residual, v) * dx,
@@ -148,6 +160,23 @@ def test_minimal_closure_T1_T2_T3_T4(
 
 
 @pytest.mark.parametrize("nonlinear", [False, True])
+def test_full_stress_closure_energy_identity(
+    fields: tuple[fd.Function, fd.Function, fd.Function, Measure], nonlinear: bool
+) -> None:
+    """T̃_full : ∇ˢu = ũ·N_E pointwise, the identity behind Propositions 5.9–5.10 (§5.8.5)."""
+    u, _, s, _ = fields
+    a = u + s if nonlinear else u
+    contraction = ufl.inner(full_stress(u, s, nonlinear), ufl.sym(ufl.grad(u)))
+    transfer = ufl.inner(s, residual_convection(a, u, "emac_vms_full"))
+    scalar_space = fd.FunctionSpace(
+        u.function_space().mesh(), s.function_space().ufl_element().sub_elements[0]
+    )
+    error = fd.Function(scalar_space).interpolate(contraction - transfer)
+    scale = fd.Function(scalar_space).interpolate(abs(contraction) + abs(transfer))
+    assert np.max(np.abs(error.dat.data_ro)) < 1e-12 * max(1, np.max(scale.dat.data_ro))
+
+
+@pytest.mark.parametrize("nonlinear", [False, True])
 @pytest.mark.parametrize("form", FORMS)
 def test_every_entry_of_both_defect_tables(
     fields: tuple[fd.Function, fd.Function, fd.Function, Measure], form: str, nonlinear: bool
@@ -173,7 +202,7 @@ def test_every_entry_of_both_defect_tables(
         expected = factor * divergence_pairing(u, sub, ufl.inner(u, phi), dx)
         if form == "emac" and nonlinear:
             expected = ufl.inner(s, ufl.dot(ufl.grad(u), phi)) * dx
-        if not nonlinear and form != "emac_vms":
+        if not nonlinear and form not in ("emac_vms", "emac_vms_full"):
             expected -= ufl.inner(s, ufl.dot(ufl.grad(phi), u)) * dx
         same(angular, expected)
     energy = resolved_convection(a, u, u, u, dx, form)

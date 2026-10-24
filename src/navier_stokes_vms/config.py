@@ -19,7 +19,13 @@ SubscaleSpace = Literal["asgs", "oss"]
 SubscaleDynamics = Literal["static", "dynamic"]
 ScaleSplitting = Literal["linear", "nonlinear"]
 ConvectiveForm = Literal[
-    "nonconservative", "conservative", "skew_symmetric_1", "skew_symmetric_2", "emac", "emac_vms"
+    "nonconservative",
+    "conservative",
+    "skew_symmetric_1",
+    "skew_symmetric_2",
+    "emac",
+    "emac_vms",
+    "emac_vms_full",
 ]
 ViscousForm = Literal["laplacian", "stress"]
 Linearization = Literal["newton", "picard"]
@@ -401,17 +407,17 @@ def _check_stabilization(config: Config) -> None:
 
 def _check_forms(config: Config) -> None:
     form, solver = config.convection.form, config.solver
-    if form == "emac_vms":
+    if form in ("emac_vms", "emac_vms_full"):
         for name, value, required in (
             ("stabilization.method", config.stabilization.method, "vms"),
             ("viscosity.form", config.viscosity.form, "stress"),
         ):
             if value != required:
                 raise ValueError(
-                    f"convection.form = 'emac_vms', {name} = {value!r}: "
+                    f"convection.form = {form!r}, {name} = {value!r}: "
                     f"EMAC–VMS needs {name} = {required!r}"
                 )
-    if form in ("emac", "emac_vms"):
+    if form in ("emac", "emac_vms", "emac_vms_full"):
         # Owner decision: no Picard linearization of the kinetic pressure or substituted stress.
         if solver.linearization != "newton":
             raise ValueError(
