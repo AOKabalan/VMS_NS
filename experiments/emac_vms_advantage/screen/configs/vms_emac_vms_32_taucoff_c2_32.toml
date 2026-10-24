@@ -1,0 +1,68 @@
+case = "gresho"
+run_name = "vms_emac_vms_32_taucoff_c2_32"
+
+[case_parameters]
+viscosity = 1e-06
+
+[mesh]
+cells = [
+    32,
+    32,
+]
+
+[discretization]
+velocity_degree = 1
+pressure_degree = 1
+
+[time]
+scheme = "crank_nicolson"
+dt = 0.01
+t_end = 3.0
+startup = "lower_order"
+
+[stabilization]
+method = "vms"
+subscale_space = "oss"
+subscale_dynamics = "dynamic"
+scale_splitting = "nonlinear"
+c1 = 4.0
+c2 = 32.0
+pressure_subscale = false
+
+[convection]
+form = "emac_vms"
+
+[viscosity]
+form = "stress"
+
+[solver]
+linearization = "newton"
+newton_tau = "frozen"
+picard_iterations_before_newton = 0
+inner_rtol = 1e-10
+inner_atol = 1e-12
+inner_max_iterations = 200
+outer_rtol = 1e-09
+outer_max_iterations = 100
+subscale_update = "accelerated"
+subscale_rtol = 1e-11
+subscale_max_iterations = 50
+
+[solver.petsc]
+ksp_type = "preonly"
+pc_type = "lu"
+pc_factor_mat_solver_type = "mumps"
+
+[output]
+vtk_every = 0
+diagnostics = [
+    "kinetic_energy",
+    "subscale_kinetic_energy",
+    "linear_momentum",
+    "angular_momentum",
+    "energy_budget",
+    "convective_energy_defect",
+    "velocity_error_l2",
+    "divergence_l2",
+]
+console_level = "INFO"
