@@ -100,6 +100,7 @@ python presentation.py           # presentation/*.png
 python report.py                 # summary.md and figures/
 python screen/analyse.py         # screen/screening.md and screen/screening.csv
 python matched.py                # matched.md and presentation/8_*.png, 9_*.png
+python robustness_figure.py      # presentation/10_*.png (after tar -xJf data/robustness.tar.xz)
 
 # Rerun one experiment, e.g. E1 with EMAC–VMS and default OSS (results/E1_emac_vms_oss):
 python driver.py E1 emac_vms oss            # E1, E3, E4, E5: experiment form variant [T] [cells]

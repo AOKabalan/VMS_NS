@@ -321,6 +321,7 @@ Relative L² velocity error after 10 steps (16² / 32²):
 | EMAC | exact | exact | exact | 5.1e-4 / 1.1e-4 | 2.8e-3 / 9.7e-4 | no convergence / 9.7e-3 |
 | EMAC–VMS | exact | exact | exact | 5.1e-4 / 1.1e-4 | 2.8e-3 / 9.6e-4 | 2.2e-2 / 9.8e-3 |
 
+Figure: `presentation/10_rotation_shear_robustness.png` (also C = 3 and 30; `robustness_figure.py`).
 "Exact" means 1e-17 to 1e-16. The nonzero errors converge like h² (P1 interpolation of a quadratic
 pressure), and their relative size grows with C (5–13× for the classical forms from C = 1 to 100,
 40× for EMAC–VMS), so their absolute size grows like C² or faster.
