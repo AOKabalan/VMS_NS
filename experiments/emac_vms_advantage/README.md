@@ -1,5 +1,7 @@
 # EMAC–VMS advantage experiments (exploratory, after Phase 12b)
 
+`FINDINGS.md` documents every experiment, its setup and its results in full.
+
 Where does EMAC–VMS differ from the other convective forms, and is the full-stress variant of
 chapter §5.8.5 worth it? Everything here is P1/P1, Crank–Nicolson, 2D, mostly dynamic OSS with
 nonlinear splitting, the default stabilization (c1 = 4, c2 = 2, pressure subscale on) and
