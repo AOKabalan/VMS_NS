@@ -297,6 +297,44 @@ with s ∈ {0.25, 0.5, 1, 2, 4}. Compare at equal energy loss and at each form's
 
 Finding: the differences are structural, not damping, in both directions.
 
+### 2.10 E6 and E7: rigid-rotation and shear robustness tests
+
+Motivated by the angular-momentum robustness tests of Brubeck, Parker and Zerbinati (FETC 2026
+slides, "On the symmetry constraint and angular momentum conservation in mixed stress formulation")
+and by pressure robustness (Linke et al. 2017). Two exact steady Navier–Stokes solutions on
+(−½, ½)² with their own Dirichlet data, ν = 1e-6, f = 0, started from the exact field, 10 steps of
+δt = 0.01, C ∈ {1, 10, 100}, meshes 16² and 32² (`driver_rotation.py`):
+
+- E6, rigid rotation u = C(−y, x), p = C²r²/2. The convective term (u·∇)u = −∇p is a pure
+  gradient that the classical forms' P1 pressure must balance, but p is quadratic. For EMAC,
+  ∇ˢu = 0 makes 2(∇ˢu)u + (∇·u)u vanish and P = p − ½|u|² = 0.
+- E7, parallel shear u = C(y, 0), p constant. Now (u·∇)u = 0, so the classical forms need no
+  pressure, while EMAC must balance ∇½|u|² = C²y e_y with P = −½C²y², which is quadratic.
+
+Relative L² velocity error after 10 steps (16² / 32²):
+
+| Form | E6, C = 1 | E6, C = 10 | E6, C = 100 | E7, C = 1 | E7, C = 10 | E7, C = 100 |
+| --- | --- | --- | --- | --- | --- | --- |
+| CONV | 4.7e-4 / 9.4e-5 | 1.2e-3 / 2.5e-4 | 6.1e-3 / 1.5e-3 | exact | exact | exact |
+| CONS | 4.7e-4 / 9.4e-5 | 1.1e-3 / 2.3e-4 | 2.7e-3 / 6.6e-4 | exact | exact | exact |
+| SKEW | 4.7e-4 / 9.4e-5 | 1.0e-3 / 2.2e-4 | 2.6e-3 / 6.4e-4 | exact | exact | exact |
+| EMAC | exact | exact | exact | 5.1e-4 / 1.1e-4 | 2.8e-3 / 9.7e-4 | no convergence / 9.7e-3 |
+| EMAC–VMS | exact | exact | exact | 5.1e-4 / 1.1e-4 | 2.8e-3 / 9.6e-4 | 2.2e-2 / 9.8e-3 |
+
+"Exact" means 1e-17 to 1e-16. The nonzero errors converge like h² (P1 interpolation of a quadratic
+pressure), and their relative size grows with C (5–13× for the classical forms from C = 1 to 100,
+40× for EMAC–VMS), so their absolute size grows like C² or faster.
+
+Finding: each form leaves a different part of the convective term to the P1 pressure. The classical
+forms must balance the centripetal gradient, which dominates in vortices; the EMAC forms must balance
+the Bernoulli term ∇½|u|², which dominates in shear. EMAC and EMAC–VMS are exact for rigid rotation
+at any speed, the classical forms for parallel shear. This one mechanism explains the earlier
+results: EMAC–VMS wins on vortex cores and the smooth vortex (E4, E5, long Gresho), and loses on
+Gresho's strained ring and in shear layers through extra dissipation (E2, E3, section 3). The
+robustness is a property of the EMAC structure, shared by standard EMAC; EMAC–VMS adds exact
+conservation. E6 and E7 together are also a sharp design target: a scheme that is better than both
+must be exact in both tests.
+
 ## 3. Why EMAC–VMS dissipates more
 
 Principe, Codina and Henke (2010) give the numerical dissipation of OSS as
@@ -334,6 +372,10 @@ stabilization parameters).
 6. **The default stabilization constants are too large** for these nearly inviscid flows, for both forms
    and more so for EMAC–VMS.
 7. **The full-stress variant is not worth it.**
+8. **Robustness is flow-type dependent and explains everything above** (section 2.10): EMAC and
+   EMAC–VMS reproduce rigid rotation exactly at any speed, where the classical forms' error grows
+   with the speed; for parallel shear it is the reverse. In a pressure-robustness sense, EMAC is
+   "rotation-robust" and the classical forms are "shear-robust".
 
 ## 5. Limitations
 
@@ -350,6 +392,9 @@ stabilization parameters).
 
 ## 6. Open questions
 
+- A scheme exact in both E6 and E7, for example EMAC–VMS with a projection space enriched by the
+  gradients of quadratic edge bubbles (so that the P1-unrepresentable part of ∇½|u_h|² is not
+  dissipated), or a pressure-robust (divergence-free reconstruction) variant in the sense of Linke.
 - Recalibrate c1 and c2 per form (for example by matching dissipation or by the Guasch–Codina
   argument) and repeat the comparison at calibrated constants.
 - The smooth vortex on finer meshes and over longer times.
@@ -367,6 +412,9 @@ stabilization parameters).
   setups used for the Galerkin anchor.
 - Principe, Codina & Henke (2010), CMAME 199:791–801: the dissipative structure of OSS.
 - Guasch & Codina (2013), CMAME 261–262:154–166: statistical behaviour of OSS stabilization terms.
+- Brubeck, Parker & Zerbinati (2026), slides, Workshop on Finite Element Tensor Calculus, Sanya:
+  symmetry constraint and angular-momentum robustness in mixed stress formulations (motivated E6).
+- Linke et al. (2017), SIAM Review: pressure robustness (cited in those slides; not read here).
 
 ## 8. Files
 

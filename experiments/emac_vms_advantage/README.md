@@ -16,6 +16,7 @@ nonlinear splitting, the default stabilization (c1 = 4, c2 = 2, pressure subscal
 | E2 | thin double shear layer (ρ = 80, δ = 0.05, ν = 1e-4), periodic, 32², 64², 128² | under-resolved robustness | own 128² runs |
 | E3 | off-centre Gresho vortex in a no-slip box (−1, 1)², 48² (T = 10) and 96² (T = 3) | angular momentum | exact steady field |
 | E4, E5 | as E1 and E3 with a smooth compact swirl u_θ = 12 r (1 − r²/0.16)⁴ | accuracy without kinks in \|u\|² | exact |
+| E6, E7 | rigid rotation u = C(−y, x) and parallel shear u = C(y, 0), exact Dirichlet data, 16² and 32², C = 1, 10, 100 | robustness to the part of convection the P1 pressure must balance | exact |
 | dt sweep | Gresho long-run settings, 32², T = 2, δt = 0.02 … 0.0025 | time-integrator dependence | — |
 | full variant | `emac_vms_full` (chapter Eq. 5.37–5.38) on E1, E2 (64²), E3 (48², 96²) | dissipation, accuracy | — |
 
