@@ -39,11 +39,24 @@ VISCOSITY = 1e-6
 BACKGROUND = (1.0, 0.5)
 BOX_CENTRE = (0.1, 0.05)
 VARIANTS = {
-    # name: (subscale space, pressure subscale, c2)
-    "oss": ("oss", True, 2.0),
-    "oss_weak": ("oss", False, 32.0),
-    "asgs": ("asgs", True, 2.0),
+    # name: (subscale space, pressure subscale, c2, c1)
+    "oss": ("oss", True, 2.0, 4.0),
+    "oss_weak": ("oss", False, 32.0, 4.0),
+    "asgs": ("asgs", True, 2.0, 4.0),
 }
+
+
+def variant_options(variant: str) -> tuple[str, bool, float, float]:
+    """A named variant, or oss_s<s>: default OSS with c1 and c2 divided by s.
+
+    That multiplies τ_m by s and leaves τ_c = h²/(c1 τ_m) unchanged (matched-dissipation runs).
+    """
+    if variant.startswith("oss_s"):
+        scale = float(variant.removeprefix("oss_s"))
+        return "oss", True, 2.0 / scale, 4.0 / scale
+    return VARIANTS[variant]
+
+
 SOLVER = SolverOptions(
     linearization="newton",
     newton_tau="frozen",
@@ -131,7 +144,7 @@ def box_problem(cells: int, smooth: bool = False) -> Problem:
 
 
 def make_config(experiment: str, form: str, variant: str, t_end: float, cells: int) -> Config:
-    space, tau_c, c2 = VARIANTS[variant]
+    space, tau_c, c2, c1 = variant_options(variant)
     diagnostics = COMMON_DIAGNOSTICS
     if experiment in ("E3", "E5"):
         diagnostics += (
@@ -152,6 +165,7 @@ def make_config(experiment: str, form: str, variant: str, t_end: float, cells: i
             subscale_space=space,
             subscale_dynamics="dynamic",
             scale_splitting="nonlinear",
+            c1=c1,
             c2=c2,
             pressure_subscale=tau_c,
         ),

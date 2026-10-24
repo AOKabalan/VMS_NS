@@ -55,10 +55,28 @@ checked against those papers; the 128² runs are the judge.
    (`presentation/6_full_stress_variant.png`). Definition 5.1, which keeps the standard subscale
    model, is the better choice.
 
-Open: a dissipation-matched comparison (scale c1 and c2 together, which scales τ_m and keeps τ_c),
-to decide whether the shear-layer topology and smooth-vortex accuracy are structural or follow
-from the extra damping; the smooth vortex on a finer mesh; a turbulent case (3D Taylor–Green,
-Re = 1600), for which Guasch and Codina (2013) give the implicit-LES framework.
+7. **Matched dissipation** (`matched.py`, `presentation/8_matched_dissipation.png`,
+   `presentation/9_shear_layer_matched.png`, `matched.md`). τ_m is multiplied by s through c1/s
+   and c2/s, which keeps τ_c = h²/(c1 τ_m): EMAC–VMS with s = 1, 0.5, 0.25 and skew with
+   s = 0.25 … 4, so each form can be compared at equal energy loss and at its own best τ.
+   - Both forms improve as τ_m decreases: the default constants over-stabilize these nearly
+     inviscid flows, EMAC–VMS more so.
+   - Gresho, 96²: skew is better at every matched loss and at its best τ (0.023 against 0.030).
+   - Translating smooth vortex: a tie at the best τ (0.153 against 0.150).
+   - Smooth vortex in the box: EMAC–VMS is about 35 % more accurate at every τ
+     (0.136–0.150 against 0.209–0.219).
+   - Shear layer, 64²: skew grows spurious braid vortices at every τ, even when it dissipates
+     more than EMAC–VMS; EMAC–VMS never does. At small τ skew's enstrophy overshoots the 128²
+     value, the signature of those vortices.
+
+   So the shear-layer topology and the smooth-vortex accuracy are structural, not damping, and
+   the Gresho penalty is structural too. Against skew-symmetric 1 the comparison is
+   flow-dependent: skew is the less dissipative, generally safe choice, and EMAC–VMS adds exact
+   angular momentum, robustness of shear-layer topology and higher accuracy on smooth vortices.
+
+Open: the smooth vortex on a finer mesh; stabilization constants recalibrated per form; a turbulent
+case (3D Taylor–Green, Re = 1600), for which Guasch and Codina (2013) give the implicit-LES
+framework.
 
 ## Code
 
@@ -78,9 +96,11 @@ tar -xJf data/runs.tar.xz && tar -xJf data/screening.tar.xz
 python presentation.py           # presentation/*.png
 python report.py                 # summary.md and figures/
 python screen/analyse.py         # screen/screening.md and screen/screening.csv
+python matched.py                # matched.md and presentation/8_*.png, 9_*.png
 
 # Rerun one experiment, e.g. E1 with EMAC–VMS and default OSS (results/E1_emac_vms_oss):
 python driver.py E1 emac_vms oss            # E1, E3, E4, E5: experiment form variant [T] [cells]
+python driver.py E5 emac_vms oss_s0.5 3     # variant oss_s<s>: τ_m × s, τ_c unchanged
 python driver_e2.py emac_vms 64             # E2: form cells [variant] [T]; MPI-safe
 python screen/generate.py                   # screening configs, then run each with run_one.sh
 ```
