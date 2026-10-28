@@ -47,25 +47,6 @@ exactly with the subscale residual. As a result, energy, linear momentum and ang
 are all conserved by convection. Time stepping uses BDF1–3 or Crank–Nicolson, solved with
 Newton or Picard iterations.
 
-## Results
-
-Of the five forms, only EMAC–VMS keeps all three convective defects at round-off:
-
-![Convective defects of each form](docs/figures/1_defect_matrix.png)
-
-Standard EMAC loses momentum and energy as soon as subscales are present. The VMS coupling,
-not EMAC itself, decides conservation:
-
-![EMAC vs EMAC–VMS on a translating vortex](docs/figures/2_emac_vs_emac_vms.png)
-
-[`FINDINGS.md`](https://github.com/AOKabalan/VMS_NS/blob/experiment/emac-vms-advantage/experiments/emac_vms_advantage/FINDINGS.md) (on the `experiment/emac-vms-advantage` branch)
-has the full set of experiments, including the cases where EMAC–VMS is *not* better: it is
-more dissipative at every resolution tested, most visibly on coarse meshes (vorticity panel above).
-
-Validation against published data: lid-driven cavity (Ghia et al. 1982, Re = 100 and 1000),
-flow past a cylinder (DFG 2D-2), lattice vortex and Ethier–Steinman 3D (exact solutions), and
-the Gresho vortex.
-
 ## Quick start
 
 Install Firedrake first (tested with 2026.10.0), then, inside its virtual environment:
