@@ -111,7 +111,7 @@ navier-stokes-vms/
 | --- | --- | --- |
 | `config.py` | Option dataclasses, TOML loading, validation of illegal combinations, resolved-config dump | Import Firedrake |
 | `problem/mesh_loading.py` | Built-in meshes and `.msh` loading; boundary name → tag tables | Know about equations |
-| `problem/boundary_conditions.py` | `Dirichlet(value)`, `Outflow()` descriptions; conversion to Firedrake `DirichletBC` and `ds` measures by name | Know about time schemes |
+| `problem/boundary_conditions.py` | `Dirichlet(value)`, `FreeSlip(normal_axis)`, `Outflow()` descriptions; conversion to Firedrake `DirichletBC` and `ds` measures by name | Know about time schemes |
 | `problem/problem_definition.py` | `Problem` dataclass (section 8); pressure null-space decision | Build forms |
 | `discretization/function_spaces.py` | Mixed space, the OSS space V × Q × V̂ (× Q̂) whose projection components stay unconstrained, subscale quadrature spaces | Choose degrees (config does) |
 | `discretization/quadrature.py` | The single quadrature rule: `dx`, `ds`, the matching quadrature element, positivity check | Anything else |
@@ -229,7 +229,7 @@ A case module exposes one function, `build(config) -> Problem`. `Problem` holds 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `mesh` | Firedrake mesh | From `mesh_loading` |
-| `boundary_conditions` | `dict[str, Dirichlet \| Outflow]` | Keyed by boundary name |
+| `boundary_conditions` | `dict[str, Dirichlet \| FreeSlip \| Outflow]` | Keyed by boundary name |
 | `boundary_tags` | `dict[str, int]` | Name → mesh tag |
 | `viscosity` | `float` | ν |
 | `forcing` | `(x, t) -> UFL` | f |
@@ -244,6 +244,7 @@ A case module exposes one function, `build(config) -> Problem`. `Problem` holds 
 - Boundary names for built-in meshes are `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max`. `mesh_loading.py` holds the name → tag table for each built-in constructor; test U7 confirms it against the installed Firedrake.
 - For `.msh` files, names come from the `$PhysicalNames` section. The case refers only to names; a missing name raises an error listing the available ones.
 - Periodic directions have no boundary names.
+- `FreeSlip(normal_axis)` is restricted to walls normal to a coordinate axis (checked geometrically). It imposes zero normal velocity, including the initial trace, and leaves zero tangential traction as the natural condition. It retains the constant-pressure null space. The Kelvin–Helmholtz experiment uses this for the horizontal walls of an x-periodic channel.
 - The case owns the geometry (shape, origin, lengths, periodicity) and its default mesh; the config only overrides resolution or file. A case raises a clear error for a mesh source it does not support.
 - The pressure null space (constant pressure) is used exactly when no `Outflow` boundary exists.
 

@@ -30,6 +30,10 @@ def scheme_at_step(scheme: TimeScheme, startup: Startup, step: int) -> TimeSchem
     """Scheme used at step n+1 = step (1-based), after the startup of spec: Time schemes."""
     if step < 1:
         raise ValueError(f"step = {step}: steps are numbered from 1")
+    if startup == "none":
+        if scheme != "crank_nicolson":
+            raise ValueError("time.startup = 'none' requires time.scheme = 'crank_nicolson'")
+        return scheme
     if scheme == "crank_nicolson":
         return "bdf1" if step == 1 else "crank_nicolson"
     if startup == "exact_history":

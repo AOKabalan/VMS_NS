@@ -153,10 +153,10 @@ def test_each_case_builds_on_a_coarse_mesh(case: str) -> None:
         else MeshOptions(cells=(4,) * dimension)
     )
     problem = build_problem(Config(case=case, run_name="test", mesh=options))
-    if case in ("cylinder_dfg_2d", "lid_driven_cavity"):
+    if case in ("cylinder_dfg_2d", "lid_driven_cavity", "kelvin_helmholtz"):
         assert problem.reference_values
         assert set(problem.boundary_conditions) == set(problem.boundary_tags)
-        assert uses_pressure_null_space(problem) == (case == "lid_driven_cavity")
+        assert uses_pressure_null_space(problem) == (case != "cylinder_dfg_2d")
         return
     assert problem.mesh.num_cells() == (384 if dimension == 3 else 32)
     assert problem.exact_velocity is not None and problem.exact_pressure is not None

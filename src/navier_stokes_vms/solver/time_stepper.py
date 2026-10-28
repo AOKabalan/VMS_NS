@@ -55,9 +55,11 @@ from navier_stokes_vms.postprocessing.output import (
 from navier_stokes_vms.postprocessing.run_logging import IterationLogs, open_iteration_logs
 from navier_stokes_vms.problem.boundary_conditions import (
     Dirichlet,
+    FreeSlip,
     Outflow,
     check_dirichlet_flux,
     dirichlet_bc,
+    free_slip_bc,
     named_boundary_measure,
 )
 from navier_stokes_vms.problem.problem_definition import (
@@ -205,6 +207,15 @@ class TimeStepper:
             for name, bc in conditions.items()
             if isinstance(bc, Dirichlet)
         ]
+        slip_walls = [(name, bc) for name, bc in conditions.items() if isinstance(bc, FreeSlip)]
+        bcs += [
+            free_slip_bc(space.sub(0), name, bc.normal_axis, problem.boundary_tags)
+            for name, bc in slip_walls
+        ]
+        self._slip_bcs = [
+            free_slip_bc(velocity_space, name, bc.normal_axis, problem.boundary_tags)
+            for name, bc in slip_walls
+        ]
         null_space = (
             constant_pressure_null_space(space) if uses_pressure_null_space(problem) else None
         )
@@ -222,6 +233,7 @@ class TimeStepper:
                 for name, bc in conditions.items()
                 if isinstance(bc, Dirichlet)
             ]
+            self._boundary_bcs += self._slip_bcs
         self._area = fd.assemble(fd.Constant(1.0) * self._dx)
         # EMAC variants keep the unknown and its null space on P; every reported pressure is the
         # physical p_h at the solve-level velocity, with its own zero mean (spec: EMAC pressure).
@@ -344,6 +356,8 @@ class TimeStepper:
     def _initialise(self) -> None:
         x = fd.SpatialCoordinate(self._problem.mesh)
         self._history[0].interpolate(self._problem.initial_velocity(x))
+        for bc in self._slip_bcs:
+            bc.apply(self._history[0])
         timing = self._config.time
         if timing.startup == "exact_history":
             first = step_coefficients(timing.scheme, timing.startup, step=1)

@@ -11,7 +11,7 @@ from ufl.core.expr import Expr
 from ufl.domain import extract_unique_domain
 
 from navier_stokes_vms.config import Config
-from navier_stokes_vms.problem.boundary_conditions import Dirichlet, Outflow, boundary_tag
+from navier_stokes_vms.problem.boundary_conditions import Dirichlet, FreeSlip, Outflow, boundary_tag
 
 SpaceTimeExpression = Callable[[Expr, Expr], Expr]
 
@@ -25,7 +25,7 @@ class Problem:
     """Mesh, boundaries, viscosity, data and optional exact solution of one case."""
 
     mesh: MeshGeometry
-    boundary_conditions: Mapping[str, Dirichlet | Outflow]
+    boundary_conditions: Mapping[str, Dirichlet | FreeSlip | Outflow]
     boundary_tags: Mapping[str, int]
     viscosity: float
     forcing: SpaceTimeExpression

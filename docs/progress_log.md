@@ -1255,3 +1255,185 @@ Gates:
 - `OMP_NUM_THREADS=1 pytest tests/unit -n 2`: **687 passed, 1 xfailed in 191.91 s**. The xfail is strict and documents the accepted near-inviscid nonlinear ASGS limitation. Pytest temporary/cache directories and the full log (`/tmp/vms_phase12b_decisions_unit.log`) are under `/tmp`; Firedrake and Matplotlib caches were redirected there too.
 - The unit gate includes byte-for-byte comparison of regenerated and committed configurations, the six family counts and settings, both viscous ASGS step checks and the analysis grouping. `git diff --check` passed.
 - The slow verification suite and the full conservation queue were not run, respecting the Phase 12b-1 unit-scale restriction. Phase 12b-2 remains owner launch only. This follow-up stops after committing the decisions and implementation.
+## Kelvin–Helmholtz Figure 4 experiment preparation
+
+Prepared the owner's requested SKEW1 versus EMAC–VMS comparison of the single
+shear-layer problem in Olshanskii & Rebholz (2020), section 4.3. Source checked
+against `/home/ali/Downloads/longer_time_accuracy.pdf`, pp. 15–17.
+
+- Added `kelvin_helmholtz`: unit square, periodic x, free-slip horizontal walls,
+  delta_0=1/28, velocity scale 1, perturbation 1e-3, Re=1000 based on delta_0,
+  hence nu=1/28000. No exact evolving solution is claimed.
+- Added axis-aligned `FreeSlip(normal_axis)` boundaries: constrain only the
+  normal velocity, including its initial trace; natural zero tangential traction
+  and constant-pressure null space. Wall alignment is checked geometrically.
+- `experiments/kelvin_helmholtz_2020/` contains two generated matched P2/P2
+  dynamic nonlinear OSS configurations (196x196, BDF2 dt=0.001, T=14), a sequential
+  MPI launcher, a driver with durable enstrophy diagnostics and triangle-local
+  vorticity snapshots, a Figure 4-style plotter, and launch instructions.
+- The paper uses unstabilized P2/P1 and ordinary EMAC. The prepared VMS pair uses
+  stress viscosity for both forms and equal-order OSS, so it is an adaptation,
+  not a quantitative reproduction. VMS could suppress the SKEW enstrophy jump;
+  these two runs alone cannot isolate the effect of adding stabilization.
+- No production simulations launched. Four-step 16x16 preparation runs passed
+  in serial and on two ranks for both forms. Energy/enstrophy agree across rank
+  counts within 2.82e-15 relative; zero normal wall velocity, startup, snapshot
+  area and reconstructed enstrophy were checked. DG1 exports explicitly use
+  vertex nodes, avoiding the installed Firedrake default's interior DG nodes.
+- 190 targeted tests passed (34 case/boundary tests, 156 time-stepper/configuration/
+  validation regressions). The plotter checks snapshot enstrophy before rendering
+  and labels missing frames. The README documents the 28,000-step full pair and
+  a separate ten-step prefix command for the owner to assess cost.
+
+## Kelvin–Helmholtz owner revision: P1/P1 and a coarser mesh (2026-10-25)
+
+The owner selected P1/P1 after the P2/P2 prefix showed excessive cost. Both
+196x196 P1/P1 ten-step prefixes completed, then the owner requested stopping
+the active full run and preparing a coarser experiment to launch later.
+Stopped the full-run queue and its MPI processes and verified none remain.
+
+The default case mesh, generator, two configurations, launcher and plotter now
+select P1/P1 on 64x64. This has 8,320 velocity and 24,960 coupled unknowns,
+versus 77,224 and 231,672 at 196x196 P1/P1. Re, viscosity, initial data, boundary
+conditions, stabilization coefficients, BDF2 dt=0.001 and T=14 are unchanged.
+Old configurations and results are retained under their explicit names.
+Configuration comparisons, ruff checks and shell syntax checks passed.
+No coarse-mesh simulation was launched; runtime at the new resolution is unmeasured.
+
+## Kelvin–Helmholtz: restored mesh and LU reuse assessment (2026-10-25)
+
+Restored the case fallback, generator, launcher and plotter to 196x196, keeping
+the owner's P1/P1 choice. Added explicitly selected `reuse_lu` configurations:
+right-preconditioned GMRES with unpreconditioned residual rtol=1e-10,
+atol=1e-14, maximum 100 iterations; LU/MUMPS rebuilt every five Newton updates
+with the counter persisting across inner solves. Jacobians still update every
+Newton iteration. The direct solver remains available and is the launcher
+default. Nonlinear tolerances, PDE, mesh, physical and time parameters are
+identical between variants. No core nonlinear solver implementation changed.
+
+The owner explicitly approved four steps per solver and per formulation on
+the restored mesh. All four four-rank runs completed at t=0.004. PETSc profiles
+confirm numeric LU factorization as substantial avoidable work: SKEW1's count
+falls from 25 to 5; EMAC–VMS's from 28 to 6. Steps 3–4 average 9.92 -> 3.55 s
+for SKEW1 (2.79x) and 11.85 -> 5.00 s for EMAC–VMS (2.37x). Outer/Newton counts
+are unchanged. Final velocity nodal differences are <=1.62e-15 absolute;
+all final coupled/subscale coefficient vectors differ by <3.56e-11 relative.
+Energy differs by <=5.56e-17 and enstrophy by <=2.85e-14 absolute over the prefix.
+These are early-time measurements, not a guarantee of late-time robustness.
+
+Added optional PETSc profiles and per-rank final-state exports to the
+experiment driver. Configuration round-trip/equality checks confirmed that
+only solver options and run names differ; ruff, shell syntax and diff checks
+passed. Evidence is in `results/kh_lu_assessment/`, including the comparison
+script, profiles, fields and JSON summary. The approved prefixes have exited;
+no full simulation was launched or resumed.
+
+## Kelvin–Helmholtz phase profiling and further solver tuning (2026-10-25)
+
+At the owner's request, profiled the restored 196x196 P1/P1 experiment on
+four MPI ranks, separating the first two steps from measured steps 3–10.
+Added optional experiment-local method timers with exclusive/inclusive
+per-rank accounting and PETSc stages. No core equations or solver iteration
+implementation changed. Three profiler tests check nested accounting,
+exception propagation and restoration/export.
+
+The reuse-5 baseline spends about 91% of measured time inside SNES: numeric
+LU factors account for approximately 42% of total step time, LU applications
+29%, Jacobian assembly 17%; local subscales take 4–5%, diagnostics/snapshots
+under 1%. Tested longer reuse and adaptive linear tolerances separately and
+together, then repeated the baseline. Ten ten-step runs completed (100 steps
+total across two formulations and five variants/repetitions). Each simulation
+records success. The repeated-baseline shell queue emitted a trailing parse
+error after both simulations completed because the launcher was edited while
+the shell was reading it; the final launcher passes `bash -n`. The numerical
+run records and complete profiles were verified independently of that queue status.
+
+Measured seconds per step (SKEW1, EMAC–VMS): reuse-5 baseline (4.18, 5.97),
+reuse-20 (3.57, 5.01), reuse-5 plus adaptive linear tolerances (3.98, 5.83),
+combined reuse-20 plus adaptive linear tolerances (2.81, 4.33). The repeat
+baseline gives (4.08, 6.26). Added the combined configuration as the explicit
+`reuse_lu_tuned` generator/launcher option; the default remains direct LU.
+Intermediate linear tolerances now adapt; final nonlinear/subscale tolerances
+and the physical/discrete equations are identical to the baseline.
+
+MPI partitions varied, so final-state exports now carry coordinates and
+subscale cell centres. Coordinate-matched comparisons against the repeated
+baseline give maximum velocity differences <=8.39e-13 absolute, all-field
+relative coefficient differences <=3.13e-10, energy differences <=1.78e-15,
+and enstrophy differences <=1.24e-12. Final coupled residuals are <1e-12.
+Baseline vorticity also agrees with the earlier direct-LU prefixes within
+2.71e-14 relative. Data, comparison/plot scripts and PNG/PDF plots are in
+`results/kh_phase_profile/`. These are t<=0.01 checks, not late-time accuracy
+or robustness validation. No full simulation was started or resumed.
+
+## Kelvin–Helmholtz block-preconditioner experiment (2026-10-25)
+
+At the owner's request, implemented an explicit `block_oss` configuration
+using flexible GMRES on the complete current Jacobian. A full Schur field
+split groups xi,zeta first and u,p second. The mass block uses CG/Jacobi
+with rtol=1e-2, atol=1e-14 and max_it=50; the Schur preconditioner uses
+the fluid A11 block with MUMPS. At 196x196 P1/P1, the global matrix remains
+231,672 square, while the direct factorization is 115,836 square. The full
+consistent weighted projection equations and final convergence tests are
+unchanged. Preconditioner reuse and adaptive linear tolerances match the
+existing `reuse_lu_tuned` option; the outer linear cap is 200.
+
+Screened six block variants using four steps of SKEW1 each, then compared
+the selected block variant and tuned LU reference using ten-step prefixes
+for both formulations, twice in opposite execution orders. All 14 prefixes
+(104 steps total) completed successfully. No full simulation was launched.
+Mean time over steps 3–10: SKEW1 4.17 -> 3.50 s (16% reduction), EMAC–VMS
+5.89 -> 4.88 s (17%). Summed per-rank peak RSS averages: 3.12 -> 2.19 GiB
+and 3.10 -> 2.22 GiB, respectively. Rank peaks need not coincide. Native
+solver views and memory high-water exports were added to the profiling path.
+
+Coordinate-matched fields agree to <4.69e-12 absolute for velocity and
+<4.08e-9 relative over all coefficient vectors, with energy differences
+<2.23e-15 and enstrophy differences <1.15e-12 absolute. Terminal coupled
+residuals remain <1e-12. The block method needs more Newton/Krylov updates,
+which limits the speed benefit despite smaller factors. The comparison
+documents machine timing variation and does not extrapolate to late times.
+Data, scripts, profiles, native solver views and figures are saved under
+`results/kh_block_profile/`. Generated configs match the measured candidate
+except for run name; the generator and launcher expose it as an opt-in
+choice and retain the existing default.
+
+## Exact inviscid Gresho benchmark preparation (2026-10-25)
+
+Prepared the owner's separate `gresho_exact` case after reading the formulation,
+implementation, verification and progress documentation. Checked the Gresho setup
+in Charnyi et al. 2017 §4.1 and the 2019 paper's preprint §4.1. Details and manual
+commands are in `docs/gresho_exact.md`.
+
+- Default 48×48 triangular mesh, ν exactly zero, f = 0, and the existing analytical
+  Gresho velocity/pressure functions imported unchanged. All four walls reuse the
+  existing component-only `FreeSlip` support. Positive viscosity is rejected for
+  this exact-Euler case. The old Gresho case/configurations are unchanged.
+- Four configurations in `configs/gresho_exact/`: EMAC and SKEW1 P2/P1 Galerkin,
+  plus EMAC–VMS and SKEW1 P1/P1 dynamic nonlinear OSS. All use dt=0.01, T=10,
+  and the new explicit CN-only `startup="none"` option. This avoids silently
+  taking a BDF1 first step; all existing startup modes retain their behavior.
+- OSS selects the existing pressure-subscale-off variant, removing the zero-weight
+  ζ block at rest. Dynamic τ_t stays finite; frozen τ avoids the derivative of
+  speed at zero. No viscosity/speed floor, formulation equation change, or solver
+  regularization was added. This choice differs from the old pressure-subscale-on
+  Phase 12b matrix and is documented explicitly.
+- Added `total_kinetic_energy` = ½‖u_h+ũ‖² with the cross term, common quadrature,
+  and endpoint fields. It requires dynamic VMS. Resolved energies/momenta and all
+  existing budgets/defects retain their definitions. OSS moments use u_h, consistent
+  with its time term and whole-domain subscale orthogonality. Existing EMAC physical
+  pressure reconstruction and gauge-invariant pressure errors are reused unchanged.
+- Documentation records free-slip wall reactions/torques, the qualifications on
+  predicted interior defects, and the lack of damping of initial discrete-divergence
+  defects under pure CN. Interior-only momentum predictions are not requested.
+
+Validation: 165 selected tests passed (new case/assembly/diagnostic tests plus time
+coefficients and configuration checks; six run-script tests excluded in the final
+selection). Initial 8×8 OSS and 4×4 Galerkin Jacobians are finite, have no empty rows,
+and have exactly one numerical null direction, the pressure constant. Tests also
+check free tangential traces, shared analytical functions, midpoint physical pressure,
+pressure gauge invariance, total-energy cross terms and endpoint timing. The first
+test attempt hit a read-only compiler-cache database; directing caches to `/tmp`
+resolved it. Ruff, formatting, diff checks and the four-config queue dry-run passed.
+No benchmark or prefix was launched, and no Newton update or time step was taken.
+No convergence, runtime or long-time conservation result is claimed.

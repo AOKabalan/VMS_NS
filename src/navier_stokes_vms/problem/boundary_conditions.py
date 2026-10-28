@@ -21,6 +21,34 @@ class Outflow:
     """Do-nothing outflow ν ∂n u − p n = 0 (spec: Boundary conditions and quadrature)."""
 
 
+@dataclass(frozen=True)
+class FreeSlip:
+    """Axis-aligned wall: zero normal velocity and natural zero tangential traction."""
+
+    normal_axis: int
+
+
+def free_slip_bc(
+    space: WithGeometry, name: str, normal_axis: int, boundary_tags: Mapping[str, int]
+) -> fd.DirichletBC:
+    """Constrain only the normal component; verify that the wall is axis-aligned."""
+    mesh = space.mesh()
+    if (
+        not isinstance(normal_axis, int)
+        or isinstance(normal_axis, bool)
+        or normal_axis not in range(mesh.geometric_dimension)
+    ):
+        raise ValueError("free-slip normal_axis must be a coordinate axis of the mesh")
+    tag = boundary_tag(name, boundary_tags)
+    normal = fd.FacetNormal(mesh)
+    ds = fd.ds(tag, domain=mesh, degree=2)
+    area = fd.assemble(fd.Constant(1.0) * ds)
+    mismatch = fd.assemble((1 - normal[normal_axis] ** 2) * ds)
+    if area <= 0 or abs(mismatch) > 1e-12 * area:
+        raise ValueError(f"free-slip boundary {name!r} is not normal to axis {normal_axis}")
+    return fd.DirichletBC(space.sub(normal_axis), 0.0, tag)
+
+
 def dirichlet_bc(
     space: WithGeometry, name: str, value: Expr, boundary_tags: Mapping[str, int]
 ) -> fd.DirichletBC:

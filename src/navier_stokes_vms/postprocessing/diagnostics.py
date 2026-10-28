@@ -292,6 +292,12 @@ def _subscale_kinetic_energy(state: DiagnosticState) -> float:
     return fd.assemble(ufl.inner(state.subscale_velocity, state.subscale_velocity) / 2 * state.dx)
 
 
+def _total_kinetic_energy(state: DiagnosticState) -> float:
+    """½‖u_h + ũ‖² at the endpoint, retaining the cross term even for OSS."""
+    velocity = state.velocity + state.subscale_velocity
+    return fd.assemble(ufl.inner(velocity, velocity) / 2 * state.dx)
+
+
 def _components(expression: Expr, measure: Measure) -> dict[str, float]:
     return {
         axis: fd.assemble(expression[i] * measure)
@@ -382,6 +388,7 @@ def _momentum_budget(state: DiagnosticState) -> dict[str, float | None]:
 DIAGNOSTICS: dict[str, Diagnostic] = {
     "kinetic_energy": Diagnostic(_kinetic_energy, needs_exact_solution=False),
     "subscale_kinetic_energy": Diagnostic(_subscale_kinetic_energy, needs_exact_solution=False),
+    "total_kinetic_energy": Diagnostic(_total_kinetic_energy, needs_exact_solution=False),
     "linear_momentum": Diagnostic(_linear_momentum, needs_exact_solution=False),
     "angular_momentum": Diagnostic(_angular_momentum, needs_exact_solution=False),
     "force": Diagnostic(_force, needs_exact_solution=False),

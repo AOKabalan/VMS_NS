@@ -153,7 +153,20 @@ limitation is why the inviscid families use OSS only. A case may declare
 `Problem.monitor_region`, an indicator (1 inside, 0 outside) evaluated at quadrature points;
 Gresho declares the near-wall frame max(|x|, |y|) ≥ 0.45.
 
+The separate [exact Gresho benchmark](docs/gresho_exact.md) uses 48×48, ν = 0,
+normal-only free-slip walls, and Crank–Nicolson from step 1 with Δt = 0.01 and T = 10.
+`configs/gresho_exact/` contains P2/P1 Galerkin baselines and P1/P1 dynamic OSS
+comparisons with the pressure subscale disabled to avoid the resting ζ null block.
+The OSS runs report both resolved and total kinetic energy. These configurations
+are prepared for manual launch; the existing `gresho` benchmark remains unchanged.
+
 ## Validation
+
+The [Kelvin–Helmholtz experiment](experiments/kelvin_helmholtz_2020/README.md) prepares
+matched SKEW1 and EMAC–VMS runs with Figure 4-style vorticity snapshots and enstrophy
+histories. Its `kelvin_helmholtz` case uses periodic x boundaries and axis-aligned
+`FreeSlip(normal_axis)` walls, which constrain only normal velocity. It is a VMS
+adaptation of the Olshanskii–Rebholz 2020 setup, with no exact evolving reference.
 
 Three validation cases compare against published data: `lid_driven_cavity` (Ghia, Ghia and
 Shin 1982, Re = 100 and 1000), `cylinder_dfg_2d` (DFG 2D-2, FEATFLOW reference) and
