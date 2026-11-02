@@ -51,6 +51,7 @@ class FieldWriter:
         self._folder = folder / "fields"
         self._files: tuple[fd.VTKFile, fd.VTKFile] | None = None
         self._temperature_file: fd.VTKFile | None = None
+        self._scalar_files: dict[str, fd.VTKFile] = {}
 
     def write(
         self,
@@ -59,6 +60,7 @@ class FieldWriter:
         velocity_time: float,
         pressure_time: float,
         temperature: fd.Function | None = None,
+        scalars: Mapping[str, fd.Function] | None = None,
     ) -> None:
         """Append the velocity at velocity_time and the pressure at pressure_time."""
         if self._files is None:
@@ -72,6 +74,10 @@ class FieldWriter:
             if self._temperature_file is None:
                 self._temperature_file = fd.VTKFile(str(self._folder / "temperature.pvd"))
             self._temperature_file.write(temperature, time=velocity_time)
+        for name, scalar in (scalars or {}).items():
+            if name not in self._scalar_files:
+                self._scalar_files[name] = fd.VTKFile(str(self._folder / f"{name}.pvd"))
+            self._scalar_files[name].write(scalar, time=velocity_time)
 
 
 def open_diagnostics_csv(comm: MPI.Comm, folder: Path, names: Sequence[str]) -> CsvWriter:
@@ -197,6 +203,10 @@ def write_thermal_metadata(comm: MPI.Comm, folder: Path, problem: Problem, confi
                 for name in ("momentum", "continuity", "temperature")
             },
         }
+        if problem.passive_scalars:
+            values["passive_scalars"] = {
+                s.name: {"diffusivity": s.diffusivity} for s in problem.passive_scalars
+            }
         (folder / "thermal_metadata.json").write_text(
             json.dumps(values, indent=2) + "\n", encoding="utf-8"
         )

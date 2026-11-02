@@ -1,0 +1,27 @@
+case = "manufactured_boussinesq"
+run_name = "static_oss_bdf1"
+
+[mesh]
+cells = [8, 8]
+
+[discretization]
+velocity_degree = 1
+pressure_degree = 1
+
+[stabilization]
+method = "vms"
+subscale_space = "oss"
+subscale_dynamics = "static"
+scale_splitting = "linear"
+
+[time]
+scheme = "bdf1"
+dt = 0.01
+t_end = 0.1
+
+[thermal]
+convection = "skew_symmetric"
+
+[output]
+vtk_every = 5
+diagnostics = ["kinetic_energy", "divergence_l2", "temperature_l2", "temperature_error_l2", "thermal_content", "buoyancy_power"]

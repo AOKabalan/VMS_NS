@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
@@ -35,6 +36,8 @@ def check_thermal_problem(problem: Problem) -> None:
     """Check material values and complete, independent thermal boundary coverage."""
     thermal = problem.thermal
     if thermal is None:
+        if problem.passive_scalars:
+            raise ValueError("passive scalars require thermal problem data")
         return
     if thermal.scaling not in ("dimensional", "nondimensional"):
         raise ValueError("thermal scaling must be dimensional or nondimensional")
@@ -70,33 +73,62 @@ def check_thermal_problem(problem: Problem) -> None:
     ):
         raise ValueError("thermal boundaries require Dirichlet or DiffusiveFlux conditions")
 
+    names = {"velocity", "pressure", "temperature", "xi", "zeta"}
+    for scalar in problem.passive_scalars:
+        if (
+            not isinstance(scalar.name, str)
+            or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", scalar.name)
+            or scalar.name in names
+            or scalar.name.startswith("eta_")
+        ):
+            raise ValueError("passive scalar names must be unique, valid and nonreserved")
+        names.add(scalar.name)
+        if (
+            isinstance(scalar.diffusivity, bool)
+            or not isinstance(scalar.diffusivity, int | float)
+            or not math.isfinite(scalar.diffusivity)
+            or scalar.diffusivity <= 0
+        ):
+            raise ValueError("passive scalar diffusivity must be finite and positive")
+        if set(scalar.boundary_conditions) != set(problem.boundary_tags) or any(
+            not isinstance(bc, Dirichlet | DiffusiveFlux)
+            for bc in scalar.boundary_conditions.values()
+        ):
+            raise ValueError("passive scalar boundaries must cover the named mesh boundaries")
+
 
 def check_thermal_supported(config: Config, problem: Problem) -> None:
-    """Reject options outside the current B1 Galerkin thermal implementation."""
+    """Reject thermal options beyond Galerkin and B2 static linear stabilization."""
+    check_thermal_problem(problem)
     if problem.thermal is None:
         if config.thermal is not None:
             raise ValueError("[thermal] requires a case with thermal problem data")
         return
     validate_config(config)
-    check_thermal_problem(problem)
-    if config.stabilization.method != "none":
-        raise ValueError("B1 thermal runs require stabilization.method = 'none'")
+    if config.stabilization.method == "vms" and (
+        config.stabilization.subscale_dynamics != "static"
+        or config.stabilization.scale_splitting != "linear"
+    ):
+        raise ValueError("B2 thermal VMS requires static dynamics and linear splitting")
     if config.time.scheme != "bdf1" or config.time.startup != "lower_order":
-        raise ValueError("B1 thermal runs require BDF1 with lower_order startup")
+        raise ValueError("B2 thermal runs require BDF1 with lower_order startup")
     if config.solver.linearization != "newton" or config.solver.picard_iterations_before_newton:
-        raise ValueError("B1 thermal runs require Newton without Picard warm-up")
+        raise ValueError("B2 thermal runs require Newton without Picard warm-up")
     if config.viscosity.form != "laplacian" or config.convection.form not in (
         "skew_symmetric_1",
         "nonconservative",
     ):
         raise ValueError(
-            "B1 thermal runs require Laplacian viscosity and "
+            "B2 thermal runs require Laplacian viscosity and "
             "skew_symmetric_1 or nonconservative momentum convection"
         )
     if any(isinstance(bc, Outflow) for bc in problem.boundary_conditions.values()):
-        raise ValueError("B1 thermal runs require periodic or closed velocity boundaries")
-    if config.discretization.velocity_degree != config.discretization.pressure_degree + 1:
-        raise ValueError("B1 thermal Galerkin runs require Taylor–Hood velocity/pressure degrees")
+        raise ValueError("B2 thermal runs require periodic or closed velocity boundaries")
+    if (
+        config.stabilization.method == "none"
+        and config.discretization.velocity_degree != config.discretization.pressure_degree + 1
+    ):
+        raise ValueError("B2 thermal Galerkin runs require Taylor–Hood velocity/pressure degrees")
     degree = config.thermal.temperature_degree if config.thermal is not None else None
     if degree is not None and degree != config.discretization.velocity_degree:
         raise ValueError("B1 temperature degree must equal the velocity degree")

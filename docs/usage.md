@@ -287,8 +287,9 @@ velocity degree, BDF1 with lower-order startup, Newton without Picard warm-up,
 and Laplacian viscosity. Momentum convection may be `skew_symmetric_1` or
 `nonconservative`; `[thermal].convection` is `skew_symmetric` (default) or
 `nonconservative`. An omitted temperature degree resolves to the velocity degree.
-Thermal VMS, other integrators, stress viscosity, other momentum forms, and open
-thermal boundaries become available through later phase gates.
+Static linear thermal VMS is described below. Dynamic/nonlinear thermal VMS,
+other integrators, stress viscosity, other momentum forms and open thermal
+boundaries remain later phase work.
 
 A thermal case attaches `ThermalProblem` to `Problem`. It supplies positive
 thermal diffusivity, nonnegative expansion coefficient, a gravity vector pointing
@@ -320,3 +321,47 @@ and absolute tolerance. These are algebraic load-vector norms, not physical
 energy norms. Their values appear in `inner_iterations.csv` as
 `velocity_residual`, `pressure_residual` and `temperature_residual`, and the
 chosen scales are recorded in thermal metadata.
+
+
+## Static thermal ASGS/OSS and passive scalars (B2)
+
+Run the stabilized manufactured examples through the same entry point:
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/manufactured_static_asgs.toml
+python scripts/run_simulation.py configs/boussinesq/manufactured_static_oss.toml
+```
+
+These use equal-order P1/P1/P1; P2/P2/P2 is also verified. Set
+`stabilization.subscale_dynamics = "static"` and `scale_splitting = "linear"`.
+BDF1, Newton, the supported convection choices and the B1 boundary restrictions
+still apply. Setting `pressure_subscale = false` removes the pressure subscale
+and its OSS projection without disabling scalar stabilization. Frozen-τ Newton
+freezes the mechanical and scalar parameters consistently. Exact-τ Newton is
+available but retains the zero-advector derivative limitation described for the
+flow solver.
+
+A case builder can attach a tuple of `PassiveScalarProblem` data to
+`Problem.passive_scalars`. Each entry supplies its name, positive diffusivity,
+source, initial value, independent boundary map and optional exact solution.
+Names must be unique identifiers and must avoid physical/projection field names
+and the `eta_` prefix. Temperature supplies the buoyancy; passive fields remain
+one-way coupled within the same monolithic system. Their degree, convection
+and stabilization switches inherit the thermal choices. B2 also supports these
+passive fields in the Galerkin baseline.
+
+For a passive field `q`, OSS unknowns are ordered as
+`velocity, pressure, temperature, q, xi, eta_temperature, eta_q, (zeta)`.
+Only physical fields receive Dirichlet conditions; the pressure constant is the
+sole gauge. Scalar endpoints/history storage, VTK series (`q.pvd`), metadata,
+inner residual columns and outer change columns are named independently. The
+`passive_scalar_content` and `passive_scalar_l2` diagnostic groups produce
+columns such as `passive_scalar_content_q`. They measure resolved scalar values;
+conservation statements still require the formulation's boundary, source and
+convection qualifications.
+
+Thermal projection residuals use the corresponding thermal/mechanical reference
+scales and have independent initial-relative/absolute checks. Empty passive data
+preserve temperature-only fields/output, and isothermal configurations retain
+their original spaces and output columns. Dynamic/nonlinear thermal subscales,
+free-slip/channel support and the KH application remain later phase work.

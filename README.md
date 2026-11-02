@@ -47,9 +47,9 @@ exactly with the subscale residual. As a result, energy, linear momentum and ang
 are all conserved by convection. Time stepping uses BDF1–3 or Crank–Nicolson, solved with
 Newton or Picard iterations.
 
-A coupled thermal Boussinesq Galerkin baseline is also available with Newton and
-BDF1. See [thermal usage](docs/usage.md#thermal-boussinesq-baseline-b1) and the
-[thermal formulation](docs/boussinesq_formulation.md); thermal VMS is the next phase.
+Thermal Boussinesq Galerkin and static linear ASGS/OSS are available with
+Newton, BDF1 and optional passive scalars. See [thermal usage](docs/usage.md#thermal-boussinesq-baseline-b1) and the
+[thermal formulation](docs/boussinesq_formulation.md); dynamic thermal subscales are the next phase.
 
 ## Quick start
 

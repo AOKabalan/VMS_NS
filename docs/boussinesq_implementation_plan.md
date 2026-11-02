@@ -1,7 +1,7 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
-Status: B0 and B1 completed, 2 November 2026. Thermal stabilization starts
-in B2. Equations refer to the companion
+Status: B0–B2 completed, 2 November 2026. Dynamic thermal subscales start
+in B3. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
 solver for isothermal and thermally coupled problems, with small, explicit
 thermal components and unchanged isothermal defaults.
@@ -300,6 +300,18 @@ Acceptance:
    temperature reproduces it to solver tolerance. With no passive data,
    temperature-only results and output are unchanged. All scalar fields have
    distinct projection and history storage.
+
+B2 implementation: `thermal_system` composes the existing mechanical VMS kernels
+with scalar-generic static residual/subscale/adjoint/projection kernels. OSS
+fields are selected by `FieldLayout`, with `eta_temperature` and one
+`eta_<name>` per passive scalar. The optional `Problem.passive_scalars` tuple
+is normalized through `transported_scalars`; each scalar has independent data,
+history, projection, output and named residual/change records. Passive content
+and L² diagnostics expand to scalar-named columns. Both Newton parameter modes
+are checked against directional derivatives; pressure projection can be removed
+independently. Dynamic/nonlinear thermal choices remain rejected. Phase G4 slip
+and partial-periodic mesh support are a separate prerequisite and are not
+implemented merely by reaching B2.
 
 ### Boundary prerequisite G4 — Before the early B7.1 test
 

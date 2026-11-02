@@ -34,7 +34,7 @@ from navier_stokes_vms.problem.mesh_loading import periodic_rectangle, rectangle
 from navier_stokes_vms.problem.problem_definition import Problem, check_problem
 from navier_stokes_vms.problem.thermal_problem import ThermalProblem, check_thermal_supported
 from navier_stokes_vms.solver.nonlinear_solver import StepSolveResult
-from navier_stokes_vms.solver.system_builder import galerkin_thermal_system
+from navier_stokes_vms.solver.system_builder import thermal_system
 from navier_stokes_vms.solver.time_stepper import TimeStepper
 
 
@@ -220,17 +220,15 @@ def test_jacobian_contains_both_coupling_directions() -> None:
         ufl.as_vector((0.0, 0.0)),
     )
     scalar = replace(level, history=fd.Function(space.sub(2).collapse()), forcing=ufl.as_ufl(0.0))
-    residual = galerkin_thermal_system(
+    residual = thermal_system(
         solution,
         layout,
-        0.1,
+        problem,
         level,
-        scalar,
-        problem.thermal,
+        {"temperature": scalar},
         fd.dx(domain=problem.mesh, degree=6),
-        "skew_symmetric_1",
-        "skew_symmetric",
-    )
+        configuration(),
+    ).residual
     jacobian = fd.derivative(residual, solution)
     for source, target in ((2, 0), (0, 2)):
         direction = fd.Function(space)

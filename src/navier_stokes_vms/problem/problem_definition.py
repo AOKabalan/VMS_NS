@@ -12,6 +12,7 @@ from ufl.domain import extract_unique_domain
 
 from navier_stokes_vms.config import Config
 from navier_stokes_vms.problem.boundary_conditions import Dirichlet, Outflow, boundary_tag
+from navier_stokes_vms.problem.scalar_problem import PassiveScalarProblem
 from navier_stokes_vms.problem.thermal_problem import ThermalProblem, check_thermal_problem
 
 SpaceTimeExpression = Callable[[Expr, Expr], Expr]
@@ -37,6 +38,7 @@ class Problem:
     force_boundaries: tuple[str, ...] = ()
     monitor_region: Callable[[Expr], Expr] | None = None
     thermal: ThermalProblem | None = None
+    passive_scalars: tuple[PassiveScalarProblem, ...] = ()
 
 
 def exact_solution_forcing(

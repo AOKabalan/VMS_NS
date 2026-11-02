@@ -1,11 +1,12 @@
 # Thermal Boussinesq VMS formulation
 
-Status: B1 Galerkin baseline implemented, 2 November 2026. This document specifies the thermal
+Status: B2 static linear thermal ASGS/OSS implemented, 2 November 2026. This document specifies the thermal
 buoyancy model requested for the existing incompressible Navier–Stokes framework;
-The implemented subset is Taylor–Hood Galerkin with equal velocity/temperature
-degree, Newton, BDF1, Laplacian viscosity, and the nonconservative or
-skew-symmetric convection choices on periodic or impermeable domains.
-Subscales and the subsequent application phases remain proposed. The companion
+The implemented subset includes Taylor–Hood Galerkin and equal-order static
+linear ASGS/OSS with temperature and optional passive scalars. Newton, BDF1,
+Laplacian viscosity and the nonconservative/skew choices are supported on
+periodic or impermeable domains. Dynamic/nonlinear thermal subscales and the
+subsequent application phases remain proposed. The companion
 [integration plan](boussinesq_implementation_plan.md) identifies the code changes
 and verification gates. Existing flow conventions remain defined by
 [formulation_spec.md](formulation_spec.md).
@@ -380,11 +381,30 @@ The monolithic Galerkin residual uses the physical force (B1) in the existing
 momentum kernel and adds only the resolved terms of (B14). Newton differentiates
 both transport and buoyancy. Independent scalar Dirichlet and outward-flux data
 use the same solve-level data weights as velocity. B1 exposes only BDF1 with
-lower-order startup and the two stated convection choices; later time/subscale
+lower-order startup and the two stated convection choices; dynamic/nonlinear subscale and later time
 choices below remain phase-gated. The existing solver's combined algebraic
 residual criterion is supplemented by a criterion for each equation, normalized
 by a recorded positive reference scale and compared with its own initial norm
 and absolute tolerance. These algebraic criteria are distinct from energy norms.
+
+### Implemented B2 extension
+
+Static linear ASGS/OSS uses the existing momentum kernels with exactly the
+resolved force $f+b(T_h)$ in their residual and projection. Scalar kernels use
+(B10), (B11), (B14) with no dynamic history or dynamic feedback. The separate
+$+\beta(g\widetilde T,v_h)$ resolved momentum term remains present for ASGS
+and OSS; no off-diagonal force is added to the local closure. Effective static
+weights equal their spatial parameters, and pointwise parameters and all
+projection/adjoint products use the common positive quadrature rule.
+
+In code, scalar projection names are `eta_temperature` and `eta_<passive_name>`;
+physical scalar names occur before the projection block. Disabling the pressure
+subscale removes only `zeta` and its equation. Passive scalar data live in
+`Problem.passive_scalars`, with independent diffusivity/source/initial/boundary
+values and inherited degree, convection and stabilization choices. All active
+fields enter the monolithic Newton solve and named convergence checks. Frozen-τ
+Newton freezes both scalar and mechanical parameters, including projection
+weights; exact-τ Newton retains the existing zero-speed derivative limitation.
 
 ### Galerkin and passive-temperature limits
 

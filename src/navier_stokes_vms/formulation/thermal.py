@@ -33,3 +33,27 @@ def scalar_galerkin_residual(
         + diffusivity * ufl.dot(ufl.grad(field), ufl.grad(test))
         - level.forcing * test
     ) * dx + scalar_convection(a, field, test, dx, convection)
+
+
+def scalar_residual(
+    field: Expr,
+    a: Expr,
+    diffusivity: float,
+    level: SolveLevel,
+    is_asgs: bool,
+) -> Expr:
+    """Static scalar residual, with resolved time derivative removed only for OSS (B10)."""
+    residual = level.forcing - ufl.dot(a, ufl.grad(field)) + diffusivity * ufl.div(ufl.grad(field))
+    if is_asgs:
+        residual -= time_derivative(field, level.history, level.alpha0, level.dt)
+    return residual
+
+
+def scalar_subscale(residual: Expr, tau: Expr, projection: Expr | None = None) -> Expr:
+    """Eliminated static scalar subscale τ(X − η), with no spatial differentiation (B10)."""
+    return tau * (residual if projection is None else residual - projection)
+
+
+def scalar_vms_terms(subscale: Expr, test: Expr, a: Expr, diffusivity: float, dx: Measure) -> Form:
+    """Scalar subscale feedback through the convective and diffusive adjoint (B14)."""
+    return -subscale * (ufl.dot(a, ufl.grad(test)) + diffusivity * ufl.div(ufl.grad(test))) * dx

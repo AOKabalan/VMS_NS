@@ -1357,3 +1357,64 @@ Verification:
   slow verification suite are outside B1.
 
 B1 is complete. Stop at this phase boundary; B2 adds static thermal ASGS/OSS.
+
+## Boussinesq B2: static linear ASGS/OSS and generic scalars (2026-11-02)
+
+Implementation:
+
+- Added scalar-generic static residual, subscale, adjoint-feedback and weighted
+  projection kernels, sharing the spatial transport parameter with momentum.
+  ASGS retains the resolved time derivative; OSS removes it and solves its
+  current projection in the monolithic system. P2 retains both elementwise
+  diffusive operators. All parameters/projections use the common quadrature.
+- Reused the existing mechanical VMS and OSS kernels with resolved buoyancy in
+  the momentum residual and projection. Temperature-subscale buoyancy remains
+  a separate resolved feedback term; the diagonal local closure is unchanged.
+- Unified Galerkin and static stabilized thermal assembly in `thermal_system`.
+  Frozen Newton freezes all mechanical/scalar parameters and projection weights;
+  exact Newton retains their derivatives and the existing zero-speed limitation.
+- Added `PassiveScalarProblem`, an optional ordered tuple on `Problem`, and
+  `transported_scalars` as the shared transport view. Names, coefficients and
+  independent boundaries are validated. Passive fields inherit thermal numerical
+  choices, enter the same solve, and never enter buoyancy. Histories, projections,
+  convergence records, VTK files, metadata and content/L² diagnostic columns name
+  each scalar separately. Empty passive data preserve temperature-only output.
+- Extended named mixed spaces with scalar projection fields. With one passive
+  field q, OSS ordering is u, p, T, q, xi, eta_temperature, eta_q, (zeta).
+  Pressure remains component 1 and the only constant gauge. Disabling the
+  pressure subscale removes only zeta and its equation; scalar stabilization stays.
+- Added runnable static ASGS/OSS examples under `configs/boussinesq/`. BDF1,
+  Newton, supported convection and boundary restrictions remain in force;
+  dynamic/nonlinear thermal variants are explicitly rejected. Free-slip/channel
+  support remains the separate G4 prerequisite, not part of this phase.
+
+Verification:
+
+- Full unit regression: **745 passed, 1 xfailed in 214.25 s**. The xfail is the
+  existing accepted near-inviscid nonlinear ASGS limitation. The final focused
+  B2 run, including three added future-variant rejection checks, passed
+  **30 tests in 20.29 s**. Logs: `/tmp/vms-b2-all.log` and `/tmp/vms-b2-focused.log`.
+- Tests verify the P1 SUPG sign, active P2 residual/adjoint diffusion, pointwise
+  weighted FE buoyancy cancellation, nonzero ASGS temperature-subscale feedback
+  with its correct sign, and zero OSS feedback under matching spaces.
+- Coupled P1/P2 OSS runs check velocity and temperature orthogonality with/without
+  pressure projection, unconstrained projection boundaries and the pressure gauge.
+  Both Newton parameter modes, ASGS/OSS and P1/P2 are checked against directional
+  finite differences with a passive scalar present. Passive-copy tests match
+  temperature at beta = 0 for Galerkin/ASGS/OSS; a distinct passive tracer leaves
+  buoyant flow/temperature unchanged. Named output and invalid data are checked.
+- The B1 Galerkin manufactured run matches HEAD's B1 source exactly in velocity,
+  pressure, temperature and diagnostic/inner/outer CSV records. Four isothermal
+  runs likewise match B1 exactly. Artifacts are `/tmp/vms-b2-before-galerkin`,
+  `/tmp/vms-b2-after-galerkin` and `/tmp/vms-b2-isothermal`.
+- Both new examples completed through `scripts/run_simulation.py`, at
+  `results/manufactured_boussinesq/static_asgs_bdf1` and `static_oss_bdf1`.
+  At t = 0.1 on the 8×8 P1/P1/P1 mesh, temperature L² errors were approximately
+  1.754e-3; final mixed residuals were 2.184e-15 (ASGS) and 5.381e-13 (OSS).
+  These are integration checks, not B5 convergence/cavity studies.
+- Lint, formatting, whitespace and documentation-link checks passed. Compiler
+  caches remain in the existing git-ignored workspace cache. The slow verification
+  suite, production studies and G4 boundary implementation remain outside B2.
+
+B2 is complete. Stop at this phase boundary; B3 adds dynamic thermal subscales
+and the remaining time schemes.

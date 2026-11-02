@@ -66,11 +66,17 @@ class IterationLogs:
 
 
 def open_iteration_logs(
-    comm: MPI.Comm, folder: Path, scalar_names: Sequence[str] = ()
+    comm: MPI.Comm,
+    folder: Path,
+    scalar_names: Sequence[str] = (),
+    residual_names: Sequence[str] = (),
 ) -> IterationLogs:
     """Create the three files with their plan §9 columns."""
     residual_columns = (
-        tuple(f"{name}_residual" for name in ("velocity", "pressure", *scalar_names))
+        tuple(
+            f"{name}_residual"
+            for name in (residual_names or ("velocity", "pressure", *scalar_names))
+        )
         if scalar_names
         else ()
     )

@@ -19,6 +19,8 @@ from navier_stokes_vms.formulation.convective_forms import (
 from navier_stokes_vms.formulation.operators import viscous_bilinear, viscous_operator
 from navier_stokes_vms.postprocessing.thermal_diagnostics import (
     buoyancy_power,
+    passive_scalar_content,
+    passive_scalar_l2,
     temperature_error_l2,
     temperature_l2,
     thermal_content,
@@ -281,6 +283,7 @@ class DiagnosticState:
     subscale_time: fd.Constant | None
     conservation: Conservation | None = None
     temperature: fd.Function | None = None
+    passive_scalars: dict[str, fd.Function] | None = None
 
 
 @dataclass(frozen=True)
@@ -387,6 +390,8 @@ def _momentum_budget(state: DiagnosticState) -> dict[str, float | None]:
 
 
 DIAGNOSTICS: dict[str, Diagnostic] = {
+    "passive_scalar_content": Diagnostic(passive_scalar_content, needs_exact_solution=False),
+    "passive_scalar_l2": Diagnostic(passive_scalar_l2, needs_exact_solution=False),
     "temperature_l2": Diagnostic(temperature_l2, needs_exact_solution=False),
     "temperature_error_l2": Diagnostic(temperature_error_l2, needs_exact_solution=False),
     "thermal_content": Diagnostic(thermal_content, needs_exact_solution=False),
@@ -437,6 +442,10 @@ REGION_DIAGNOSTICS = ("region_velocity_l2", "region_subscale_l2")
 
 def check_diagnostics_supported(names: Sequence[str], problem: Problem) -> None:
     """Reject diagnostics whose exact solution, force boundaries or monitor region are absent."""
+    if {"passive_scalar_content", "passive_scalar_l2"}.intersection(
+        names
+    ) and not problem.passive_scalars:
+        raise ValueError("passive scalar diagnostics require named passive scalars")
     thermal_names = {"temperature_l2", "temperature_error_l2", "thermal_content", "buoyancy_power"}
     if thermal_names.intersection(names) and problem.thermal is None:
         raise ValueError("thermal diagnostics require thermal problem data")
@@ -474,7 +483,9 @@ def diagnostic_columns(names: Sequence[str], problem: Problem) -> tuple[str, ...
     axes = "xyz"[: problem.mesh.geometric_dimension]
     columns = []
     for name in names:
-        if name in (
+        if name in ("passive_scalar_content", "passive_scalar_l2"):
+            columns.extend(f"{name}_{scalar.name}" for scalar in problem.passive_scalars)
+        elif name in (
             "linear_momentum",
             "linear_momentum_defect",
             "linear_momentum_defect_predicted",

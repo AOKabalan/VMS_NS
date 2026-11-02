@@ -26,3 +26,14 @@ def projection_equations(
     if zeta is not None:
         form += tau_c * (zeta - divergence) * r * dx
     return form
+
+
+def scalar_projection_equation(
+    projection: Expr,
+    test: Expr,
+    residual: Expr,
+    tau: Expr,
+    dx: Measure,
+) -> Form:
+    """Weighted scalar residual projection onto the unconstrained scalar space (B11)."""
+    return tau * (projection - residual) * test * dx

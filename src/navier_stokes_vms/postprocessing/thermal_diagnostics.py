@@ -40,3 +40,16 @@ def buoyancy_power(state: DiagnosticState) -> float:
         thermal.reference_temperature,
     )
     return fd.assemble(ufl.inner(force, state.solve_velocity) * state.dx)
+
+
+def passive_scalar_content(state: DiagnosticState) -> dict[str, float]:
+    """Resolved content of each named passive scalar."""
+    return {name: fd.assemble(field * state.dx) for name, field in state.passive_scalars.items()}
+
+
+def passive_scalar_l2(state: DiagnosticState) -> dict[str, float]:
+    """L² norm of each named passive scalar."""
+    return {
+        name: fd.assemble(field**2 * state.dx) ** 0.5
+        for name, field in state.passive_scalars.items()
+    }
