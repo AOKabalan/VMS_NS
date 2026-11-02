@@ -58,6 +58,11 @@ from navier_stokes_vms.postprocessing.output import (
     write_thermal_metadata,
 )
 from navier_stokes_vms.postprocessing.run_logging import IterationLogs, open_iteration_logs
+from navier_stokes_vms.postprocessing.thermal_budgets import (
+    THERMAL_BUDGETS,
+    ThermalBudgetFields,
+    ThermalBudgets,
+)
 from navier_stokes_vms.problem.boundary_conditions import (
     DiffusiveFlux,
     Dirichlet,
@@ -427,6 +432,47 @@ class TimeStepper:
             subscale_time = self._t_new
         elif self._iterate is not None:
             subscale_velocity = self._iterate.value
+        self._thermal_budgets = None
+        thermal_requested = [name for name in config.output.diagnostics if name in THERMAL_BUDGETS]
+        if thermal is not None and thermal_requested:
+            self._thermal_budgets = ThermalBudgets(
+                thermal_requested,
+                ThermalBudgetFields(
+                    config=config,
+                    problem=problem,
+                    velocity=self._velocity,
+                    advector=a,
+                    velocity_subscale=self._u_sub,
+                    velocity_history=u_sub_history,
+                    scalar_fields=self._scalar_fields,
+                    scalar_subscales=self._scalar_subscales,
+                    scalar_histories={
+                        name: storage.history
+                        for name, storage in self._scalar_subscale_storage.items()
+                    },
+                    scalar_projections={
+                        name: unknowns[f"eta_{name}"]
+                        for name in self._scalar_data
+                        if f"eta_{name}" in unknowns
+                    },
+                    scalar_fluxes={
+                        name: {
+                            boundary: self._at_solve_level(bc.value, x)
+                            for boundary, bc in data.boundary_conditions.items()
+                            if isinstance(bc, DiffusiveFlux) and bc.value is not None
+                        }
+                        for name, data in self._scalar_data.items()
+                    },
+                    momentum_level=level,
+                    scalar_levels=scalar_levels,
+                    xi=xi,
+                    zeta=zeta,
+                    tau_u=tau_m,
+                    tau_c=tau_c,
+                    dx=self._dx,
+                    ds=self._ds,
+                ),
+            )
         self._diagnostic_state = DiagnosticState(
             problem=problem,
             velocity=self._velocity_states.levels[0],
@@ -444,6 +490,7 @@ class TimeStepper:
             temperature=self.temperature,
             solve_temperature=self._temperature,
             passive_scalars=self.passive_scalars,
+            thermal_budgets=self._thermal_budgets,
         )
         self._fields = FieldWriter(folder)
         self._folder = folder
@@ -643,6 +690,8 @@ class TimeStepper:
             self._fail(step, result)
         if self._conservation is not None:
             self._conservation.capture(coefficients.scheme == "crank_nicolson")
+        if self._thermal_budgets is not None:
+            self._thermal_budgets.capture()
         self._advance(coefficients)
         values = evaluate_diagnostics(self._config.output.diagnostics, self._diagnostic_state)
         subscale_time = self._diagnostic_state.subscale_time

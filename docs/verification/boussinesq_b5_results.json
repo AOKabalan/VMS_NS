@@ -1,0 +1,462 @@
+{
+  "spatial": {
+    "1": {
+      "rows": [
+        {
+          "level": "cells8x8",
+          "refinement": "8",
+          "velocity_error_l2": "0.0009700867294279082",
+          "velocity_error_l2_rate": "",
+          "velocity_gradient_error_l2": "0.02168967362048775",
+          "velocity_gradient_error_l2_rate": "",
+          "pressure_error_l2": "0.001294609486545489",
+          "pressure_error_l2_rate": "",
+          "temperature_error_l2": "0.0017573875241186344",
+          "temperature_error_l2_rate": "",
+          "temperature_gradient_error_l2": "0.07939063088161749",
+          "temperature_gradient_error_l2_rate": ""
+        },
+        {
+          "level": "cells16x16",
+          "refinement": "16",
+          "velocity_error_l2": "0.000249073651965584",
+          "velocity_error_l2_rate": "1.9615413200264595",
+          "velocity_gradient_error_l2": "0.010980717237441774",
+          "velocity_gradient_error_l2_rate": "0.9820360527059808",
+          "pressure_error_l2": "0.00040589849209435547",
+          "pressure_error_l2_rate": "1.6733260951290707",
+          "temperature_error_l2": "0.00043898016842609425",
+          "temperature_error_l2_rate": "2.001204686763689",
+          "temperature_gradient_error_l2": "0.03969348971443516",
+          "temperature_gradient_error_l2_rate": "1.0000663561160923"
+        },
+        {
+          "level": "cells32x32",
+          "refinement": "32",
+          "velocity_error_l2": "6.207682018558528e-05",
+          "velocity_error_l2_rate": "2.0044458513204484",
+          "velocity_gradient_error_l2": "0.00549000181432175",
+          "velocity_gradient_error_l2_rate": "1.0000937601166233",
+          "pressure_error_l2": "0.00012749948423754827",
+          "pressure_error_l2_rate": "1.6706275693707127",
+          "temperature_error_l2": "0.00010971428071309628",
+          "temperature_error_l2_rate": "2.000404442239854",
+          "temperature_gradient_error_l2": "0.019846484575016813",
+          "temperature_gradient_error_l2_rate": "1.0000189204983145"
+        }
+      ],
+      "finest_rates": {
+        "velocity_error_l2_rate": "2.0044458513204484",
+        "velocity_gradient_error_l2_rate": "1.0000937601166233",
+        "pressure_error_l2_rate": "1.6706275693707127",
+        "temperature_error_l2_rate": "2.000404442239854",
+        "temperature_gradient_error_l2_rate": "1.0000189204983145"
+      }
+    },
+    "2": {
+      "rows": [
+        {
+          "level": "cells8x8",
+          "refinement": "8",
+          "velocity_error_l2": "5.455555028628151e-05",
+          "velocity_error_l2_rate": "",
+          "velocity_gradient_error_l2": "0.0030202737227267564",
+          "velocity_gradient_error_l2_rate": "",
+          "pressure_error_l2": "0.0004477524048356523",
+          "pressure_error_l2_rate": "",
+          "temperature_error_l2": "3.0524461344155553e-06",
+          "temperature_error_l2_rate": "",
+          "temperature_gradient_error_l2": "0.0001351855256485359",
+          "temperature_gradient_error_l2_rate": ""
+        },
+        {
+          "level": "cells16x16",
+          "refinement": "16",
+          "velocity_error_l2": "6.202863643865801e-06",
+          "velocity_error_l2_rate": "3.1367196627061906",
+          "velocity_gradient_error_l2": "0.0007400837446664994",
+          "velocity_gradient_error_l2_rate": "2.028918870486751",
+          "pressure_error_l2": "7.353233875264054e-05",
+          "pressure_error_l2_rate": "2.606250404015456",
+          "temperature_error_l2": "2.047434585894468e-07",
+          "temperature_error_l2_rate": "3.8980765720227106",
+          "temperature_gradient_error_l2": "2.0853673838800403e-05",
+          "temperature_gradient_error_l2_rate": "2.6965672161178142"
+        },
+        {
+          "level": "cells32x32",
+          "refinement": "32",
+          "velocity_error_l2": "7.468039030294733e-07",
+          "velocity_error_l2_rate": "3.054133038153347",
+          "velocity_gradient_error_l2": "0.00018299456748386582",
+          "velocity_gradient_error_l2_rate": "2.015887708890818",
+          "pressure_error_l2": "1.1840903620363812e-05",
+          "pressure_error_l2_rate": "2.6345996894589634",
+          "temperature_error_l2": "1.2499199784146067e-08",
+          "temperature_error_l2_rate": "4.03390971985519",
+          "temperature_gradient_error_l2": "2.716782919153839e-06",
+          "temperature_gradient_error_l2_rate": "2.940330370211598"
+        }
+      ],
+      "finest_rates": {
+        "velocity_error_l2_rate": "3.054133038153347",
+        "velocity_gradient_error_l2_rate": "2.015887708890818",
+        "pressure_error_l2_rate": "2.6345996894589634",
+        "temperature_error_l2_rate": "4.03390971985519",
+        "temperature_gradient_error_l2_rate": "2.940330370211598"
+      }
+    }
+  },
+  "temporal": {
+    "crank_nicolson": {
+      "scheme": "crank_nicolson",
+      "errors": {
+        "velocity": [
+          0.00011748677808554802,
+          3.0650379023378045e-05,
+          7.842116670973107e-06
+        ],
+        "temperature": [
+          0.0008124247473971241,
+          0.0002081737004104607,
+          5.2739063839919785e-05
+        ]
+      },
+      "rates": {
+        "velocity": 1.9665899036298462,
+        "temperature": 1.9808439499485244
+      }
+    },
+    "bdf2": {
+      "scheme": "bdf2",
+      "errors": {
+        "velocity": [
+          0.00017834944807917073,
+          4.382796329802851e-05,
+          1.0852951775853828e-05
+        ],
+        "temperature": [
+          0.0006639092123663022,
+          0.0001646621350665192,
+          4.096406472438281e-05
+        ]
+      },
+      "rates": {
+        "velocity": 2.013764158926748,
+        "temperature": 2.0070780565471806
+      }
+    },
+    "bdf1": {
+      "scheme": "bdf1",
+      "errors": {
+        "velocity": [
+          0.0016265427876880766,
+          0.0008348914188529384,
+          0.0004230887007152816
+        ],
+        "temperature": [
+          0.009788790056881632,
+          0.004991482184719171,
+          0.0025208876614585527
+        ]
+      },
+      "rates": {
+        "velocity": 0.9806284245698698,
+        "temperature": 0.9855364484103573
+      }
+    },
+    "bdf3": {
+      "scheme": "bdf3",
+      "errors": {
+        "velocity": [
+          1.6837336287504633e-05,
+          2.01949528028284e-06,
+          2.473418161981623e-07
+        ],
+        "temperature": [
+          5.013191020020559e-05,
+          6.062116380410926e-06,
+          7.454856285222479e-07
+        ]
+      },
+      "rates": {
+        "velocity": 3.02941670342512,
+        "temperature": 3.023569103620658
+      }
+    }
+  },
+  "cavity": {
+    "1000": [
+      {
+        "cells": 8,
+        "degree": 1,
+        "run": "results/differentially_heated_cavity/b5_cavity_ra1000_n8",
+        "last": {
+          "step": 750.0,
+          "time": 150.0,
+          "pressure_time": 150.0,
+          "subscale_time": 150.0,
+          "kinetic_energy": 0.003103481198283971,
+          "angular_momentum": -0.023114804432197874,
+          "thermal_content": -4.0852737859253807e-16,
+          "cavity_nusselt_volume": 1.0812173647791492,
+          "cavity_nusselt_hot_gradient": 1.1223288607177755,
+          "cavity_nusselt_cold_gradient": 1.12232886071776,
+          "cavity_nusselt_hot_reaction": 1.0845784801800136,
+          "cavity_nusselt_cold_reaction": 1.0845784801800202
+        },
+        "last50_nusselt_span": 0.0,
+        "relative_wall_reaction_imbalance": 6.141868264475725e-15
+      },
+      {
+        "cells": 16,
+        "degree": 1,
+        "run": "results/differentially_heated_cavity/cavity_ra1000_v2",
+        "last": {
+          "step": 750.0,
+          "time": 150.0,
+          "pressure_time": 150.0,
+          "subscale_time": 150.0,
+          "kinetic_energy": 0.0038160845061982105,
+          "angular_momentum": -0.02613856517381013,
+          "thermal_content": -6.440160904563896e-17,
+          "cavity_nusselt_volume": 1.1075657453610257,
+          "cavity_nusselt_hot_gradient": 1.1309762682512758,
+          "cavity_nusselt_cold_gradient": 1.1309762682512743,
+          "cavity_nusselt_hot_reaction": 1.1077943057409356,
+          "cavity_nusselt_cold_reaction": 1.1077943057409345
+        },
+        "last50_nusselt_span": 0.0,
+        "relative_wall_reaction_imbalance": 1.0021923915582835e-15
+      },
+      {
+        "cells": 32,
+        "degree": 1,
+        "run": "results/differentially_heated_cavity/b5_cavity_ra1000_n32",
+        "last": {
+          "step": 750.0,
+          "time": 150.0,
+          "pressure_time": 150.0,
+          "subscale_time": 150.0,
+          "kinetic_energy": 0.004036129586794428,
+          "angular_momentum": -0.027080337606779505,
+          "thermal_content": -8.239936510889834e-18,
+          "cavity_nusselt_volume": 1.1151819828432692,
+          "cavity_nusselt_hot_gradient": 1.1275694584126041,
+          "cavity_nusselt_cold_gradient": 1.127569458412604,
+          "cavity_nusselt_hot_reaction": 1.1151967278779211,
+          "cavity_nusselt_cold_reaction": 1.1151967278779211
+        },
+        "last50_nusselt_span": 0.0,
+        "relative_wall_reaction_imbalance": 0.0
+      }
+    ],
+    "10000": [
+      {
+        "cells": 8,
+        "degree": 2,
+        "run": "results/differentially_heated_cavity/b5_cavity_ra10000_n8",
+        "last": {
+          "step": 750.0,
+          "time": 150.0,
+          "pressure_time": 150.0,
+          "subscale_time": 150.0,
+          "kinetic_energy": 0.009047019282087608,
+          "angular_momentum": -0.042857823518366214,
+          "thermal_content": 1.5785983631388945e-16,
+          "cavity_nusselt_volume": 2.231966891428831,
+          "cavity_nusselt_hot_gradient": 2.324309313442145,
+          "cavity_nusselt_cold_gradient": 2.324309313442145,
+          "cavity_nusselt_hot_reaction": 2.232015082842901,
+          "cavity_nusselt_cold_reaction": 2.232015082842902
+        },
+        "last50_nusselt_span": 0.0,
+        "relative_wall_reaction_imbalance": 3.979267104991329e-16
+      },
+      {
+        "cells": 16,
+        "degree": 2,
+        "run": "results/differentially_heated_cavity/b5_cavity_ra10000_n16",
+        "last": {
+          "step": 750.0,
+          "time": 150.0,
+          "pressure_time": 150.0,
+          "subscale_time": 150.0,
+          "kinetic_energy": 0.00912529431676565,
+          "angular_momentum": -0.04320695662114546,
+          "thermal_content": 2.955535122195485e-16,
+          "cavity_nusselt_volume": 2.2440992965183004,
+          "cavity_nusselt_hot_gradient": 2.2593868862156827,
+          "cavity_nusselt_cold_gradient": 2.259386886215685,
+          "cavity_nusselt_hot_reaction": 2.2440994902994857,
+          "cavity_nusselt_cold_reaction": 2.2440994902994875
+        },
+        "last50_nusselt_span": 0.0,
+        "relative_wall_reaction_imbalance": 7.915677745478152e-16
+      },
+      {
+        "cells": 32,
+        "degree": 2,
+        "run": "results/differentially_heated_cavity/b5_cavity_ra10000_n32",
+        "last": {
+          "step": 750.0,
+          "time": 150.0,
+          "pressure_time": 150.0,
+          "subscale_time": 150.0,
+          "kinetic_energy": 0.00912944809960859,
+          "angular_momentum": -0.04322737486191139,
+          "thermal_content": 5.557891386703817e-16,
+          "cavity_nusselt_volume": 2.2447841883906334,
+          "cavity_nusselt_hot_gradient": 2.246832814664616,
+          "cavity_nusselt_cold_gradient": 2.246832814664616,
+          "cavity_nusselt_hot_reaction": 2.2447841783029054,
+          "cavity_nusselt_cold_reaction": 2.244784178302906
+        },
+        "last50_nusselt_span": 0.0,
+        "relative_wall_reaction_imbalance": 1.978315840526823e-16
+      }
+    ]
+  },
+  "mpi": {
+    "serial": {
+      "temperature_l2": 0.28867197766440195,
+      "thermal_content": 3.642919299551295e-17,
+      "thermal_variance_budget_temperature_energy": 0.0416657868595211,
+      "thermal_variance_budget_temperature_rate": -1.436382800298486e-05,
+      "thermal_variance_budget_temperature_diffusion": 0.03752957910496261,
+      "thermal_variance_budget_temperature_subscale": 1.5806425001103264e-07,
+      "thermal_variance_budget_temperature_diffusion_cross": 0.0,
+      "thermal_variance_budget_temperature_convection": 0.0,
+      "thermal_variance_budget_temperature_projection": -7.583555602110873e-19,
+      "thermal_variance_budget_temperature_source": 0.0,
+      "thermal_variance_budget_temperature_flux": 0.0,
+      "thermal_variance_budget_temperature_reaction_work": 0.037515373341209954,
+      "thermal_variance_budget_temperature_residual": -3.191891195797325e-16,
+      "thermal_variance_budget_temperature_normalized_residual": -4.252482746422972e-15,
+      "thermal_subscale_l2_temperature": 0.0002510584896205906,
+      "cavity_nusselt_volume": 0.9956793206665927,
+      "cavity_nusselt_hot_gradient": 1.000215170969226,
+      "cavity_nusselt_hot_reaction": 0.9996280799480177,
+      "cavity_nusselt_cold_gradient": 1.0002151709692257,
+      "cavity_nusselt_cold_reaction": 0.9996280799480183,
+      "velocity_orthogonality": 3.411065479639598e-18,
+      "temperature_orthogonality": 5.328672327182228e-17
+    },
+    "two_rank": {
+      "temperature_l2": 0.28867197766440195,
+      "thermal_content": 6.938893903907228e-17,
+      "thermal_variance_budget_temperature_energy": 0.04166578685952109,
+      "thermal_variance_budget_temperature_rate": -1.4363828003026641e-05,
+      "thermal_variance_budget_temperature_diffusion": 0.0375295791049626,
+      "thermal_variance_budget_temperature_subscale": 1.5806425001103254e-07,
+      "thermal_variance_budget_temperature_diffusion_cross": 0.0,
+      "thermal_variance_budget_temperature_convection": 0.0,
+      "thermal_variance_budget_temperature_projection": -7.583856553682175e-19,
+      "thermal_variance_budget_temperature_source": 0.0,
+      "thermal_variance_budget_temperature_flux": 0.0,
+      "thermal_variance_budget_temperature_reaction_work": 0.037515373341209926,
+      "thermal_variance_budget_temperature_residual": -3.400058012914542e-16,
+      "thermal_variance_budget_temperature_normalized_residual": -4.529818577711427e-15,
+      "thermal_subscale_l2_temperature": 0.00025105848962059057,
+      "cavity_nusselt_volume": 0.9956793206665926,
+      "cavity_nusselt_hot_gradient": 1.000215170969226,
+      "cavity_nusselt_hot_reaction": 0.9996280799480177,
+      "cavity_nusselt_cold_gradient": 1.000215170969226,
+      "cavity_nusselt_cold_reaction": 0.9996280799480168,
+      "velocity_orthogonality": 3.4298051892177682e-18,
+      "temperature_orthogonality": 5.328363415996122e-17
+    },
+    "max_absolute_difference": 1.4432899320127035e-15
+  },
+  "tall": {
+    "345000": {
+      "exit_status": 0,
+      "last": {
+        "step": 20.0,
+        "time": 1.6,
+        "pressure_time": 1.6,
+        "subscale_time": 1.6,
+        "kinetic_energy": 0.017197366265342164,
+        "angular_momentum": -0.2126406405818869,
+        "thermal_content": 1.6154612370034016e-17,
+        "cavity_nusselt_volume": 1.0123169500650286,
+        "cavity_nusselt_hot_gradient": 4.478830039534392,
+        "cavity_nusselt_cold_gradient": 4.478830039534391,
+        "cavity_nusselt_hot_reaction": 4.8409216181830725,
+        "cavity_nusselt_cold_reaction": 4.840921618183072
+      }
+    },
+    "1000000": {
+      "exit_status": 0,
+      "last": {
+        "step": 20.0,
+        "time": 1.6,
+        "pressure_time": 1.6,
+        "subscale_time": 1.6,
+        "kinetic_energy": 0.012026600722588699,
+        "angular_momentum": -0.15869742725378305,
+        "thermal_content": -2.981555974335137e-17,
+        "cavity_nusselt_volume": 1.0102540810116676,
+        "cavity_nusselt_hot_gradient": 5.501236214425869,
+        "cavity_nusselt_cold_gradient": 5.501236214425866,
+        "cavity_nusselt_hot_reaction": 6.183535175474346,
+        "cavity_nusselt_cold_reaction": 6.183535175474347
+      }
+    },
+    "10000000": {
+      "exit_status": 0,
+      "last": {
+        "step": 20.0,
+        "time": 1.6,
+        "pressure_time": 1.6,
+        "subscale_time": 1.6,
+        "kinetic_energy": 0.0039054784426771276,
+        "angular_momentum": -0.07174276502696447,
+        "thermal_content": 2.0925101928970236e-17,
+        "cavity_nusselt_volume": 1.001380927002389,
+        "cavity_nusselt_hot_gradient": 7.726425860648833,
+        "cavity_nusselt_cold_gradient": 7.7264258606488365,
+        "cavity_nusselt_hot_reaction": 9.589911124971515,
+        "cavity_nusselt_cold_reaction": 9.589911124971518
+      }
+    }
+  },
+  "budget_maxima": {
+    "thermal_content_budget_temperature_residual": 2.929600253294766e-11,
+    "thermal_content_budget_temperature_normalized_residual": 0.001052977149917922,
+    "thermal_variance_budget_temperature_residual": 6.3864469268537505e-12,
+    "thermal_variance_budget_temperature_normalized_residual": 2.878456879676858e-12,
+    "boussinesq_energy_budget_residual": 9.799827941324446e-12,
+    "boussinesq_energy_budget_normalized_residual": 4.100669479640448e-09,
+    "thermal_content_budget_q_residual": 2.9295947076006536e-11,
+    "thermal_content_budget_q_normalized_residual": 1.0881680081145684e-06,
+    "thermal_variance_budget_q_residual": 6.3864469268537505e-12,
+    "thermal_variance_budget_q_normalized_residual": 2.878456879676858e-12
+  },
+  "verification": {
+    "unit_passed": 934,
+    "unit_xfailed": 1,
+    "unit_seconds": 475.47,
+    "convergence_passed": 6,
+    "convergence_seconds": 36.41,
+    "base_commit": "5330e36",
+    "phase": "B5",
+    "content_normalization_edge_case": {
+      "normalized_residual": -0.001052977149917922,
+      "absolute_residual": -1.052977149917922e-15,
+      "test": "/tmp/vms-b5-final-all/popen-gw0/test_periodic_dynamic_oss_vari0",
+      "step": "2"
+    }
+  },
+  "conservative_galerkin": {
+    "cells": [
+      4,
+      8
+    ],
+    "temperature_l2_errors": [
+      4.427822904133996e-05,
+      5.132360994287352e-06
+    ],
+    "rate": 3.108902967242161
+  }
+}

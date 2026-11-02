@@ -1554,3 +1554,86 @@ Verification:
 
 B4 is complete. Stop at this phase boundary; B5 adds conservative thermal
 transport, coupled budget diagnostics, and their verification/validation.
+
+
+## Boussinesq B5: coupled budgets, verification and heated cavities (2026-11-02)
+
+Implemented:
+
+- Conservative scalar convection, with the skew default retained and momentum
+  convection chosen independently. Added a conservative Galerkin example with
+  explicit MUMPS null-pivot detection for the constant-pressure mode; global
+  solver defaults and the residual formulation are unchanged.
+- Added `postprocessing/thermal_budgets.py` for captured solve-level content,
+  variance and kinetic–potential identities. The rates use actual BDF/CN
+  histories before any shift/extrapolation. ASGS cross storage/static mixed
+  rates, higher-degree diffusion, pressure stabilization, projection work,
+  every exchange remainder, reference-temperature work and finite-iterate
+  corrections are retained. Content names resolved and total scalar moments.
+- Added nodal extrema, temperature gradient error, scalar subscale norms,
+  prescribed boundary work, molecular flux and partitioned variational
+  reactions. Budgets reject inadmissible constant/potential tests. Normalized
+  residuals use an absolute-work sum and recorded `1e-12` floor. Thermal energy
+  has its own group; legacy isothermal budgets keep their previous meanings.
+- Added `differentially_heated_cavity` with explicit width-based free-fall
+  scaling, independent Ra/Pr/aspect ratio, centered wall temperatures and
+  conduction/isothermal starts. Nu distinguishes volume, gradient and reaction
+  estimates. Derived reference scales are written to thermal metadata.
+- Added moderate square-cavity configs and three short tall-cavity configs
+  after checking the primary de Vahl Davis and Christon references. The tall
+  cases use Codina's Ra values and are explicitly integration smoke checks,
+  not long-time benchmark reproductions. G5 remains optional/unimplemented;
+  B6 options and G4/B7 applications were not started.
+
+Verification:
+
+- Final full unit suite: **934 passed, 1 known xfail in 475.47 s**.
+  The existing near-inviscid nonlinear ASGS xfail is unchanged.
+  Log: `/tmp/vms-b5-final-all.log`. The new tests cover 48 solved core
+  scalar/momentum-form combinations with passive copies, all time schemes,
+  P1/P2 diffusion cross terms, nonzero reference temperature, source/flux work,
+  Dirichlet reactions, periodic variance, geometry rejection, 3D and cavity data.
+- Maximum measured absolute identity residuals: 2.930e-11 (content),
+  6.386e-12 (variance), 9.800e-12 (kinetic–potential). Maximum normalized
+  kinetic–potential residual: 4.101e-9. Near-zero content work reaches the
+  normalization floor; the report pairs its normalized maximum with the
+  approximately 1.053e-15 absolute residual. The nonzero linear-ASGS exchange
+  remainder is verified, rather than imposing the rejected exact-exchange claim.
+- Six refinement tests passed in 36.41 s. Finest-pair velocity L2/H1 rates:
+  2.004/1.000 for P1, 3.054/2.016 for P2; temperature rates meet or exceed
+  the intended k+1/k targets. Buoyancy-driven temporal velocity/temperature
+  rates were 0.981/0.986 (BDF1), 2.014/2.007 (BDF2), 3.029/3.024 (BDF3),
+  and 1.967/1.981 (CN). The source-free discrete shear isolates time/coupling
+  error and does not bypass the documented forced-subscale startup limitation.
+- Serial/two-rank probe: largest absolute diagnostic difference 1.443e-15;
+  two-rank velocity/thermal OSS orthogonality norms 3.430e-18/5.328e-17.
+  MPI needed local sockets outside the filesystem sandbox; automatic approval
+  permitted the local two-process validation. Probe artifacts are under
+  `/tmp/vms-b5-serial` and `/tmp/vms-b5-mpi`.
+- Moderate square cavities were run to t=150 on 8/16/32 meshes. Fine volume
+  Nu: 1.115182 at Ra=1000 (P1), 2.244784 at Ra=10000 (P2), versus primary
+  volume references 1.118/2.243. Corresponding hot-wall reactions are within
+  0.16%/0.30% of the separately reported hot-wall references. Hot/cold reactions
+  balance to solver precision, circulation has the expected clockwise sign,
+  and final Nu histories plateau. The report preserves the less accurate
+  gradient estimates rather than treating them as discrete balance fluxes.
+- All three tall-cavity CLI smoke runs completed 20 BDF2 steps at dt=0.08.
+  Final residuals: 7.431e-14, 9.245e-13, 7.652e-13 for Ra=3.45e5/1e6/1e7.
+  Their 16×128 triangular meshes, BDF2 subscales and duration differ from the
+  2010 study; no oscillation/chaos/long-time agreement claim is made.
+- Four isothermal and three prior thermal baseline runs retain bitwise
+  identical arrays and diagnostic/inner/outer CSVs. Comparisons are in
+  `/tmp/vms-b5-before-*` and `/tmp/vms-b5-after-*`. Canonical conservative
+  Galerkin and moderate-cavity CLI examples also completed successfully.
+- Initial integration checks exposed an indexed-space boundary-lifting error,
+  corrected by constructing lifts in collapsed scalar spaces, and a zero-gravity
+  empty-form/product-gradient case, now covered by the periodic variance test.
+  The new physical cavity was added to the non-analytic case registry test.
+  Conservative Galerkin's coarse error is studied by refinement (observed order
+  3.109), rather than reusing the older forms' fixed error threshold.
+- Ruff lint/format (86 files), `git diff --check`, TOML parsing, documentation
+  links/math fences and report/data consistency passed. The detailed report,
+  machine-readable results and cavity figure are in `docs/verification/boussinesq_b5*`.
+
+B5 is complete. Stop at this phase boundary. B6 extends the remaining framework
+options; free-slip support still gates the later KH application.

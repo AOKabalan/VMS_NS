@@ -454,7 +454,7 @@ def test_incomplete_thermal_energy_budgets_remain_disabled() -> None:
     config = replace(
         configuration(scheme="crank_nicolson"), output=OutputOptions(diagnostics=("energy_budget",))
     )
-    with pytest.raises(ValueError, match="B5"):
+    with pytest.raises(ValueError, match="boussinesq_energy_budget"):
         build_problem(config)
 
 

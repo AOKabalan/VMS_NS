@@ -399,9 +399,9 @@ startup retains the existing global second-order limitation. The source-free
 order checks isolate the time operator with compatible zero OSS subscales.
 
 Failed steps preserve all resolved and subscale endpoint histories and write
-available physical fields at the attempted solve time. Full thermal `energy_budget` and
-`momentum_budget` diagnostics remain disabled until the B5 coupled work terms
-are implemented; isothermal budget behavior is unchanged.
+available physical fields at the attempted solve time. The legacy `energy_budget`
+and `momentum_budget` groups retain their isothermal meanings. B5 adds a distinct
+thermal energy group below; thermal momentum budgets remain B6 work.
 
 
 ## Nonlinear thermal splitting and Picard (B4)
@@ -440,3 +440,82 @@ by elimination and verified independently against the formulation.
 The thermal convection choices remain `skew_symmetric` and `nonconservative`;
 conservative thermal transport and coupled conservation budgets belong to B5.
 These manufactured examples do not start the cavity or Kelvin–Helmholtz studies.
+
+
+## Thermal budgets and natural convection (B5)
+
+Set `thermal.convection = "conservative"` to use the conservative scalar form.
+Momentum convection is selected independently; its thermal support remains
+`skew_symmetric_1` and `nonconservative` with Laplacian viscosity. The scalar
+default is still `skew_symmetric`.
+
+The conservative Galerkin example includes explicit MUMPS null-pivot detection
+for the constant-pressure null space:
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/manufactured_galerkin_conservative.toml
+```
+
+Its `[solver.petsc]` sets `mat_mumps_icntl_24 = 1`. This handles a singular
+factorization without pressure regularization or a formulation change; it does
+not change global solver defaults. The pressure null space and spatial-mean
+normalization still apply. See the
+[PETSc MUMPS option definitions](https://petsc.org/main/src/mat/impls/aij/mpi/mumps/impl/imumps.c.html).
+
+Select these groups in `output.diagnostics` as needed:
+
+| Group | Output and requirements |
+| --- | --- |
+| `temperature_extrema` | Global FE nodal min/max at the endpoint, without clipping |
+| `temperature_gradient_error_l2` | Endpoint gradient error; exact temperature required |
+| `thermal_subscale_l2` | Solve-level subscale norm for every scalar; zero for Galerkin |
+| `thermal_content_budget` | Resolved/total scalar content, history rate, source/flux and splitting/continuity/iterate terms; no scalar Dirichlet walls |
+| `thermal_variance_budget` | Rate, diffusion, subscale damping/cross terms, convection, projection/source/flux and Dirichlet reaction work |
+| `boussinesq_energy_budget` | Kinetic/potential storage and rates, mechanical terms, source/boundary work and each exchange remainder |
+| `thermal_boundary_flux` | Integrated molecular-gradient flux and variational Dirichlet reaction for each scalar/wall; reaction is blank on natural walls |
+| `cavity_nusselt` | Volume, hot/cold gradient and hot/cold reaction estimates; heated-cavity reference scales required |
+
+For example, `thermal_variance_budget_temperature_diffusion_cross` and
+`thermal_content_budget_q_total_content` identify their scalar explicitly.
+`total_content` includes the dynamic ASGS scalar moment. Budget/flux/subscale
+groups use the solve time in `pressure_time`, even when temperature field output
+and ordinary temperature diagnostics use the CN endpoint. All budget values are
+captured before histories advance.
+
+The rates use the actual BDF/CN history operators. Dynamic ASGS includes cross
+storage; static ASGS retains mixed rates. Residuals subtract all named source,
+boundary, exchange and finite-solver corrections. Their normalized values divide
+by the sum of absolute work/rate terms, with floor `1e-12`, recorded in
+`thermal_metadata.json`. A finite difference of energy CSV values is a different
+quantity for BDF schemes. The optional G5 stabilization-work ratios are not provided.
+
+Potential energy requires an admissible, single-valued `g·x`: gravity-direction
+periodicity and thermal Dirichlet walls are rejected. This budget currently
+requires homogeneous no-slip or periodic velocity. Content checks require an
+admissible constant scalar test. Matching scalar/pressure degrees are needed to
+interpret the measured continuity work as a vanishing FE residual. Nonzero
+Dirichlet temperature is supported in the variance budget through reaction work;
+it is not silently treated as insulation.
+
+The new closed-cavity case is available through the same entry point:
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/cavity_ra1000.toml
+python scripts/run_simulation.py configs/boussinesq/cavity_ra10000.toml
+```
+
+It uses width `L=1`, configurable height `aspect_ratio`, hot/cold temperatures
+`+0.5/-0.5`, insulated horizontal walls, and no-slip velocity. Free-fall units give
+`viscosity=sqrt(Pr/Ra)`, `diffusivity=1/sqrt(Ra*Pr)`, unit buoyancy coupling and
+`gravity=(0,-1)`. `initial_profile` is `conduction` or `isothermal`; the latter
+applies the wall-temperature jump on the first solve. Derived coefficients and
+reference scales are recorded. Positive hot-wall Nu is minus outward flux;
+positive cold-wall Nu is outward flux. The reaction includes all weak scalar
+terms and can differ from a molecular-gradient estimate on a finite mesh.
+
+The three `codina_tall_ra*_smoke.toml` files exercise aspect ratio eight and the
+2010 Rayleigh numbers for 20 steps. Their 16×128 triangular meshes, same-scheme
+BDF2 subscales and short duration differ from the paper. They are integration
+checks, not predictions of oscillation, chaos or long-time benchmark agreement.
+The [B5 report](verification/boussinesq_b5.md) contains primary-source conventions,
+refinement results, MPI/3D checks and reproducible commands.

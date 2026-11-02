@@ -16,6 +16,7 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 from navier_stokes_vms.config import Config, ThermalOptions, config_to_toml
+from navier_stokes_vms.postprocessing.thermal_budgets import NORMALIZATION_FLOOR, THERMAL_BUDGETS
 from navier_stokes_vms.problem.problem_definition import Problem
 
 
@@ -206,6 +207,17 @@ def write_thermal_metadata(comm: MPI.Comm, folder: Path, problem: Problem, confi
         if problem.passive_scalars:
             values["passive_scalars"] = {
                 s.name: {"diffusivity": s.diffusivity} for s in problem.passive_scalars
+            }
+        if problem.reference_values is not None:
+            values["reference_values"] = dict(problem.reference_values)
+        groups = [name for name in config.output.diagnostics if name in THERMAL_BUDGETS]
+        if groups:
+            values["budget_diagnostics"] = {
+                "groups": groups,
+                "time_level": "solve level (pressure_time)",
+                "rate": "actual discrete history operator before shifting/extrapolation",
+                "normalization_floor": NORMALIZATION_FLOOR,
+                "wall_reaction": "negative weak scalar residual on partitioned boundary lifts",
             }
         (folder / "thermal_metadata.json").write_text(
             json.dumps(values, indent=2) + "\n", encoding="utf-8"

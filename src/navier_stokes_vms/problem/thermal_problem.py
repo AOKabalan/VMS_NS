@@ -115,7 +115,10 @@ def check_thermal_supported(config: Config, problem: Problem) -> None:
                 f"missing: {', '.join(missing)}"
             )
     if {"energy_budget", "momentum_budget"}.intersection(config.output.diagnostics):
-        raise ValueError("thermal energy/momentum budgets require the B5 coupling identities")
+        raise ValueError(
+            "thermal runs use boussinesq_energy_budget; legacy energy_budget is isothermal, "
+            "and thermal momentum_budget awaits B6"
+        )
     if config.viscosity.form != "laplacian" or config.convection.form not in (
         "skew_symmetric_1",
         "nonconservative",

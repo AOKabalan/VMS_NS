@@ -50,7 +50,9 @@ Newton or Picard iterations.
 Thermal Boussinesq Galerkin and all eight static/dynamic, linear/nonlinear
 ASGS/OSS variants are available with Newton or Picard, BDF1–3, Crank–Nicolson
 and optional passive scalars. See [thermal usage](docs/usage.md#thermal-boussinesq-baseline-b1)
-and the [thermal formulation](docs/boussinesq_formulation.md).
+and the [thermal formulation](docs/boussinesq_formulation.md). Conservative scalar
+transport, coupled thermal/kinetic–potential budgets and a heated-cavity case
+are included; measured checks are in the [B5 report](docs/verification/boussinesq_b5.md).
 
 ## Quick start
 

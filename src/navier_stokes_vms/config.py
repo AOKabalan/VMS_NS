@@ -119,7 +119,7 @@ class ThermalOptions:
     """Thermal scalar degree and convection; physical properties belong to the case."""
 
     temperature_degree: int | None = None
-    convection: Literal["skew_symmetric", "nonconservative"] = "skew_symmetric"
+    convection: Literal["skew_symmetric", "nonconservative", "conservative"] = "skew_symmetric"
     momentum_residual_scale: float = 1.0
     continuity_residual_scale: float = 1.0
     temperature_residual_scale: float = 1.0
@@ -219,7 +219,7 @@ def validate_config(config: Config) -> None:
             isinstance(degree, bool) or not isinstance(degree, int) or degree < 1
         ):
             raise ValueError("thermal.temperature_degree must be a positive integer")
-        if config.thermal.convection not in ("skew_symmetric", "nonconservative"):
+        if config.thermal.convection not in ("skew_symmetric", "nonconservative", "conservative"):
             raise ValueError("unsupported thermal.convection")
     _check_bounds(config)
     steps = config.time.t_end / config.time.dt

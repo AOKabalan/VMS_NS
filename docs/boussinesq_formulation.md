@@ -1,12 +1,14 @@
 # Thermal Boussinesq VMS formulation
 
-Status: B4 nonlinear thermal splitting and Picard implemented, 2 November 2026. This document specifies the thermal
+Status: B5 conservative transport and coupled budgets implemented, 2 November 2026. This document specifies the thermal
 buoyancy model requested for the existing incompressible Navier–Stokes framework;
 The implemented subset includes Taylor–Hood Galerkin and equal-order static
 or dynamic, linear or nonlinear ASGS/OSS with temperature and optional passive scalars.
 Newton and Picard, BDF1–3 and Crank–Nicolson, Laplacian viscosity and the nonconservative/
-skew choices are supported on periodic or impermeable domains. Coupled budget
-diagnostics and subsequent application phases remain proposed. The companion
+skew choices, plus conservative scalar transport, are supported on periodic or
+impermeable domains. Coupled budget diagnostics and moderate-Rayleigh cavity
+validation are implemented; remaining options and applications follow later.
+The companion
 [integration plan](boussinesq_implementation_plan.md) identifies the code changes
 and verification gates. Existing flow conventions remain defined by
 [formulation_spec.md](formulation_spec.md).
@@ -469,6 +471,48 @@ parameters in both equations, keeping temperature, buoyancy and projections
 unknown in an affine monolithic system. Its convergence check uses the true
 coupled residual. Picard warm-up before Newton is also supported.
 
+### Implemented B5 diagnostics and verification
+
+Conservative scalar convection now uses the third form of (B15), independently
+of momentum convection. The global scalar default remains skew-symmetric.
+`postprocessing/thermal_budgets.py` composes (B19)–(B24) from matched solve-level
+fields, the same spatial parameters and the actual resolved/subscale histories.
+It captures all work before history shifts or CN endpoint extrapolation.
+`thermal_diagnostics.py` provides endpoint norms, gradient error, and global FE
+nodal extrema; these are not extrema of an entire higher-order polynomial.
+
+The named groups are `thermal_content_budget`, `thermal_variance_budget`,
+`boussinesq_energy_budget`, `thermal_boundary_flux`, `thermal_subscale_l2`, and
+`cavity_nusselt`. Scalar groups name temperature and every passive scalar.
+Content reports resolved and total moments; variance includes ASGS cross-mass,
+the higher-degree diffusion cross term, projection work and boundary reactions.
+The kinetic–potential group separately reports every exchange remainder in
+(B22), reference-temperature work, momentum convection and pressure stabilization.
+At finite outer tolerance it also records the exchange correction
+$\beta(t+r,g\cdot(a-U-\chi_N w))$; the convective defect uses the actual $a$.
+The content identity includes the corresponding
+$-\lambda_T(a-U-\chi_Nw,\nabla t)$ and continuity work. Both disappear under
+their stated convergence/space assumptions; they are not silently discarded.
+
+Residuals use signed work/rate terms from the tested discrete equations.
+Normalization divides by the sum of their absolute values, with absolute
+floor $10^{-12}$, recorded in thermal metadata. BDF rates are history pairings,
+not finite differences of plotted energies. Legacy isothermal `energy_budget`
+and `momentum_budget` keep their previous meanings; thermal energy uses the new
+`boussinesq_energy_budget` name. Thermal momentum budgets remain B6 work.
+
+Content budgets reject scalar Dirichlet walls. Potential budgets additionally
+require representable, single-valued $g\cdot x$ and homogeneous no-slip or
+periodic velocity; gravity-direction periodicity is rejected. Variance budgets
+permit nonzero Dirichlet temperature by retaining variational reaction work.
+Gradient wall flux and variational reaction are different diagnostics. Boundary
+lifts partition shared Dirichlet nodes so corner reactions are counted once.
+
+The [B5 verification report](verification/boussinesq_b5.md) records solved variant
+identities, P1/P2 spatial and coupled temporal rates, 3D and MPI checks, cavity
+refinement, and the limited purpose of the tall-cavity smoke runs. The optional
+G5 proxy ratios are not implemented in B5.
+
 ### Galerkin and passive-temperature limits
 
 For `method = "none"`, remove every subscale and projection contribution from
@@ -565,6 +609,25 @@ without dimensional scaling. Fully discrete BDF budgets must use the actual
 history terms and time-scheme dissipation; a finite difference of squared norms
 alone is not the BDF energy identity. Static subscales have no subscale storage
 term. ASGS needs its own cross-mass accounting.
+
+The implemented general scalar variance budget uses
+
+$$
+\begin{aligned}
+M_T={}&(D_tt,t)+\chi_A\chi_D(D_tr,t)
+       +\chi_D(D_tr,r)+\chi_A(D_tt,r),\\
+0={}&M_T+\kappa\|\nabla t\|^2+(\tau_T^{-1}r,r)
+ -2\kappa(r,\Delta_ht)+c_T(a;t,t)+(\eta,r)\\
+ &-(s,t+r)+\langle j_{\rm out},t\rangle-W_{\rm Dirichlet}.
+\end{aligned}
+$$
+
+Here $\eta=0$ for ASGS. For dynamic ASGS the storage is
+$\frac12\|t+r\|_h^2$; static ASGS retains the mixed rate $(D_tt,t+r)$.
+$W_{\rm Dirichlet}$ is the full weak scalar residual tested with the FE
+boundary trace of $t$, zero at interior nodes. It is measured, not inferred
+from the temperature gradient. Orthogonality removes $(\eta,r)$ for converged
+matching OSS; its measured value exposes projection error.
 
 For cavity comparisons define the normal convention explicitly, for example
 $Nu_{\rm out}=j_{\rm out}L/(\kappa\Delta T)$. At the hot wall, heat enters the

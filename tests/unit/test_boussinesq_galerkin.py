@@ -270,6 +270,26 @@ def test_thermal_config_roundtrip_and_inactive_omission(tmp_path: Path) -> None:
         check_thermal_supported(config, replace(simple_problem(), thermal=None))
 
 
+def test_conservative_galerkin_manufactured_refinement(tmp_path: Path) -> None:
+    errors = []
+    for cells in (4, 8):
+        config = configuration(
+            thermal=ThermalOptions(convection="conservative"),
+            mesh=MeshOptions(cells=(cells, cells)),
+        )
+        config = replace(
+            config,
+            solver=replace(config.solver, petsc={**config.solver.petsc, "mat_mumps_icntl_24": 1}),
+        )
+        problem = build_problem(config)
+        stepper = run(config, problem, tmp_path / f"n{cells}")
+        exact = problem.thermal.exact_temperature(
+            fd.SpatialCoordinate(problem.mesh), fd.Constant(0.02)
+        )
+        errors.append(norm(stepper.temperature - exact))
+    assert errors[0] / errors[1] >= 2**2.8, errors
+
+
 @pytest.mark.parametrize(
     "changes",
     [

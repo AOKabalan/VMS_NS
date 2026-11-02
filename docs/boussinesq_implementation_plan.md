@@ -1,7 +1,7 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
-Status: B0–B4 completed, 2 November 2026. Coupled budget diagnostics and
-verification/validation follow in B5. Equations refer to the companion
+Status: B0–B5 completed, 2 November 2026. Remaining framework options follow in
+B6; free-slip support still gates the B7 applications. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
 solver for isothermal and thermally coupled problems, with small, explicit
 thermal components and unchanged isothermal defaults.
@@ -447,6 +447,25 @@ Our different mesh/parameter/time choices preclude calling a direct figure
 comparison an exact reproduction. Consult its cited Christon et al. benchmark
 for missing physical details before creating that case. Turbulent cavity/channel
 comparisons are subsequent studies, not the initial correctness gate.
+
+B5 implementation keeps stateless field diagnostics in `thermal_diagnostics.py`
+and the captured, history-dependent budgets in `thermal_budgets.py`. No legacy
+isothermal budget is repurposed. New CSV groups expose resolved/total scalar
+moments, variance with ASGS cross storage and higher-order diffusion, full
+kinetic–potential exchange, finite-iterate/projection terms, and molecular versus
+variational boundary fluxes. Invalid constant/potential tests are rejected.
+Signed rate/work sums use a recorded absolute normalization floor.
+
+Solved tests cover the 48 core scalar/momentum-form combinations, all schemes
+and P1/P2 histories, nonzero reference temperature, prescribed flux, Dirichlet
+reactions, periodic geometry, 3D, and serial/two-rank agreement. Spatial and
+buoyancy-driven temporal refinement passed. The square-cavity builder uses
+explicit width-based free-fall scaling; moderate-Rayleigh studies distinguish
+volume, wall-gradient and wall-reaction Nusselt estimates against the primary
+reference. Only after those checks were the 2010 tall-cavity smoke cases run.
+Their short, coarser triangular calculations are not long-time benchmark
+reproductions. Details and measured results are in
+[the B5 report](verification/boussinesq_b5.md). G5 remains optional and unimplemented.
 
 ### B6 — Compatibility with the remaining framework options
 

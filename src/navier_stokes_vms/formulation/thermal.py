@@ -9,8 +9,10 @@ from navier_stokes_vms.formulation.galerkin import SolveLevel, time_derivative
 
 
 def scalar_convection(a: Expr, field: Expr, test: Expr, dx: Measure, form: str) -> Form:
-    """Closed-domain nonconservative or skew-symmetric scalar transport (B15)."""
+    """Closed-domain scalar transport in any of the three forms (B15)."""
     forward = ufl.dot(a, ufl.grad(field)) * test
+    if form == "conservative":
+        return -field * ufl.dot(a, ufl.grad(test)) * dx
     if form == "nonconservative":
         return forward * dx
     if form == "skew_symmetric":

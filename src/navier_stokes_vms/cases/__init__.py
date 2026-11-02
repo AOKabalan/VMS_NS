@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from navier_stokes_vms.cases import (
     cylinder_dfg_2d,
+    differentially_heated_cavity,
     ethier_steinman_3d,
     gresho,
     kovasznay,
@@ -20,6 +21,7 @@ from navier_stokes_vms.problem.thermal_problem import check_thermal_supported
 
 CASES: dict[str, Callable[[Config], Problem]] = {
     "cylinder_dfg_2d": cylinder_dfg_2d.build,
+    "differentially_heated_cavity": differentially_heated_cavity.build,
     "lattice_vortex": lattice_vortex.build,
     "lid_driven_cavity": lid_driven_cavity.build,
     "ethier_steinman_3d": ethier_steinman_3d.build,

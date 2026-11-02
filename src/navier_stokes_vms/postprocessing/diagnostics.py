@@ -7,7 +7,6 @@ from dataclasses import dataclass
 import firedrake as fd
 import ufl
 from ufl.core.expr import Expr
-from ufl.form import Form
 from ufl.measure import Measure
 
 from navier_stokes_vms.formulation.convective_forms import (
@@ -17,17 +16,24 @@ from navier_stokes_vms.formulation.convective_forms import (
     predicted_momentum_defect,
 )
 from navier_stokes_vms.formulation.operators import viscous_bilinear, viscous_operator
+from navier_stokes_vms.postprocessing.thermal_budgets import (
+    THERMAL_BUDGETS,
+    ThermalBudgets,
+    thermal_budget_columns,
+)
 from navier_stokes_vms.postprocessing.thermal_diagnostics import (
     buoyancy_power,
     passive_scalar_content,
     passive_scalar_l2,
     temperature_error_l2,
+    temperature_extrema,
+    temperature_gradient_error_l2,
     temperature_l2,
     thermal_content,
 )
 from navier_stokes_vms.problem.boundary_conditions import named_boundary_measure
 from navier_stokes_vms.problem.problem_definition import Problem
-from navier_stokes_vms.solver.reusable_assembly import reusable_assembler
+from navier_stokes_vms.solver.reusable_assembly import scalar_functional as _functional
 
 ENERGY_BUDGET_TERMS = (
     "rate",
@@ -69,14 +75,6 @@ class ConservationFields:
     viscous_form: str
     is_nonlinear: bool
     is_asgs: bool
-
-
-def _functional(form: Form) -> Callable[[], float]:
-    """A scalar functional preprocessed once; one that vanishes identically evaluates to 0."""
-    expanded = ufl.algorithms.expand_derivatives(form)
-    if not any(integral.integrand() != 0 for integral in expanded.integrals()):
-        return lambda: 0.0
-    return reusable_assembler(form).assemble
 
 
 class Conservation:
@@ -285,6 +283,7 @@ class DiagnosticState:
     temperature: fd.Function | None = None
     solve_temperature: fd.Function | None = None
     passive_scalars: dict[str, fd.Function] | None = None
+    thermal_budgets: ThermalBudgets | None = None
 
 
 @dataclass(frozen=True)
@@ -391,6 +390,17 @@ def _momentum_budget(state: DiagnosticState) -> dict[str, float | None]:
 
 
 DIAGNOSTICS: dict[str, Diagnostic] = {
+    **{
+        name: Diagnostic(
+            lambda state, group=name: state.thermal_budgets.values(group),
+            needs_exact_solution=False,
+        )
+        for name in THERMAL_BUDGETS
+    },
+    "temperature_extrema": Diagnostic(temperature_extrema, needs_exact_solution=False),
+    "temperature_gradient_error_l2": Diagnostic(
+        temperature_gradient_error_l2, needs_exact_solution=False
+    ),
     "passive_scalar_content": Diagnostic(passive_scalar_content, needs_exact_solution=False),
     "passive_scalar_l2": Diagnostic(passive_scalar_l2, needs_exact_solution=False),
     "temperature_l2": Diagnostic(temperature_l2, needs_exact_solution=False),
@@ -447,10 +457,20 @@ def check_diagnostics_supported(names: Sequence[str], problem: Problem) -> None:
         names
     ) and not problem.passive_scalars:
         raise ValueError("passive scalar diagnostics require named passive scalars")
-    thermal_names = {"temperature_l2", "temperature_error_l2", "thermal_content", "buoyancy_power"}
+    thermal_names = {
+        "temperature_l2",
+        "temperature_error_l2",
+        "thermal_content",
+        "buoyancy_power",
+        "temperature_extrema",
+        "temperature_gradient_error_l2",
+        *THERMAL_BUDGETS,
+    }
     if thermal_names.intersection(names) and problem.thermal is None:
         raise ValueError("thermal diagnostics require thermal problem data")
-    if "temperature_error_l2" in names and problem.thermal.exact_temperature is None:
+    if {"temperature_error_l2", "temperature_gradient_error_l2"}.intersection(
+        names
+    ) and problem.thermal.exact_temperature is None:
         raise ValueError("temperature_error_l2 requires an exact temperature")
     if "force" in names and not problem.force_boundaries:
         raise ValueError("output.diagnostics: force requires the case to declare force_boundaries")
@@ -484,7 +504,13 @@ def diagnostic_columns(names: Sequence[str], problem: Problem) -> tuple[str, ...
     axes = "xyz"[: problem.mesh.geometric_dimension]
     columns = []
     for name in names:
-        if name in ("passive_scalar_content", "passive_scalar_l2"):
+        if name in THERMAL_BUDGETS:
+            columns.extend(
+                f"{name}_{component}" for component in thermal_budget_columns(name, problem)
+            )
+        elif name == "temperature_extrema":
+            columns.extend(f"{name}_{kind}" for kind in ("nodal_min", "nodal_max"))
+        elif name in ("passive_scalar_content", "passive_scalar_l2"):
             columns.extend(f"{name}_{scalar.name}" for scalar in problem.passive_scalars)
         elif name in (
             "linear_momentum",

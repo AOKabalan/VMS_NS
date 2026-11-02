@@ -1,0 +1,23 @@
+case = "differentially_heated_cavity"
+run_name = "codina_tall_ra10000000_smoke"
+
+[case_parameters]
+rayleigh = 10000000.0
+prandtl = 0.71
+aspect_ratio = 8.0
+initial_profile = "isothermal"
+
+[mesh]
+cells = [16, 128]
+
+[time]
+scheme = "bdf2"
+dt = 0.08
+t_end = 1.6
+
+[thermal]
+convection = "skew_symmetric"
+
+[output]
+vtk_every = 20
+diagnostics = ["kinetic_energy", "angular_momentum", "thermal_content", "cavity_nusselt"]

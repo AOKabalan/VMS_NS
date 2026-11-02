@@ -1,4 +1,4 @@
-"""Thermal Galerkin diagnostics with the shared discrete integration measure."""
+"""Thermal field diagnostics with the shared discrete integration measure."""
 
 from __future__ import annotations
 
@@ -28,6 +28,21 @@ def temperature_error_l2(state: DiagnosticState) -> float:
     x = fd.SpatialCoordinate(state.problem.mesh)
     exact = state.problem.thermal.exact_temperature(x, state.velocity_time)
     return fd.assemble((state.temperature - exact) ** 2 * state.error_dx) ** 0.5
+
+
+def temperature_gradient_error_l2(state: DiagnosticState) -> float:
+    """Endpoint temperature gradient error against the declared exact solution."""
+    x = fd.SpatialCoordinate(state.problem.mesh)
+    error = ufl.grad(
+        state.temperature - state.problem.thermal.exact_temperature(x, state.velocity_time)
+    )
+    return fd.assemble(ufl.inner(error, error) * state.error_dx) ** 0.5
+
+
+def temperature_extrema(state: DiagnosticState) -> dict[str, float]:
+    """Global endpoint FE nodal extrema, without clipping overshoots."""
+    with state.temperature.dat.vec_ro as vector:
+        return {"nodal_min": vector.min()[1], "nodal_max": vector.max()[1]}
 
 
 def buoyancy_power(state: DiagnosticState) -> float:
