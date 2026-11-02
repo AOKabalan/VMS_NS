@@ -89,3 +89,8 @@ def constant_pressure_null_space(space: WithGeometry) -> fd.MixedVectorSpaceBasi
 def subscale_space(mesh: MeshGeometry, degree: int) -> WithGeometry:
     """Vector space of values at the points of the dx rule of the given degree."""
     return fd.VectorFunctionSpace(mesh, quadrature_element(mesh.ufl_cell(), degree))
+
+
+def scalar_subscale_space(mesh: MeshGeometry, degree: int) -> WithGeometry:
+    """Scalar values at the common positive quadrature points for subscale histories."""
+    return fd.FunctionSpace(mesh, quadrature_element(mesh.ufl_cell(), degree))

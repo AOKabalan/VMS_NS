@@ -31,10 +31,12 @@ def temperature_error_l2(state: DiagnosticState) -> float:
 
 
 def buoyancy_power(state: DiagnosticState) -> float:
-    """Resolved BDF1 buoyancy work with the active thermal data."""
+    """Resolved buoyancy work with both fields at the common solve level."""
     thermal = state.problem.thermal
+    if thermal.expansion_coefficient == 0 or not any(thermal.gravity):
+        return 0.0
     force = buoyancy(
-        state.temperature,
+        state.solve_temperature if state.solve_temperature is not None else state.temperature,
         thermal.expansion_coefficient,
         thermal.gravity,
         thermal.reference_temperature,

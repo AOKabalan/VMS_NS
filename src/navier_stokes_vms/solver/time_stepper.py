@@ -16,6 +16,7 @@ from navier_stokes_vms.discretization.function_spaces import (
     flow_layout,
     mixed_space,
     oss_space,
+    scalar_subscale_space,
     subscale_space,
 )
 from navier_stokes_vms.discretization.quadrature import (
@@ -154,6 +155,7 @@ class TimeStepper:
         frozen = self._frozen
         jacobian = None
         self._subscales: SubscaleStorage | None = None
+        self._scalar_subscale_storage: dict[str, SubscaleStorage] = {}
         self._u_sub: Expr | None = None
         self._iterate: SubscaleIterate | None = None
         forms = {"convective_form": config.convection.form, "viscous_form": config.viscosity.form}
@@ -171,6 +173,12 @@ class TimeStepper:
                     quadrature_space, len(self._velocity_states.levels)
                 )
                 u_sub_history = self._subscales.history
+                if thermal is not None:
+                    scalar_quadrature = scalar_subscale_space(mesh, degree)
+                    self._scalar_subscale_storage = {
+                        name: SubscaleStorage(scalar_quadrature, self._history_levels())
+                        for name in self._scalar_data
+                    }
             if chi.is_nonlinear:
                 u_sub_iterate = fd.Function(quadrature_space)
                 a, a_hat = u + u_sub_iterate, frozen + u_sub_iterate
@@ -216,7 +224,17 @@ class TimeStepper:
                 for name, data in self._scalar_data.items()
             }
             system = thermal_system(
-                self._solution, layout, problem, level, scalar_levels, self._dx, config
+                self._solution,
+                layout,
+                problem,
+                level,
+                scalar_levels,
+                self._dx,
+                config,
+                velocity_history=u_sub_history,
+                scalar_histories={
+                    name: storage.history for name, storage in self._scalar_subscale_storage.items()
+                },
             )
             newton = system.residual
             self._u_sub = system.velocity_subscale
@@ -231,7 +249,19 @@ class TimeStepper:
                         )
             if chi is not None and config.solver.newton_tau == "frozen":
                 frozen_system = thermal_system(
-                    self._solution, layout, problem, level, scalar_levels, self._dx, config, frozen
+                    self._solution,
+                    layout,
+                    problem,
+                    level,
+                    scalar_levels,
+                    self._dx,
+                    config,
+                    frozen,
+                    velocity_history=u_sub_history,
+                    scalar_histories={
+                        name: storage.history
+                        for name, storage in self._scalar_subscale_storage.items()
+                    },
                 )
                 jacobian = ufl.replace(
                     fd.derivative(frozen_system.residual, self._solution), {frozen: u}
@@ -392,6 +422,7 @@ class TimeStepper:
             subscale_time=subscale_time,
             conservation=self._conservation,
             temperature=self.temperature,
+            solve_temperature=self._temperature,
             passive_scalars=self.passive_scalars,
         )
         self._fields = FieldWriter(folder)
@@ -488,6 +519,13 @@ class TimeStepper:
         for name, data in self._scalar_data.items():
             self._scalar_states[name].levels[0].interpolate(data.initial_value(x))
             self._scalar_fields[name].assign(self.scalar(name))
+            if timing.startup == "exact_history":
+                first = step_coefficients(timing.scheme, timing.startup, step=1)
+                for history_level in range(1, len(first.history_weights)):
+                    earlier = fd.Constant(-history_level * timing.dt)
+                    self._scalar_states[name].levels[history_level].interpolate(
+                        data.exact_solution(x, earlier)
+                    )
 
     def _initial_state(self) -> dict[str, float]:
         """|Ω|, d, and the energy and moments of u_h(0), which fix the conservation-run scales.
@@ -648,6 +686,8 @@ class TimeStepper:
         self._velocity_states.form_history(coefficients)
         for state in self._scalar_states.values():
             state.form_history(coefficients)
+        for storage in self._scalar_subscale_storage.values():
+            storage.form_history(coefficients)
         if self._subscales is not None:
             self._subscales.form_history(coefficients)
             if self._iterate is not None:
@@ -656,6 +696,8 @@ class TimeStepper:
     def _advance(self, coefficients: StepCoefficients) -> None:
         if self._subscales is not None:
             self._subscales.store(self._u_sub, coefficients)
+        for name, storage in self._scalar_subscale_storage.items():
+            storage.store(self._scalar_subscales[name], coefficients)
         self._velocity_states.advance(self._velocity, coefficients)
         for name, state in self._scalar_states.items():
             state.advance(self._scalar_fields[name], coefficients)

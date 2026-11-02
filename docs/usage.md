@@ -287,9 +287,9 @@ velocity degree, BDF1 with lower-order startup, Newton without Picard warm-up,
 and Laplacian viscosity. Momentum convection may be `skew_symmetric_1` or
 `nonconservative`; `[thermal].convection` is `skew_symmetric` (default) or
 `nonconservative`. An omitted temperature degree resolves to the velocity degree.
-Static linear thermal VMS is described below. Dynamic/nonlinear thermal VMS,
-other integrators, stress viscosity, other momentum forms and open thermal
-boundaries remain later phase work.
+Static and dynamic linear thermal VMS and the remaining time schemes are
+described below. Nonlinear thermal splitting, stress viscosity, other momentum
+forms and open thermal boundaries remain later phase work.
 
 A thermal case attaches `ThermalProblem` to `Problem`. It supplies positive
 thermal diffusivity, nonnegative expansion coefficient, a gravity vector pointing
@@ -334,8 +334,8 @@ python scripts/run_simulation.py configs/boussinesq/manufactured_static_oss.toml
 
 These use equal-order P1/P1/P1; P2/P2/P2 is also verified. Set
 `stabilization.subscale_dynamics = "static"` and `scale_splitting = "linear"`.
-BDF1, Newton, the supported convection choices and the B1 boundary restrictions
-still apply. Setting `pressure_subscale = false` removes the pressure subscale
+B2 introduced these examples with BDF1; B3 extends their time schemes below.
+Newton, the supported convection choices and the B1 boundary restrictions apply. Setting `pressure_subscale = false` removes the pressure subscale
 and its OSS projection without disabling scalar stabilization. Frozen-τ Newton
 freezes the mechanical and scalar parameters consistently. Exact-τ Newton is
 available but retains the zero-advector derivative limitation described for the
@@ -363,5 +363,43 @@ convection qualifications.
 Thermal projection residuals use the corresponding thermal/mechanical reference
 scales and have independent initial-relative/absolute checks. Empty passive data
 preserve temperature-only fields/output, and isothermal configurations retain
-their original spaces and output columns. Dynamic/nonlinear thermal subscales,
+their original spaces and output columns. Nonlinear thermal splitting,
 free-slip/channel support and the KH application remain later phase work.
+
+
+## Dynamic thermal subscales and time schemes (B3)
+
+Linear thermal ASGS/OSS now accepts `subscale_dynamics = "dynamic"` and all four
+existing schemes: `bdf1`, `bdf2`, `bdf3`, `crank_nicolson`. Galerkin and static
+thermal cases accept those time schemes too. Examples:
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/manufactured_dynamic_oss_bdf2.toml
+python scripts/run_simulation.py configs/boussinesq/manufactured_dynamic_asgs_crank_nicolson.toml
+python scripts/run_simulation.py configs/boussinesq/manufactured_dynamic_oss_bdf3.toml
+```
+
+Each active scalar has a separate dynamic subscale history on the same
+quadrature rule as the velocity subscale. The integrator's actual history
+weights, startup sequence and effective parameters apply to both scales.
+Crank–Nicolson starts with BDF1, then solves at the half level using endpoint
+averages of sources and prescribed boundary data. Resolved scalar and dynamic
+subscale endpoints are extrapolated; pressure and projections stay at the solve
+level. Temperature/passive VTK and scalar diagnostics use endpoint states.
+`buoyancy_power` uses both fields at the solve level, whose time is the existing
+`pressure_time` column; the diagnostic is not a kinetic/potential budget.
+
+`startup = "exact_history"` requires exact velocity and exact solutions for
+**every** active scalar, including passive tracers. Their negative-time FE
+histories are interpolated from those callbacks. Subscale history slots remain
+zero. For forced subscale ODEs, zero negative history is generally inconsistent
+and can limit startup accuracy; selecting exact resolved histories does not
+promise third-order accuracy for arbitrary forced BDF3 runs. Lower-order BDF3
+startup retains the existing global second-order limitation. The source-free
+order checks isolate the time operator with compatible zero OSS subscales.
+
+Failed steps preserve all resolved and subscale endpoint histories and write
+available physical fields at the attempted solve time. Nonlinear thermal
+splitting and Picard remain B4 work. Full thermal `energy_budget` and
+`momentum_budget` diagnostics remain disabled until the B5 coupled work terms
+are implemented; isothermal budget behavior is unchanged.

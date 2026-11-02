@@ -12,7 +12,7 @@ from navier_stokes_vms.solver.reusable_assembly import reusable_assembler
 
 
 class SubscaleStorage:
-    """ũⁿ, ũⁿ⁻¹, … starting from zero, and their combination ũ_hist for the current step."""
+    """Scalar or vector subscale endpoints, initially zero, and their current time history."""
 
     def __init__(self, space: WithGeometry, levels: int) -> None:
         self._space = space

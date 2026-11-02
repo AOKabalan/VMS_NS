@@ -275,7 +275,7 @@ def test_thermal_config_roundtrip_and_inactive_omission(tmp_path: Path) -> None:
     "changes",
     [
         dict(stabilization=StabilizationOptions()),
-        dict(time=TimeOptions(scheme="bdf2")),
+        dict(time=TimeOptions(startup="exact_history")),
         dict(solver=SolverOptions(linearization="picard")),
         dict(thermal=ThermalOptions(temperature_degree=1)),
     ],

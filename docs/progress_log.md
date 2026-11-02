@@ -1418,3 +1418,74 @@ Verification:
 
 B2 is complete. Stop at this phase boundary; B3 adds dynamic thermal subscales
 and the remaining time schemes.
+
+## Boussinesq B3: dynamic subscales and thermal time integration (2026-11-02)
+
+Implementation:
+
+- Extended the scalar residual with dynamic history and the scalar weak form
+  with ASGS subscale inertia. The monolithic builder uses effective velocity
+  and scalar parameters from the same integrator coefficients, including in
+  OSS projection weights and history terms. Spatial tau and the quasi-static
+  pressure closure retain their existing definitions.
+- Reused `SubscaleStorage` for temperature and every passive scalar on the
+  common scalar quadrature space. Scalar/vector subscale histories are sampled
+  and committed only after the whole coupled step succeeds. CN extrapolates
+  both resolved and dynamic subscale scalar endpoints; pressure/projections stay
+  at the half level. Failed steps retain all successful endpoint histories.
+- Enabled BDF1–3 and CN for Galerkin/static/dynamic linear thermal cases.
+  Nonlinear splitting and Picard remain B4 work. Exact-history validation now
+  requires exact velocity and every active scalar; their negative-time FE
+  histories are filled from those callbacks. Subscale histories deliberately
+  remain zero, with the specified startup limitation for forced ODEs.
+- Sources, fluxes and Dirichlet values share the existing endpoint data weights.
+  Buoyancy power now pairs solve-level temperature with solve-level velocity.
+  Additional checks exposed the pre-existing empty-form diagnostic failure at
+  zero expansion; zero expansion or gravity now returns exact zero work.
+- Full thermal energy/momentum budget requests are explicitly gated to B5:
+  enabling dynamic CN must not expose the incomplete isothermal budget formulas
+  for a coupled problem. Isothermal budget support is unchanged.
+- Added dynamic OSS BDF2/BDF3 and dynamic ASGS CN examples under
+  `configs/boussinesq/`, with documentation of time levels and startup limits.
+
+Verification:
+
+- Scalar ODE tests verify the effective parameters, history signs, lower-order
+  startup and CN endpoint recovery for all four schemes. A forced local ODE
+  measures the first-order first-step error from zero negative BDF3 subscale
+  histories using the actual scalar closure, rather than promising full BDF3
+  order for arbitrary forced starts.
+- Source-free temporal checks use discrete diffusion eigenmodes to remove
+  spatial error. OSS subscales are exactly zero for this P1 diffusion setting,
+  making their zero histories compatible. Across Galerkin, static OSS and
+  dynamic OSS, measured finest-pair orders were 0.965–0.968 (BDF1),
+  2.000–2.012 (BDF2), 3.042–3.061 (BDF3 with exact resolved histories), and
+  1.957–1.965 (CN with its BDF1 start). Per-case errors and orders are saved in
+  `temporal_order.json` within the pytest temporary directories.
+- Matched dynamic/static steady-state checks cover ASGS/OSS and all schemes,
+  including nonzero ASGS scalar subscales. Other checks cover dynamic OSS
+  orthogonality at solve and endpoint levels, passive-copy equality, both
+  Newton parameter modes with nonzero scalar/vector histories and P1/P2 fields,
+  negative-time scalar initialization, missing exact-data rejection, CN
+  nonlinear-data endpoint averaging, matching buoyancy work, and failed-step
+  preservation of all resolved/subscale histories with passive output.
+- Before the final zero-work edge checks, full regression passed
+  **798 tests with 1 known xfail**; the extended focused thermal run then passed
+  **82 tests** after the zero-expansion fix. With the final zero-gravity check
+  included, the full suite passed **801 tests with 1 known xfail in 219.47 s**.
+  The xfail remains the accepted near-inviscid nonlinear ASGS limitation. Logs: `/tmp/vms-b3-final-all.log` and `/tmp/vms-b3-final-thermal.log`.
+- Three B2 thermal cases (Galerkin, static ASGS and static OSS) retain exactly
+  identical velocity/pressure/temperature arrays and diagnostic/inner/outer CSV
+  records. Four isothermal cases likewise match B2 exactly. Comparisons are in
+  `/tmp/vms-b3-before`, `/tmp/vms-b3-after` and `/tmp/vms-b3-isothermal`.
+- All three dynamic CLI examples completed through `scripts/run_simulation.py`.
+  Ten-step final mixed residuals were 3.242e-13 (OSS BDF2), 2.796e-13 (ASGS CN),
+  and 2.711e-13 (OSS BDF3). These are integration checks, not forced-startup
+  temporal-order claims or production studies. Run artifacts are under
+  `results/manufactured_boussinesq/dynamic_*`.
+- `ruff check src tests scripts`, `ruff format --check src tests scripts`
+  (80 files), `git diff --check` and documentation-link/delimiter checks passed.
+  The production cavity/KH studies and slow verification suite remain outside B3.
+
+B3 is complete. Stop at this phase boundary; B4 adds nonlinear thermal splitting
+and Picard linearization.

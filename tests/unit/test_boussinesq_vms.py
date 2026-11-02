@@ -189,10 +189,14 @@ def test_asgs_temperature_subscale_buoyancy_sign(tmp_path: Path) -> None:
 @pytest.mark.parametrize("mode", ["asgs", "oss"])
 @pytest.mark.parametrize("degree", [1, 2])
 @pytest.mark.parametrize("newton_tau", ["frozen", "exact"])
+@pytest.mark.parametrize("dynamics", ["static", "dynamic"])
 def test_thermal_jacobian_with_passive_scalar(
-    tmp_path: Path, mode: str, degree: int, newton_tau: str
+    tmp_path: Path, mode: str, degree: int, newton_tau: str, dynamics: str
 ) -> None:
     config = replace(configuration(mode, degree), solver=SolverOptions(newton_tau=newton_tau))
+    config = replace(
+        config, stabilization=replace(config.stabilization, subscale_dynamics=dynamics)
+    )
     problem = build_problem(config)
     thermal = problem.thermal
     passive = PassiveScalarProblem(
@@ -211,6 +215,13 @@ def test_thermal_jacobian_with_passive_scalar(
     rng = np.random.default_rng(37)
     for field in (*solution.subfunctions, *direction.subfunctions):
         field.dat.data[:] = rng.uniform(0.2, 1.0, field.dat.data.shape)
+    if dynamics == "dynamic":
+        histories = [
+            stepper._subscales.history,
+            *(storage.history for storage in stepper._scalar_subscale_storage.values()),
+        ]
+        for history in histories:
+            history.dat.data[:] = rng.uniform(-0.5, 0.5, history.dat.data.shape)
     base = solution.copy(deepcopy=True)
     x = fd.SpatialCoordinate(problem.mesh)
     level = SolveLevel(
@@ -236,6 +247,10 @@ def test_thermal_jacobian_with_passive_scalar(
         stepper._dx,
         config,
         base.subfunctions[0] if newton_tau == "frozen" else None,
+        velocity_history=None if dynamics == "static" else stepper._subscales.history,
+        scalar_histories={
+            name: storage.history for name, storage in stepper._scalar_subscale_storage.items()
+        },
     ).residual
     J = stepper._step_solver._inner._newton._problem.J
     action = fd.assemble(ufl.action(J, direction))
@@ -379,9 +394,7 @@ def test_constant_gauge_is_confined_to_pressure(tmp_path: Path) -> None:
         assert size < 1e-12 if name == "pressure" else size > 1e-8
 
 
-@pytest.mark.parametrize(
-    "dynamics,splitting", [("dynamic", "linear"), ("static", "nonlinear"), ("dynamic", "nonlinear")]
-)
+@pytest.mark.parametrize("dynamics,splitting", [("static", "nonlinear"), ("dynamic", "nonlinear")])
 def test_later_thermal_variants_are_rejected(dynamics: str, splitting: str) -> None:
     config = configuration()
     config = replace(
@@ -390,5 +403,5 @@ def test_later_thermal_variants_are_rejected(dynamics: str, splitting: str) -> N
             config.stabilization, subscale_dynamics=dynamics, scale_splitting=splitting
         ),
     )
-    with pytest.raises(ValueError, match="static dynamics and linear splitting"):
+    with pytest.raises(ValueError, match="linear splitting"):
         build_problem(config)

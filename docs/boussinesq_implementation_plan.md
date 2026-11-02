@@ -1,7 +1,7 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
-Status: B0–B2 completed, 2 November 2026. Dynamic thermal subscales start
-in B3. Equations refer to the companion
+Status: B0–B3 completed, 2 November 2026. Nonlinear thermal splitting and
+Picard follow in B4. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
 solver for isothermal and thermally coupled problems, with small, explicit
 thermal components and unchanged isothermal defaults.
@@ -353,6 +353,17 @@ without contamination from inconsistent subscale startup; a forced test measures
 the documented startup limitation. Check dynamic/static steady-state agreement,
 temperature Dirichlet endpoint values and half-level buoyancy. Failed coupled
 steps must not advance either field's histories.
+
+B3 implementation uses scalar `SubscaleStorage` on the common quadrature rule,
+matched dynamic effective parameters for both projection families, and the
+existing resolved `FieldHistory` for every scalar. CN endpoint recovery includes
+all dynamic scalar subscales. Exact-history validation covers velocity and all
+scalars; zero subscale histories are explicitly retained with their documented
+forced-startup limitation. Buoyancy work uses matching solve-level fields.
+Thermal energy/momentum budget requests are rejected until B5, since the
+isothermal budget formulas alone omit coupled work. The progress log records
+source-free temporal orders, steady-state checks, failed-step preservation,
+matched Jacobians, example runs and regressions.
 
 ### B4 — Nonlinear splitting and complete core variant matrix
 

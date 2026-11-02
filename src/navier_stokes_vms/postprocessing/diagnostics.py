@@ -283,6 +283,7 @@ class DiagnosticState:
     subscale_time: fd.Constant | None
     conservation: Conservation | None = None
     temperature: fd.Function | None = None
+    solve_temperature: fd.Function | None = None
     passive_scalars: dict[str, fd.Function] | None = None
 
 

@@ -12,6 +12,7 @@ from ufl.core.expr import Expr
 
 from navier_stokes_vms.config import Config, validate_config
 from navier_stokes_vms.problem.boundary_conditions import DiffusiveFlux, Dirichlet, Outflow
+from navier_stokes_vms.problem.scalar_problem import transported_scalars
 
 if TYPE_CHECKING:
     from navier_stokes_vms.problem.problem_definition import Problem
@@ -98,37 +99,42 @@ def check_thermal_problem(problem: Problem) -> None:
 
 
 def check_thermal_supported(config: Config, problem: Problem) -> None:
-    """Reject thermal options beyond Galerkin and B2 static linear stabilization."""
+    """Reject unsupported nonlinear thermal variants and missing startup data."""
     check_thermal_problem(problem)
     if problem.thermal is None:
         if config.thermal is not None:
             raise ValueError("[thermal] requires a case with thermal problem data")
         return
     validate_config(config)
-    if config.stabilization.method == "vms" and (
-        config.stabilization.subscale_dynamics != "static"
-        or config.stabilization.scale_splitting != "linear"
-    ):
-        raise ValueError("B2 thermal VMS requires static dynamics and linear splitting")
-    if config.time.scheme != "bdf1" or config.time.startup != "lower_order":
-        raise ValueError("B2 thermal runs require BDF1 with lower_order startup")
+    if config.stabilization.method == "vms" and config.stabilization.scale_splitting != "linear":
+        raise ValueError("B3 thermal VMS requires linear splitting")
+    if config.time.startup == "exact_history":
+        missing = [] if problem.exact_velocity is not None else ["velocity"]
+        missing += [s.name for s in transported_scalars(problem) if s.exact_solution is None]
+        if missing:
+            raise ValueError(
+                "exact_history requires exact data for every transported field; "
+                f"missing: {', '.join(missing)}"
+            )
+    if {"energy_budget", "momentum_budget"}.intersection(config.output.diagnostics):
+        raise ValueError("thermal energy/momentum budgets require the B5 coupling identities")
     if config.solver.linearization != "newton" or config.solver.picard_iterations_before_newton:
-        raise ValueError("B2 thermal runs require Newton without Picard warm-up")
+        raise ValueError("B3 thermal runs require Newton without Picard warm-up")
     if config.viscosity.form != "laplacian" or config.convection.form not in (
         "skew_symmetric_1",
         "nonconservative",
     ):
         raise ValueError(
-            "B2 thermal runs require Laplacian viscosity and "
+            "B3 thermal runs require Laplacian viscosity and "
             "skew_symmetric_1 or nonconservative momentum convection"
         )
     if any(isinstance(bc, Outflow) for bc in problem.boundary_conditions.values()):
-        raise ValueError("B2 thermal runs require periodic or closed velocity boundaries")
+        raise ValueError("B3 thermal runs require periodic or closed velocity boundaries")
     if (
         config.stabilization.method == "none"
         and config.discretization.velocity_degree != config.discretization.pressure_degree + 1
     ):
-        raise ValueError("B2 thermal Galerkin runs require Taylor–Hood velocity/pressure degrees")
+        raise ValueError("B3 thermal Galerkin runs require Taylor–Hood velocity/pressure degrees")
     degree = config.thermal.temperature_degree if config.thermal is not None else None
     if degree is not None and degree != config.discretization.velocity_degree:
         raise ValueError("B1 temperature degree must equal the velocity degree")

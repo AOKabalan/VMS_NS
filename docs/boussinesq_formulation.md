@@ -1,12 +1,12 @@
 # Thermal Boussinesq VMS formulation
 
-Status: B2 static linear thermal ASGS/OSS implemented, 2 November 2026. This document specifies the thermal
+Status: B3 dynamic linear thermal subscales implemented, 2 November 2026. This document specifies the thermal
 buoyancy model requested for the existing incompressible Navier–Stokes framework;
 The implemented subset includes Taylor–Hood Galerkin and equal-order static
-linear ASGS/OSS with temperature and optional passive scalars. Newton, BDF1,
-Laplacian viscosity and the nonconservative/skew choices are supported on
-periodic or impermeable domains. Dynamic/nonlinear thermal subscales and the
-subsequent application phases remain proposed. The companion
+or dynamic linear ASGS/OSS with temperature and optional passive scalars.
+Newton, BDF1–3 and Crank–Nicolson, Laplacian viscosity and the nonconservative/
+skew choices are supported on periodic or impermeable domains. Nonlinear
+thermal splitting and subsequent application phases remain proposed. The companion
 [integration plan](boussinesq_implementation_plan.md) identifies the code changes
 and verification gates. Existing flow conventions remain defined by
 [formulation_spec.md](formulation_spec.md).
@@ -405,6 +405,31 @@ values and inherited degree, convection and stabilization choices. All active
 fields enter the monolithic Newton solve and named convergence checks. Frozen-τ
 Newton freezes both scalar and mechanical parameters, including projection
 weights; exact-τ Newton retains the existing zero-speed derivative limitation.
+
+### Implemented B3 time integration
+
+Dynamic velocity, temperature and passive subscales use their own quadrature
+histories with the same time-scheme coefficients as the resolved fields. Both
+residual-history terms and effective-parameter projection weights follow
+(B9)–(B11). ASGS retains the scalar subscale time term in (B14); OSS removes it
+through matched orthogonality. The quasi-static pressure closure is unchanged.
+Sources and prescribed fluxes/Dirichlet data use solve-level endpoint weights.
+
+Crank–Nicolson solves all fields at the endpoint-average half level and recovers
+resolved velocity/scalars and dynamic subscales at the endpoint. Pressure and
+projections remain at the solve level. Buoyancy and its reported power use
+solve-level temperature/velocity together. Zero expansion or gravity gives
+exactly zero buoyancy work. All histories are committed only after the coupled
+step succeeds.
+
+Exact-history startup requires exact velocity and every scalar, and fills their
+negative-time FE histories. Subscale histories remain zero, as specified in §6.
+Source-free temporal verification uses discrete diffusion eigenmodes for which
+OSS subscales are exactly zero; it isolates temporal order without spatial
+error or inconsistent subscale startup. A forced local-ODE check separately
+measures the first-order first-step defect of zero negative BDF3 subscale
+histories. Full thermal kinetic/potential and momentum budgets stay disabled
+until B5 supplies their coupled terms; §7 remains their derivation/specification.
 
 ### Galerkin and passive-temperature limits
 
