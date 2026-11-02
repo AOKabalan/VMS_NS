@@ -13,6 +13,7 @@ from ufl.core.expr import Expr
 from navier_stokes_vms.config import Config, method_name
 from navier_stokes_vms.discretization.function_spaces import (
     constant_pressure_null_space,
+    flow_layout,
     mixed_space,
     oss_space,
     subscale_space,
@@ -84,14 +85,16 @@ class TimeStepper:
         self._ds = boundary_measure(mesh, degree)
         stabilization = config.stabilization
         k = config.discretization.velocity_degree
+        layout = flow_layout(stabilization)
         if stabilization.method == "vms" and stabilization.subscale_space == "oss":
             # ξ_h, ζ_h are unknowns of the inner solve; they start at zero and then carry over.
             space = oss_space(mesh, k, stabilization.pressure_subscale)
         else:
             space = mixed_space(mesh, k, config.discretization.pressure_degree)
-        velocity_space = space.sub(0).collapse()
+        velocity_space = space.sub(layout.index("velocity")).collapse()
         self._solution = fd.Function(space)
-        self._velocity, self._pressure = self._solution.subfunctions[:2]
+        fields = layout.bind(self._solution.subfunctions)
+        self._velocity, self._pressure = fields["velocity"], fields["pressure"]
         self._pressure.rename("pressure")
         self._history = [
             fd.Function(velocity_space, name="velocity") for _ in range(self._history_levels())
@@ -117,8 +120,10 @@ class TimeStepper:
         outflow_ds = None
         if outflow:
             outflow_ds = named_boundary_measure(self._ds, outflow, problem.boundary_tags)
-        u, p, *projections = ufl.split(self._solution)
-        v, q, *projection_tests = fd.TestFunctions(space)
+        unknowns = layout.bind(ufl.split(self._solution))
+        tests = layout.bind(fd.TestFunctions(space))
+        u, p = unknowns["velocity"], unknowns["pressure"]
+        v, q = tests["velocity"], tests["pressure"]
         nu = problem.viscosity
         frozen = self._frozen
         jacobian = None
@@ -130,8 +135,8 @@ class TimeStepper:
         u_sub_history = None
         a, a_hat = u, frozen
         tau_m = tau_t = tau_c = tau_t_hat = tau_c_hat = None
-        xi, zeta = (projections + [None, None])[:2]
-        w, r = (projection_tests + [None, None])[:2]
+        xi, zeta = unknowns.get("xi"), unknowns.get("zeta")
+        w, r = tests.get("xi"), tests.get("zeta")
         if chi is not None:
             if chi.is_dynamic or chi.is_nonlinear:
                 quadrature_space = subscale_space(mesh, degree)
@@ -200,7 +205,10 @@ class TimeStepper:
                 )
         bcs = [
             dirichlet_bc(
-                space.sub(0), name, self._at_solve_level(bc.value, x), problem.boundary_tags
+                space.sub(layout.index("velocity")),
+                name,
+                self._at_solve_level(bc.value, x),
+                problem.boundary_tags,
             )
             for name, bc in conditions.items()
             if isinstance(bc, Dirichlet)
@@ -242,7 +250,7 @@ class TimeStepper:
             self._solution, newton, picard, frozen, bcs, null_space, config.solver, jacobian
         )
         self._step_solver = StepSolver(
-            inner, self._solution, self._iterate, self._dx, config.solver
+            inner, self._solution, self._iterate, self._dx, config.solver, layout
         )
         self._conservation = None
         requested = [name for name in config.output.diagnostics if name in CONSERVATION_DIAGNOSTICS]

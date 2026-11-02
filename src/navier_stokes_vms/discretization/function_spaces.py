@@ -1,10 +1,48 @@
 """Function spaces of the discretization and the constant-pressure null space."""
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import TypeVar
+
 import firedrake as fd
 from firedrake.functionspaceimpl import WithGeometry
 from firedrake.mesh import MeshGeometry
 
+from navier_stokes_vms.config import StabilizationOptions
 from navier_stokes_vms.discretization.quadrature import quadrature_element
+
+_T = TypeVar("_T")
+
+
+@dataclass(frozen=True)
+class FieldLayout:
+    """Ordered mixed fields with velocity first and the pressure gauge at component one."""
+
+    names: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if self.names[:2] != ("velocity", "pressure"):
+            raise ValueError("mixed fields must start with velocity and pressure")
+        if len(set(self.names)) != len(self.names) or any(not name for name in self.names):
+            raise ValueError("mixed field names must be nonempty and unique")
+
+    def index(self, name: str) -> int:
+        """Component index of the named field."""
+        return self.names.index(name)
+
+    def bind(self, components: Sequence[_T]) -> dict[str, _T]:
+        """Name function, expression or test components, rejecting a mismatched space."""
+        return dict(zip(self.names, components, strict=True))
+
+
+def flow_layout(stabilization: StabilizationOptions) -> FieldLayout:
+    """Named physical and projection fields of the configured isothermal method."""
+    names = ("velocity", "pressure")
+    if stabilization.method == "vms" and stabilization.subscale_space == "oss":
+        names += ("xi",)
+        if stabilization.pressure_subscale:
+            names += ("zeta",)
+    return FieldLayout(names)
 
 
 def mixed_space(mesh: MeshGeometry, velocity_degree: int, pressure_degree: int) -> WithGeometry:

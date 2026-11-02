@@ -1255,3 +1255,43 @@ Gates:
 - `OMP_NUM_THREADS=1 pytest tests/unit -n 2`: **687 passed, 1 xfailed in 191.91 s**. The xfail is strict and documents the accepted near-inviscid nonlinear ASGS limitation. Pytest temporary/cache directories and the full log (`/tmp/vms_phase12b_decisions_unit.log`) are under `/tmp`; Firedrake and Matplotlib caches were redirected there too.
 - The unit gate includes byte-for-byte comparison of regenerated and committed configurations, the six family counts and settings, both viscous ASGS step checks and the analysis grouping. `git diff --check` passed.
 - The slow verification suite and the full conservation queue were not run, respecting the Phase 12b-1 unit-scale restriction. Phase 12b-2 remains owner launch only. This follow-up stops after committing the decisions and implementation.
+
+## Boussinesq B0: named mixed fields (2026-11-02)
+
+Implementation:
+
+- Added immutable `FieldLayout` and `flow_layout` beside the function-space builders.
+  The layout validates field identity, pressure at component 1 and exact component counts,
+  and binds Firedrake functions, UFL expressions and tests by name.
+- Replaced positional physical/projection splitting in `TimeStepper` and positional
+  change reporting in `StepSolver`. Every named mixed field participates in outer
+  convergence. Existing iteration-log properties and CSV columns retain their meanings.
+- Added ten layout/convergence tests, including an intervening mixed field and a
+  case where only that additional field prevents outer convergence.
+- Form and history extraction remains with its first thermal consumer in B1; this
+  phase adds no thermal configuration, physical fields or unused extension stubs.
+- Included the reviewed thermal formulation, integration plan and addendum disposition
+  as the documentation basis for subsequent phases. The current flow equations and
+  isothermal defaults are unchanged.
+
+Verification:
+
+- Ten focused field-layout tests passed in 2.69 s. `ruff check src tests scripts`,
+  `ruff format --check src tests scripts` (69 files) and `git diff --check` passed.
+- Compared two-step manufactured-solution runs against `HEAD` source extracted to
+  `/tmp/vms-b0-baseline`: Galerkin, static linear ASGS, dynamic nonlinear OSS with
+  pressure projection, and dynamic nonlinear OSS without it. Velocity and pressure
+  arrays were exactly identical, as were diagnostic, inner-iteration and outer-iteration
+  CSV records for all four runs. Artifacts are `/tmp/vms-b0-before` and
+  `/tmp/vms-b0-after`; the comparison script is `/tmp/vms_b0_compare.py`.
+- The initial full-suite run exhausted the temporary-directory disk quota and was
+  interrupted; it is not a valid regression result. Compiler-cache SQLite integrity
+  checks passed after relocating only this phase's caches to the git-ignored
+  `results/.b0-test-cache/` directory. The clean full-suite rerun passed:
+  **697 passed, 1 xfailed in 850.99 s**. The xfail documents the existing
+  near-inviscid nonlinear ASGS limitation. Log: `/tmp/vms-b0-unit-rerun.log`.
+  Pytest artifacts remain under `/tmp`. The slow
+  verification suite and production validation/conservation queues are outside
+  this structural phase.
+
+B0 is complete. Stop at this phase boundary; B1 is the next implementation phase.

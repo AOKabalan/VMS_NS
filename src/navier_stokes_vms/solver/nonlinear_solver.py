@@ -1,8 +1,9 @@
 """Inner Newton or Picard solve with its convergence test and iteration records."""
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 
 import firedrake as fd
 import ufl
@@ -13,6 +14,7 @@ from ufl.form import Form
 from ufl.measure import Measure
 
 from navier_stokes_vms.config import SolverOptions
+from navier_stokes_vms.discretization.function_spaces import FieldLayout
 from navier_stokes_vms.solver.reusable_assembly import reusable_assembler
 from navier_stokes_vms.solver.subscale_storage import LocalUpdateResult, SubscaleIterate
 
@@ -248,13 +250,30 @@ class OuterIteration:
     iteration: int
     inner: InnerSolveResult
     local: LocalUpdateResult | None
-    velocity_change: float
-    pressure_change: float
+    field_changes: Mapping[str, float]
     subscale_change: float | None
-    xi_change: float | None
-    zeta_change: float | None
     fe_residual_norm: float
     converged: bool
+
+    @property
+    def velocity_change(self) -> float:
+        """Resolved velocity change for the existing iteration log."""
+        return self.field_changes["velocity"]
+
+    @property
+    def pressure_change(self) -> float:
+        """Pressure change for the existing iteration log."""
+        return self.field_changes["pressure"]
+
+    @property
+    def xi_change(self) -> float | None:
+        """Velocity projection change when present."""
+        return self.field_changes.get("xi")
+
+    @property
+    def zeta_change(self) -> float | None:
+        """Pressure projection change when present."""
+        return self.field_changes.get("zeta")
 
 
 @dataclass(frozen=True)
@@ -280,6 +299,7 @@ class StepSolver:
         subscale: SubscaleIterate | None,
         dx: Measure,
         options: SolverOptions,
+        layout: FieldLayout,
     ) -> None:
         self._inner = inner
         self._solution = solution
@@ -287,11 +307,11 @@ class StepSolver:
         self._dx = dx
         self._options = options
         self._previous = fd.Function(solution.function_space())
-        # Components: u_h, p_h, then ξ_h and ζ_h when present.
-        self._changes = [
-            RelativeChange(new, old, dx)
-            for new, old in zip(solution.subfunctions, self._previous.subfunctions, strict=True)
-        ]
+        current = layout.bind(solution.subfunctions)
+        previous = layout.bind(self._previous.subfunctions)
+        self._changes = {
+            name: RelativeChange(current[name], previous[name], dx) for name in layout.names
+        }
         self._previous_subscale = None
         if subscale is not None:
             self._previous_subscale = fd.Function(subscale.value.function_space())
@@ -322,11 +342,8 @@ class StepSolver:
                 rows.append(row)
                 return StepSolveResult(False, tuple(rows), self._local_failure(local))
             changes = (
-                row.velocity_change,
-                row.pressure_change,
+                *row.field_changes.values(),
                 subscale_change,
-                row.xi_change,
-                row.zeta_change,
             )
             tolerance = self._options.outer_rtol
             converged = max(
@@ -358,8 +375,7 @@ class StepSolver:
         subscale_change: float | None,
         converged: bool,
     ) -> OuterIteration:
-        changes = [change() for change in self._changes]
-        projections = changes[2:] + [None] * (4 - len(changes))
+        changes = {name: change() for name, change in self._changes.items()}
         # After the local update the stored ũ* has changed: reassemble the FE residual.
         residual = (
             inner.iterations[-1].residual_norm if local is None else self._inner.residual_norm()
@@ -368,11 +384,8 @@ class StepSolver:
             iteration=iteration,
             inner=inner,
             local=local,
-            velocity_change=changes[0],
-            pressure_change=changes[1],
+            field_changes=MappingProxyType(changes),
             subscale_change=subscale_change,
-            xi_change=projections[0],
-            zeta_change=projections[1],
             fe_residual_norm=residual,
             converged=converged,
         )
