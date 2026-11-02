@@ -43,6 +43,16 @@ def box(
     return mesh, dict(BOX_TAGS)
 
 
+def periodic_channel(
+    cells: Sequence[int], lower: Sequence[float], upper: Sequence[float]
+) -> tuple[MeshGeometry, dict[str, int]]:
+    """Affine triangle rectangle periodic only in x, with bottom/top tags 3/4 (G4)."""
+    nx, ny = cells
+    mesh = fd.PeriodicRectangleMesh(nx, ny, upper[0] - lower[0], upper[1] - lower[1], direction="x")
+    _translate(mesh, lower)
+    return mesh, {"y_min": 3, "y_max": 4}
+
+
 def gmsh_mesh(path: Path) -> tuple[MeshGeometry, dict[str, int]]:
     """Mesh from a .msh file; boundary names are its $PhysicalNames entries of facet dimension."""
     mesh = fd.Mesh(str(path))

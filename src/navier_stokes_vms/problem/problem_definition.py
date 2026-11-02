@@ -11,7 +11,13 @@ from ufl.core.expr import Expr
 from ufl.domain import extract_unique_domain
 
 from navier_stokes_vms.config import Config
-from navier_stokes_vms.problem.boundary_conditions import Dirichlet, Outflow, boundary_tag
+from navier_stokes_vms.problem.boundary_conditions import (
+    Dirichlet,
+    FreeSlip,
+    Outflow,
+    boundary_tag,
+    check_free_slip_boundaries,
+)
 from navier_stokes_vms.problem.scalar_problem import PassiveScalarProblem
 from navier_stokes_vms.problem.thermal_problem import ThermalProblem, check_thermal_problem
 
@@ -27,7 +33,7 @@ class Problem:
     """Mesh, boundaries, viscosity, data and optional exact solution of one case."""
 
     mesh: MeshGeometry
-    boundary_conditions: Mapping[str, Dirichlet | Outflow]
+    boundary_conditions: Mapping[str, Dirichlet | FreeSlip | Outflow]
     boundary_tags: Mapping[str, int]
     viscosity: float
     forcing: SpaceTimeExpression
@@ -88,13 +94,18 @@ def case_parameters(config: Config, defaults: Mapping[str, float]) -> dict[str, 
 def check_problem(problem: Problem) -> None:
     """Every named boundary has exactly one known condition; an exact velocity is solenoidal."""
     check_thermal_problem(problem)
-    for name in problem.boundary_conditions:
+    for name, condition in problem.boundary_conditions.items():
         boundary_tag(name, problem.boundary_tags)
+        if not isinstance(condition, Dirichlet | FreeSlip | Outflow):
+            raise ValueError(
+                "velocity boundaries require Dirichlet, FreeSlip or Outflow conditions"
+            )
     for name in problem.force_boundaries:
         boundary_tag(name, problem.boundary_tags)
     missing = sorted(set(problem.boundary_tags) - set(problem.boundary_conditions))
     if missing:
         raise ValueError(f"boundaries without a condition: {', '.join(missing)}")
+    check_free_slip_boundaries(problem.mesh, problem.boundary_conditions, problem.boundary_tags)
     if problem.exact_velocity is not None:
         _check_divergence_free(problem.mesh, problem.exact_velocity)
 

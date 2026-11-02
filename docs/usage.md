@@ -364,7 +364,7 @@ Thermal projection residuals use the corresponding thermal/mechanical reference
 scales and have independent initial-relative/absolute checks. Empty passive data
 preserve temperature-only fields/output, and isothermal configurations retain
 their original spaces and output columns. B4 adds nonlinear thermal splitting
-below; free-slip/channel support and the KH application remain later phase work.
+below; G4 adds free-slip/channel support below, and B7 supplies the KH application.
 
 
 ## Dynamic thermal subscales and time schemes (B3)
@@ -491,7 +491,8 @@ quantity for BDF schemes. The optional G5 stabilization-work ratios are not prov
 
 Potential energy requires an admissible, single-valued `g·x`: gravity-direction
 periodicity and thermal Dirichlet walls are rejected. This budget currently
-requires homogeneous no-slip or periodic velocity. Content checks require an
+requires homogeneous full-vector Dirichlet, free-slip or periodic velocity.
+Content checks require an
 admissible constant scalar test. Matching scalar/pressure degrees are needed to
 interpret the measured continuity work as a vanishing FE residual. Nonzero
 Dirichlet temperature is supported in the variance budget through reaction work;
@@ -519,3 +520,45 @@ BDF2 subscales and short duration differ from the paper. They are integration
 checks, not predictions of oscillation, chaos or long-time benchmark agreement.
 The [B5 report](verification/boussinesq_b5.md) contains primary-source conventions,
 refinement results, MPI/3D checks and reproducible commands.
+
+
+## Horizontally periodic free-slip channels (G4)
+
+Case builders can use `periodic_channel(cells, lower, upper)` for a triangular
+rectangle periodic only in x. It returns `y_min=3` and `y_max=4`, the bottom and
+top walls after translation. `periodic_rectangle()` remains fully periodic.
+Construct any coordinate remapping before creating the spaces and BCs.
+
+Attach `FreeSlip(normal_component=1)` to both channel walls. Only the normal
+velocity DOFs are constrained; tangent velocity has natural zero tangential
+traction. Component indices are zero-based. Flat walls must be normal to the
+declared coordinate axis; invalid/tilted wall descriptions are rejected. The
+same description works on axis-aligned 3D faces with the corresponding index.
+
+Temperature and passive scalars use `DiffusiveFlux()` on these walls for
+insulation. Their OSS projections remain unconstrained. Pressure retains its
+constant null space, and there is no zero-mean velocity constraint. Initial
+velocity/history fields are clamped only in the slip-normal trace; report any
+remaining interpolation divergence when setting up a physical case.
+
+Two runnable preservation examples use the existing entry point:
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/free_slip_uniform.toml
+python scripts/run_simulation.py configs/boussinesq/free_slip_uniform_stress.toml
+```
+
+`free_slip_channel` defaults to a 2×1 channel centered vertically, horizontal
+speed 1, T=T_ref=1 and passive tracer q=2, with zero sources/fluxes. Its
+`case_parameters` accept finite `speed`, positive `length`/`height`, and boolean
+`thermal`. The stress example sets `thermal=false`; thermal stress viscosity
+remains B6 work. The uniform examples use explicit MUMPS null-pivot detection
+for the pressure null space. Their scalar values are verification data; B7 will
+supply stratified shear/moisture initial conditions.
+
+The coupled kinetic–potential budget accepts free-slip wall tests and permits
+nonzero tangential wall speed. Its other admissibility checks remain active.
+The [G4 report](verification/free_slip_g4.md) records component/gauge tests,
+uniform preservation, nonuniform natural-traction decay, failure handling,
+serial/MPI checks and compatibility results. This completes the boundary gate
+for B7; it does not start the KH growth or cloud studies.

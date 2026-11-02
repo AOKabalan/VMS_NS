@@ -1,7 +1,8 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
-Status: B0–B5 completed, 2 November 2026. Remaining framework options follow in
-B6; free-slip support still gates the B7 applications. Equations refer to the companion
+Status: B0–B5 and boundary prerequisite G4 completed, 2 November 2026.
+B7 now has its boundary prerequisite; B6 remains the separate compatibility
+extension. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
 solver for isothermal and thermally coupled problems, with small, explicit
 thermal components and unchanged isothermal defaults.
@@ -315,31 +316,39 @@ implemented merely by reaching B2.
 
 ### Boundary prerequisite G4 — Before the early B7.1 test
 
-This may be completed alongside B2. `periodic_rectangle()` currently creates a
-fully periodic mesh and returns no boundary tags; add an explicit channel helper
-without changing that behavior. A runtime probe of installed Firedrake
-2026.10.0 confirms `PeriodicRectangleMesh(..., direction="x")` has empty tags
-1/2, bottom tag 3 and top tag 4. Translate and cluster before constructing spaces.
+Implemented after B5 at the owner's request. `periodic_channel()` creates an
+x-periodic affine triangle rectangle with bottom/top tags `y_min=3`, `y_max=4`;
+translated boundary integrals confirm those tags and empty periodic tags 1/2 in
+installed Firedrake 2026.10.0. The fully periodic helper keeps its existing
+behavior. Any vertex remapping for B7 must precede space/BC construction.
 
-`Dirichlet` and `Outflow` are the only current velocity boundary types. Add a
-small axis-aligned `FreeSlip` description giving the normal component. Impose
-that component only, with zero tangential traction natural; do not label slip
-walls as outflow. Update problem validation, BC construction, initialization,
-boundary-flux checks, failure output and solver test-space handling. On flat
-horizontal walls, $w=0$ along the wall implies $\partial_x w=0$, so both
-Laplacian and stress viscosity give $\partial_z u=0$ for zero tangential stress.
-General curved-wall slip is outside this initial boundary type.
+`FreeSlip(normal_component)` imposes zero only on that axis component and leaves
+tangential traction natural. Validation rejects invalid component indices and
+walls whose normals are not aligned with the declared axis. The same BC builder
+serves mixed solves and boundary-normal flux checks. Initialization enforces
+only the slip-normal trace on resolved initial/exact-history states. Solver
+residual norms and failed-state output use the component BCs consistently.
 
-The existing pressure-null-space decision (no outflow) can be retained after
-including the new boundary type. No zero-mean velocity constraint is imposed.
-OSS projection blocks remain unconstrained. Insulated thermal/passive boundaries
-are supplied by B1/G1; they do not exist in the current isothermal code.
+On flat horizontal walls, $w=0$ implies $\partial_x w=0$, so both Laplacian and
+stress viscosity reduce to natural $\partial_z u=0$ for tangential motion.
+Curved-wall slip remains outside this boundary type. Pressure retains its
+constant null space when no outflow is present; only component 1 is gauged.
+No mean-velocity constraint or OSS projection BC is introduced. Temperature
+and passive insulation use their existing natural zero-flux descriptions.
 
-Acceptance: verify wall tags after translation, apply only the normal component
-BC, check pressure gauge and projection spaces, and evolve a uniform horizontal
-flow in the periodic slip channel under both viscous forms. It must remain
-constant with zero normal flow to solver tolerance. The review's component-BC
-probe is evidence of Firedrake capability, not this future time-stepping test.
+The kinetic–potential budget now admits slip test functions: it checks zero
+normal flow everywhere and zero velocity only on full-vector Dirichlet walls.
+Tangential slip velocity is admissible without adding mechanical boundary work.
+Both viscous forms pass isothermal preservation/decay checks; thermal Laplacian
+runs verify T/q and budgets. The thermal stress-viscosity gate remains B6.
+
+Acceptance passed: uniform preservation across Galerkin/eight VMS variants,
+P1/P2 and all time schemes; translated tags, 3D component constraints, pressure
+gauge/projection freedom, mixed-boundary flux rejection, failure output, and
+nonuniform shear decay under both viscous forms. Serial/two-rank CLI examples
+are in `configs/boussinesq/free_slip_uniform*.toml`.
+See [G4 verification](verification/free_slip_g4.md). G4 does not implement the
+stratified KH initial state or the B7 growth/cloud studies.
 
 ### B3 — Dynamic thermal subscales and all existing time schemes
 

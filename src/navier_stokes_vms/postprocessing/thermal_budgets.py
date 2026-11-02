@@ -236,7 +236,14 @@ class ThermalBudgets:
                 )
         normal = fd.FacetNormal(problem.mesh)
         self._normal_flow = scalar_functional(ufl.dot(u, normal) ** 2 * ds)
-        self._wall_speed = scalar_functional(ufl.inner(u, u) * ds)
+        fixed_walls = tuple(
+            problem.boundary_tags[name]
+            for name, condition in problem.boundary_conditions.items()
+            if isinstance(condition, Dirichlet)
+        )
+        self._dirichlet_speed = (
+            scalar_functional(ufl.inner(u, u) * ds(fixed_walls)) if fixed_walls else lambda: 0.0
+        )
         for scalar in transported_scalars(problem):
             name = scalar.name
             t, level = fields.scalar_fields[name], fields.scalar_levels[name]
@@ -402,9 +409,10 @@ class ThermalBudgets:
             raise ValueError(
                 "thermal content/potential budgets require impermeable velocity boundaries"
             )
-        if "boussinesq_energy_budget" in self._names and self._wall_speed() > 1e-20:
+        if "boussinesq_energy_budget" in self._names and self._dirichlet_speed() > 1e-20:
             raise ValueError(
-                "boussinesq_energy_budget requires homogeneous no-slip or periodic velocity"
+                "boussinesq_energy_budget requires homogeneous Dirichlet data "
+                "or free-slip/periodic velocity"
             )
         self._values = {
             group: {key: evaluate() for key, evaluate in forms.items()}

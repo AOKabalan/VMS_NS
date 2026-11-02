@@ -1637,3 +1637,63 @@ Verification:
 
 B5 is complete. Stop at this phase boundary. B6 extends the remaining framework
 options; free-slip support still gates the later KH application.
+
+
+## Boundary prerequisite G4: periodic free-slip channels (2026-11-02)
+
+Implemented after B5 at the owner's request:
+
+- Added `periodic_channel()` for x-periodic affine triangular rectangles,
+  exposing translated bottom/top tags 3/4. The fully periodic mesh helper
+  retains its original behavior.
+- Added the axis-aligned `FreeSlip(normal_component)` dataclass with component,
+  wall-measure and normal-alignment validation. The BC builder constrains only
+  that normal component, leaving tangential traction natural. Problem typing
+  and validation now admit this boundary type.
+- Reused component BCs in mixed solves, prescribed-normal-flow compatibility
+  checks, initialization/exact histories, residual-row elimination and failure
+  output. Pressure alone retains its constant null space; mean horizontal flow
+  and all OSS projections remain unconstrained. Thermal/tracer insulation uses
+  existing natural zero-flux data.
+- The kinetic–potential budget now permits slip test functions with nonzero
+  tangential wall velocity. It checks zero normal flow everywhere and zero full
+  velocity only on full-vector Dirichlet walls. No boundary work is added for
+  zero natural tangential traction.
+- Added the fully specified `free_slip_channel` preservation case and thermal
+  Laplacian/isothermal stress CLI examples under `configs/boussinesq/`.
+  Thermal stress viscosity stays gated to B6; no KH initial data or application
+  study is included in G4.
+
+Verification:
+
+- Full unit regression: **983 passed, 1 known xfail in 448.70 s**. The existing
+  near-inviscid nonlinear ASGS xfail is unchanged. Log: `/tmp/vms-g4-all.log`.
+  The 48 new G4 tests and one registry case check cover geometry, component BCs,
+  gauge/projection freedom, initialization, flux rejection, failure output and
+  time stepping. Focused logs: `/tmp/vms-g4-uniform.log`, `/tmp/vms-g4-extra.log`
+  (four non-failure checks), `/tmp/vms-g4-rows.log` (final row/failure checks).
+- The uniform-preservation matrix covers Galerkin/all eight VMS variants under
+  isothermal Laplacian, isothermal stress, and thermal Laplacian with q. Further
+  P1/P2 thermal OSS checks cover all four time schemes, histories and budgets.
+  Uniform velocity/scalars remain within 1e-11, with zero normal flow and the
+  prescribed nonzero horizontal mean.
+- Source-free nonuniform shear decay exercises natural tangential traction.
+  Laplacian/stress velocities agree below 1e-10, maintain mean flow, and match
+  the continuum decay within the 0.005 P1 spatial-error bound. A separate
+  thermal shear check verifies the energy budget with nonzero wall tangent.
+- Both canonical CLI examples completed four steps. Velocity/pressure errors
+  were zero at output precision; thermal error was 1.835e-16, with scalar
+  contents 2/4 and kinetic energy 1. Both also passed two-rank MPI runs.
+  Stress diagnostics match serial exactly; the largest unnormalized thermal
+  difference is 3.669e-18. Normalized near-zero budget residuals reflect the
+  existing 1e-12 floor; the report pairs their differences with absolute values.
+  MPI needed local sockets and automatic approval allowed the local test.
+- Four isothermal and three prior thermal baselines retain bitwise-identical
+  fields and diagnostic/inner/outer CSV records. Artifacts:
+  `/tmp/vms-g4-before-*`, `/tmp/vms-g4-after-*`.
+- Ruff lint/format, `git diff --check`, TOML parsing, local documentation links,
+  math fences and report/CSV consistency passed. The report and measured data
+  are in `docs/verification/free_slip_g4.md` and `free_slip_g4_results.json`.
+
+G4 is complete. Stop at this phase boundary. B7 now has both its B5 and G4
+prerequisites; B6 remains the separate compatibility extension.

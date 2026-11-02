@@ -66,10 +66,13 @@ from navier_stokes_vms.postprocessing.thermal_budgets import (
 from navier_stokes_vms.problem.boundary_conditions import (
     DiffusiveFlux,
     Dirichlet,
+    FreeSlip,
     Outflow,
     check_dirichlet_flux,
+    check_free_slip_boundaries,
     dirichlet_bc,
     named_boundary_measure,
+    velocity_bcs,
 )
 from navier_stokes_vms.problem.problem_definition import (
     Problem,
@@ -91,6 +94,7 @@ class TimeStepper:
         self, config: Config, problem: Problem, folder: Path, logger: logging.Logger
     ) -> None:
         check_thermal_supported(config, problem)
+        check_free_slip_boundaries(problem.mesh, problem.boundary_conditions, problem.boundary_tags)
         self._config = config
         self._problem = problem
         self._logger = logger
@@ -308,16 +312,18 @@ class TimeStepper:
                 config.solver.subscale_max_iterations,
                 is_static=not chi.is_dynamic,
             )
-        bcs = [
-            dirichlet_bc(
-                space.sub(layout.index("velocity")),
-                name,
-                self._at_solve_level(bc.value, x),
-                problem.boundary_tags,
-            )
+        velocity_values = {
+            name: self._at_solve_level(bc.value, x)
             for name, bc in conditions.items()
             if isinstance(bc, Dirichlet)
-        ]
+        }
+        bcs = velocity_bcs(
+            space.sub(layout.index("velocity")), conditions, velocity_values, problem.boundary_tags
+        )
+        slip_conditions = {name: bc for name, bc in conditions.items() if isinstance(bc, FreeSlip)}
+        self._initial_slip_bcs = velocity_bcs(
+            velocity_space, slip_conditions, {}, problem.boundary_tags
+        )
         for name, data in self._scalar_data.items():
             bcs.extend(
                 dirichlet_bc(
@@ -337,15 +343,13 @@ class TimeStepper:
         self._zero_mean_pressure = null_space is not None
         self._boundary_velocity = None
         self._boundary_bcs = []
-        if null_space is not None and any(isinstance(bc, Dirichlet) for bc in conditions.values()):
+        if null_space is not None and any(
+            isinstance(bc, Dirichlet | FreeSlip) for bc in conditions.values()
+        ):
             self._boundary_velocity = fd.Function(velocity_space)
-            self._boundary_bcs = [
-                dirichlet_bc(
-                    velocity_space, name, self._at_solve_level(bc.value, x), problem.boundary_tags
-                )
-                for name, bc in conditions.items()
-                if isinstance(bc, Dirichlet)
-            ]
+            self._boundary_bcs = velocity_bcs(
+                velocity_space, conditions, velocity_values, problem.boundary_tags
+            )
         self._area = fd.assemble(fd.Constant(1.0) * self._dx)
         # EMAC variants keep the unknown and its null space on P; every reported pressure is the
         # physical p_h at the solve-level velocity, with its own zero mean (spec: EMAC pressure).
@@ -582,6 +586,9 @@ class TimeStepper:
                 self._velocity_states.levels[level].interpolate(
                     self._problem.exact_velocity(x, earlier)
                 )
+        for state in self._velocity_states.levels:
+            for bc in self._initial_slip_bcs:
+                bc.apply(state)
         self._velocity.assign(self._velocity_states.levels[0])
         self._pressure.assign(0.0)
         for name, data in self._scalar_data.items():

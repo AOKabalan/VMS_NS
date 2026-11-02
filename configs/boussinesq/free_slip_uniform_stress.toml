@@ -1,0 +1,26 @@
+case = "free_slip_channel"
+run_name = "g4_uniform_stress"
+
+[case_parameters]
+thermal = false
+
+[viscosity]
+form = "stress"
+
+[mesh]
+cells = [8, 8]
+
+[time]
+scheme = "crank_nicolson"
+dt = 0.05
+t_end = 0.2
+
+[solver.petsc]
+ksp_type = "preonly"
+pc_type = "lu"
+pc_factor_mat_solver_type = "mumps"
+mat_mumps_icntl_24 = 1
+
+[output]
+vtk_every = 4
+diagnostics = ["kinetic_energy", "velocity_error_l2", "pressure_error_l2", "divergence_l2"]

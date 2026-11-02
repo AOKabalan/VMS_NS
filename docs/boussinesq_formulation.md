@@ -1,6 +1,7 @@
 # Thermal Boussinesq VMS formulation
 
-Status: B5 conservative transport and coupled budgets implemented, 2 November 2026. This document specifies the thermal
+Status: B5 budgets and G4 periodic/free-slip boundary support implemented,
+2 November 2026. This document specifies the thermal
 buoyancy model requested for the existing incompressible Navier–Stokes framework;
 The implemented subset includes Taylor–Hood Galerkin and equal-order static
 or dynamic, linear or nonlinear ASGS/OSS with temperature and optional passive scalars.
@@ -502,8 +503,9 @@ and `momentum_budget` keep their previous meanings; thermal energy uses the new
 `boussinesq_energy_budget` name. Thermal momentum budgets remain B6 work.
 
 Content budgets reject scalar Dirichlet walls. Potential budgets additionally
-require representable, single-valued $g\cdot x$ and homogeneous no-slip or
-periodic velocity; gravity-direction periodicity is rejected. Variance budgets
+require representable, single-valued $g\cdot x$ and admissible velocity tests
+(homogeneous full-vector Dirichlet, free-slip or periodic); gravity-direction
+periodicity is rejected. Variance budgets
 permit nonzero Dirichlet temperature by retaining variational reaction work.
 Gradient wall flux and variational reaction are different diagnostics. Boundary
 lifts partition shared Dirichlet nodes so corner reactions are counted once.
@@ -512,6 +514,35 @@ The [B5 verification report](verification/boussinesq_b5.md) records solved varia
 identities, P1/P2 spatial and coupled temporal rates, 3D and MPI checks, cavity
 refinement, and the limited purpose of the tall-cavity smoke runs. The optional
 G5 proxy ratios are not implemented in B5.
+
+### Implemented G4 channel boundaries
+
+`periodic_channel()` creates an x-periodic affine triangle mesh with horizontal
+walls tagged `y_min=3`, `y_max=4`. This uses coordinate index 1 for the vertical
+direction; it is the $z$ direction in the shear-layer notation. Translation
+preserves these wall tags. The fully periodic mesh helper is unchanged.
+
+`FreeSlip(normal_component=1)` imposes only the vertical resolved velocity
+component on those walls. The tangential component remains a free test/unknown;
+zero tangential traction follows naturally from the viscous weak form. On a
+flat wall, the tangential derivative of the zero normal trace vanishes, so
+Laplacian and stress viscosity have the same tangential Neumann condition.
+The geometry check rejects curved/tilted walls and incorrect axis indices.
+
+No pressure datum or mean-horizontal-velocity constraint is added. Pressure is
+still component 1 with its existing constant null space. OSS projection fields
+remain unconstrained; temperature and passive insulation are natural zero flux.
+Initialization clamps only the slip-normal trace, including exact-history
+states; it does not project the initial velocity onto a solenoidal space.
+Residual-row elimination and failed-state output use the same component BCs.
+
+For (B24), the resolved velocity is an admissible test at a slip wall despite
+nonzero tangential speed. The budget therefore checks zero normal flow on all
+walls and zero full velocity only on full-vector Dirichlet walls. No additional
+mechanical boundary work is required for zero natural tangential traction.
+G4 verifies both viscous forms isothermally and thermal Laplacian transport;
+thermal stress viscosity remains the separate B6 extension. Measured checks:
+[G4 verification](verification/free_slip_g4.md).
 
 ### Galerkin and passive-temperature limits
 
