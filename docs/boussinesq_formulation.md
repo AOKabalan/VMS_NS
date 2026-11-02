@@ -899,6 +899,21 @@ or explicitly measure the initialization adjustment. Do not maintain the base
 with a body force: it diffuses on the $O(Re)$ time scale, so report its drift
 during each growth fit and longer run.
 
+**Implemented B7.1 profile.** The case uses an exact tanh core on $|z|\le c$,
+a nonnegative degree-five gradient taper to a constant plateau, and a C²
+compact envelope for the Gaussian streamfunction and initial moisture. With
+the default height/buffer/transition width, the core ends at $|z|=7$ and the
+plateau begins at $|z|=9$. The taper matches the base value and its first two
+derivatives and never reverses the temperature gradient. An analytic even
+primitive supplies physical initial pressure $p_0'=Ri\theta_0$ before FE
+interpolation and gauge normalization. The formulas, noise RMS convention and
+parameter restrictions are recorded in
+[the case reference definitions](../data/references/kelvin_helmholtz/README.md).
+No holding force is added. Initial divergence, scalar wall flux and the FE
+pressure–buoyancy mismatch are measured; analytic hydrostatic balance does not
+imply exact discrete equilibrium. This checkpoint validates only a few coupled
+static linear ASGS/OSS steps, not a growth rate or cloud pattern.
+
 Optional clustering moves triangle vertices by
 $z=(L_z/2)\sinh(\lambda\zeta)/\sinh\lambda$ from uniform
 $\zeta\in[-1,1]$, with the uniform limit at $\lambda=0$ and $\lambda\geq0$.

@@ -167,7 +167,12 @@ def test_each_case_builds_on_a_coarse_mesh(case: str) -> None:
             time=TimeOptions(scheme="bdf1"),
         )
     problem = build_problem(config)
-    if case in ("cylinder_dfg_2d", "lid_driven_cavity", "differentially_heated_cavity"):
+    if case in (
+        "cylinder_dfg_2d",
+        "lid_driven_cavity",
+        "differentially_heated_cavity",
+        "kelvin_helmholtz_shear_layer",
+    ):
         assert problem.reference_values
         assert set(problem.boundary_conditions) == set(problem.boundary_tags)
         assert uses_pressure_null_space(problem) == (case != "cylinder_dfg_2d")

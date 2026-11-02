@@ -45,6 +45,8 @@ class Problem:
     monitor_region: Callable[[Expr], Expr] | None = None
     thermal: ThermalProblem | None = None
     passive_scalars: tuple[PassiveScalarProblem, ...] = ()
+    initial_pressure: Callable[[Expr], Expr] | None = None
+    case_metadata: Mapping[str, object] | None = None
 
 
 def exact_solution_forcing(

@@ -1,0 +1,159 @@
+{
+  "phase": "B7.1",
+  "date": "2026-11-03",
+  "mesh": [
+    24,
+    24
+  ],
+  "degrees": [
+    1,
+    1
+  ],
+  "dt": 0.02,
+  "steps": 3,
+  "scheme": "bdf1",
+  "splitting": "linear",
+  "dynamics": "static",
+  "runs": {
+    "asgs": {
+      "folder": "results/kelvin_helmholtz_shear_layer/b71_static_asgs",
+      "initial": {
+        "time": 0.0,
+        "domain_volume": 282.6444132784258,
+        "dimension": 2,
+        "kinetic_energy": 126.14367429939851,
+        "linear_momentum_x": 2.8724245204614363e-13,
+        "linear_momentum_y": 7.592817672616636e-19,
+        "angular_momentum": -1399.9634392416012,
+        "divergence_l2": 8.68368551953074e-05,
+        "vertical_kinetic_energy": 7.818289963289113e-09,
+        "advective_cfl": 0.033964926798248626,
+        "pressure_mean": -1.3380042712603504e-14,
+        "boundary_flux": 0.0,
+        "boundary_normal_l2": 0.0,
+        "pressure_buoyancy_defect_l2": 0.10436751553426032,
+        "temperature_boundary_flux_l2": 0.0,
+        "q_boundary_flux_l2": 0.0
+      },
+      "final": {
+        "time": 0.06,
+        "kinetic_energy": 126.14265738705812,
+        "vertical_kinetic_energy": 6.240709889242993e-05,
+        "divergence_l2": 0.015724275058584126,
+        "advective_cfl": 0.03396492828514287,
+        "thermal_content": -1.0139111772389242e-13,
+        "passive_scalar_content_q": 36.465087085679926,
+        "boussinesq_energy_budget_potential": -139.99601701518452
+      },
+      "maximum_advective_cfl": 0.03396492828514287,
+      "maximum_absolute_budget_residuals": {
+        "thermal_content_budget_temperature_residual": 2.7067293692807374e-14,
+        "thermal_content_budget_q_residual": 1.376559250185835e-14,
+        "thermal_variance_budget_temperature_residual": 6.030295044508107e-14,
+        "thermal_variance_budget_q_residual": 1.1876594542895025e-14,
+        "boussinesq_energy_budget_residual": 4.368640865726192e-14
+      },
+      "final_field_residual": 3.0547635736262163e-13,
+      "exit_status": 0,
+      "vtk_fields": [
+        "pressure",
+        "q",
+        "temperature",
+        "velocity"
+      ]
+    },
+    "oss": {
+      "folder": "results/kelvin_helmholtz_shear_layer/b71_static_oss",
+      "initial": {
+        "time": 0.0,
+        "domain_volume": 282.6444132784258,
+        "dimension": 2,
+        "kinetic_energy": 126.14367429939851,
+        "linear_momentum_x": 2.8724245204614363e-13,
+        "linear_momentum_y": 7.592817672616636e-19,
+        "angular_momentum": -1399.9634392416012,
+        "divergence_l2": 8.68368551953074e-05,
+        "vertical_kinetic_energy": 7.818289963289113e-09,
+        "advective_cfl": 0.033964926798248626,
+        "pressure_mean": -1.3380042712603504e-14,
+        "boundary_flux": 0.0,
+        "boundary_normal_l2": 0.0,
+        "pressure_buoyancy_defect_l2": 0.10436751553426032,
+        "temperature_boundary_flux_l2": 0.0,
+        "q_boundary_flux_l2": 0.0
+      },
+      "final": {
+        "time": 0.06,
+        "kinetic_energy": 126.14266216387838,
+        "vertical_kinetic_energy": 6.767934615852204e-05,
+        "divergence_l2": 0.01665563685042242,
+        "advective_cfl": 0.033964928016543994,
+        "thermal_content": 1.6925350010410511e-13,
+        "passive_scalar_content_q": 36.465110744199606,
+        "boussinesq_energy_budget_potential": -139.99601480931406
+      },
+      "maximum_advective_cfl": 0.033964928016543994,
+      "maximum_absolute_budget_residuals": {
+        "thermal_content_budget_temperature_residual": 3.73797492649731e-14,
+        "thermal_content_budget_q_residual": 6.631845918290585e-15,
+        "thermal_variance_budget_temperature_residual": 3.5800989643553624e-14,
+        "thermal_variance_budget_q_residual": 7.262915654070596e-15,
+        "boussinesq_energy_budget_residual": 5.969010008488596e-14
+      },
+      "final_field_residual": 2.3520219510336983e-14,
+      "exit_status": 0,
+      "vtk_fields": [
+        "pressure",
+        "q",
+        "temperature",
+        "velocity"
+      ]
+    }
+  },
+  "mpi": {
+    "ranks": 2,
+    "folder": "results/kelvin_helmholtz_shear_layer/b71_static_oss_mpi",
+    "exit_status": 0,
+    "thermal_metadata_identical": true,
+    "maximum_initial_absolute_difference": 2.2168933355715126e-12,
+    "maximum_unnormalized_absolute_difference": 2.2737367544323206e-13,
+    "maximum_normalized_residual_difference": 0.026179715767408497,
+    "temperature_content_residual_absolute_difference": 2.6179715767408498e-14,
+    "diagnostic_absolute_differences": {
+      "kinetic_energy": 1.2789769243681803e-13,
+      "vertical_kinetic_energy": 3.9302328752599536e-19,
+      "divergence_l2": 3.8163916471489756e-17,
+      "advective_cfl": 0.0,
+      "thermal_content": 2.1443957720634899e-13,
+      "passive_scalar_content_q": 4.973799150320701e-14,
+      "boussinesq_energy_budget_potential": 2.2737367544323206e-13
+    }
+  },
+  "regression": {
+    "baseline_commit": "a0d4b83",
+    "isothermal_cases": 4,
+    "thermal_cases": 3,
+    "fields_and_diagnostic_iteration_initial_metadata_identical": true,
+    "wall_times_compared": false
+  },
+  "tests": {
+    "full_run": {
+      "passed": 1027,
+      "failed": 1,
+      "xfailed": 1,
+      "seconds": 464.98,
+      "log": "/tmp/vms-b71-all.log"
+    },
+    "full_run_failure": "Outdated invalid-CLI sorted diagnostic prefix; updated assertion only",
+    "corrected_cli_checks": {
+      "passed": 5,
+      "log": "/tmp/vms-b71-cli.log"
+    },
+    "final_kelvin_helmholtz_checks": {
+      "passed": 44,
+      "seconds": 19.01,
+      "log": "/tmp/vms-b71-final-focus.log"
+    },
+    "passing_coverage_after_targeted_correction": 1028
+  }
+}

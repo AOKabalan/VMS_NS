@@ -1697,3 +1697,63 @@ Verification:
 
 G4 is complete. Stop at this phase boundary. B7 now has both its B5 and G4
 prerequisites; B6 remains the separate compatibility extension.
+
+
+## Phase B7.1: stratified Kelvin–Helmholtz coupled smoke case (2026-11-03)
+
+Implemented the early coupled checkpoint and its required B7.0 definitions:
+
+- Added `kelvin_helmholtz_shear_layer` with dimensionless Re/Pr/Sc/Ri scaling,
+  periodic/free-slip geometry, insulated temperature and optional passive q.
+  Parameters, actual mesh/cutoffs and fixed-seed PCG64 Fourier phases are recorded.
+  The tanh core joins monotone C² wall plateaus; compact perturbation/moisture
+  envelopes give compatible normal/tangential and scalar wall data.
+- Added optional physical initial pressure to `Problem`, initialized from the
+  analytic hydrostatic primitive in this case. Initialization respects modified
+  pressure conventions and gauge normalization. Existing cases retain their
+  zero-pressure startup and original initial/thermal metadata schema.
+- Added opt-in endpoint vertical kinetic energy and MPI-global quadrature-sampled
+  degree-weighted advective CFL. This case records initial divergence, normal
+  flow, scalar wall fluxes and the FE pressure–buoyancy defect explicitly.
+- Added static linear ASGS/OSS CLI configs, case reference definitions,
+  formulation/plan/usage updates and a measured verification report/JSON.
+  No force holds the base state. No growth/cloud/long-time study or clustering
+  implementation is included; B6 thermal stress/EMAC gates remain intact.
+
+Verification:
+
+- Regression coverage: **1,028 passing unit checks, one existing xfail**, across
+  the full suite plus a focused correction rerun. The full run gave 1,027 passed,
+  one failed and one xfailed in 464.98 s (`/tmp/vms-b71-all.log`). The sole failure
+  was an old CLI expectation that `angular_momentum` begins the available-diagnostic
+  list; adding `advective_cfl` changes that sorted prefix. The expectation was
+  updated and all five focused CLI checks passed (`/tmp/vms-b71-cli.log`). No
+  simulation code changed for this correction. The final 44 KH tests passed in
+  19.01 s (`/tmp/vms-b71-final-focus.log`), plus the added coarse case-registry check.
+- Tests check parameter ranges, taper monotonicity/C² joins, pressure primitive
+  derivatives, noise RMS/seed reproducibility, P1/P2 coupled residuals/Jacobians,
+  pressure null mode, wall compatibility and OSS orthogonality. Duplicate scalar
+  transport agrees below 1e-11 under ASGS/OSS with active buoyancy. Physical
+  pressure initialization also passes isothermal EMAC/EMAC–VMS reporting checks.
+  A preliminary DG3 profile sampler could not represent the integrated taper;
+  using DG6 corrected that test interpolation artifact without changing the profile.
+- Both 24×24 P1 CLI examples completed three BDF1 steps (dt=0.02, t_end=0.06).
+  Initial normal/scalar wall fluxes are zero; divergence L² is 8.684e-5 and the
+  hydrostatic interpolation defect is 0.10437. Absolute scalar and energy budget
+  residuals remain below 6.1e-14. Final vertical energies 6.241e-5/6.768e-5 exceed
+  the tiny seed energy 7.818e-9; these coarse data establish no KH growth rate.
+- Two-rank OSS MPI completed with identical case/thermal metadata and noise
+  phases. Largest unnormalized per-step difference: 2.274e-13. A normalized
+  near-zero thermal-content residual differs by 0.02618, corresponding to only
+  2.618e-14 absolute difference divided by the existing 1e-12 floor. Automatic
+  approval allowed local MPI sockets outside the sandbox.
+- Four isothermal and three prior thermal runs against G4 `a0d4b83` retain
+  bitwise-identical field arrays, diagnostic/inner/outer CSVs and initial/thermal
+  JSON. Wall-clock timings are excluded. Artifacts: `/tmp/vms-b71-before-*` and
+  `/tmp/vms-b71-after-*`.
+- Ruff lint/format, `git diff --check`, TOML/JSON parsing, local links, math fences
+  and report/CLI consistency passed. Details:
+  `docs/verification/kelvin_helmholtz_b71.md` and its results JSON.
+
+B7.1 is complete. Stop here. B7.2 checks startup controls, mesh/refinement and
+base-profile drift before growth-rate or cloud studies.

@@ -9,6 +9,7 @@ import ufl
 from ufl.core.expr import Expr
 from ufl.measure import Measure
 
+from navier_stokes_vms.discretization.function_spaces import scalar_subscale_space
 from navier_stokes_vms.formulation.convective_forms import (
     convective_defect,
     energy_defect,
@@ -33,6 +34,7 @@ from navier_stokes_vms.postprocessing.thermal_diagnostics import (
 )
 from navier_stokes_vms.problem.boundary_conditions import named_boundary_measure
 from navier_stokes_vms.problem.problem_definition import Problem
+from navier_stokes_vms.solver.reusable_assembly import reusable_assembler
 from navier_stokes_vms.solver.reusable_assembly import scalar_functional as _functional
 
 ENERGY_BUDGET_TERMS = (
@@ -284,6 +286,7 @@ class DiagnosticState:
     solve_temperature: fd.Function | None = None
     passive_scalars: dict[str, fd.Function] | None = None
     thermal_budgets: ThermalBudgets | None = None
+    advective_cfl: Callable[[], float] | None = None
 
 
 @dataclass(frozen=True)
@@ -296,6 +299,29 @@ class Diagnostic:
 
 def _kinetic_energy(state: DiagnosticState) -> float:
     return fd.assemble(ufl.inner(state.velocity, state.velocity) / 2 * state.dx)
+
+
+def advective_cfl_sampler(
+    velocity: fd.Function, dt: float, degree: int, quadrature_degree: int
+) -> Callable[[], float]:
+    """Sample k Δt |u_h|/h_min at the common quadrature points, taking an MPI-global maximum."""
+    mesh = velocity.function_space().mesh()
+    values = fd.Function(scalar_subscale_space(mesh, quadrature_degree))
+    expression = degree * dt * ufl.sqrt(ufl.inner(velocity, velocity)) / fd.MinCellEdgeLength(mesh)
+    assembler = reusable_assembler(fd.interpolate(expression, values.function_space()))
+
+    def sample() -> float:
+        values.assign(assembler.assemble())
+        with values.dat.vec_ro as vector:
+            return float(vector.max()[1])
+
+    return sample
+
+
+def _vertical_kinetic_energy(state: DiagnosticState) -> float:
+    return fd.assemble(
+        state.velocity[state.problem.mesh.geometric_dimension - 1] ** 2 / 2 * state.dx
+    )
 
 
 def _subscale_kinetic_energy(state: DiagnosticState) -> float:
@@ -408,6 +434,8 @@ DIAGNOSTICS: dict[str, Diagnostic] = {
     "thermal_content": Diagnostic(thermal_content, needs_exact_solution=False),
     "buoyancy_power": Diagnostic(buoyancy_power, needs_exact_solution=False),
     "kinetic_energy": Diagnostic(_kinetic_energy, needs_exact_solution=False),
+    "vertical_kinetic_energy": Diagnostic(_vertical_kinetic_energy, needs_exact_solution=False),
+    "advective_cfl": Diagnostic(lambda state: state.advective_cfl(), needs_exact_solution=False),
     "subscale_kinetic_energy": Diagnostic(_subscale_kinetic_energy, needs_exact_solution=False),
     "linear_momentum": Diagnostic(_linear_momentum, needs_exact_solution=False),
     "angular_momentum": Diagnostic(_angular_momentum, needs_exact_solution=False),

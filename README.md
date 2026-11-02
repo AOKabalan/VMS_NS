@@ -55,6 +55,9 @@ transport, coupled thermal/kinetic–potential budgets and a heated-cavity case
 are included; measured checks are in the [B5 report](docs/verification/boussinesq_b5.md).
 Horizontally periodic free-slip channels are supported; see the
 [G4 boundary checks](docs/verification/free_slip_g4.md).
+The stratified Kelvin–Helmholtz case with passive moisture is available as a
+[coupled smoke test](docs/usage.md#kelvinhelmholtz-coupled-smoke-test-b71);
+growth-rate and cloud studies remain later checkpoints.
 
 ## Quick start
 

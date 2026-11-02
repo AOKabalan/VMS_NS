@@ -332,7 +332,7 @@ def test_run_script_refuses_an_existing_results_folder(tmp_path: Path) -> None:
     [
         (
             SHORT_RUN.replace("vtk_every = 0", "vtk_every = 0\ndiagnostics = ['vorticity']"),
-            "output.diagnostics: unknown vorticity; available: angular_momentum",
+            "output.diagnostics: unknown vorticity; available: advective_cfl",
         ),
         (
             SHORT_RUN.replace(

@@ -47,6 +47,7 @@ from navier_stokes_vms.postprocessing.diagnostics import (
     Conservation,
     ConservationFields,
     DiagnosticState,
+    advective_cfl_sampler,
     diagnostic_columns,
     evaluate_diagnostics,
 )
@@ -83,6 +84,7 @@ from navier_stokes_vms.problem.scalar_problem import transported_scalars
 from navier_stokes_vms.problem.thermal_problem import check_thermal_supported
 from navier_stokes_vms.solver.field_history import FieldHistory
 from navier_stokes_vms.solver.nonlinear_solver import InnerSolver, StepSolver, StepSolveResult
+from navier_stokes_vms.solver.reusable_assembly import scalar_functional
 from navier_stokes_vms.solver.subscale_storage import SubscaleIterate, SubscaleStorage
 from navier_stokes_vms.solver.system_builder import ThermalSystem, thermal_system
 
@@ -495,6 +497,11 @@ class TimeStepper:
             solve_temperature=self._temperature,
             passive_scalars=self.passive_scalars,
             thermal_budgets=self._thermal_budgets,
+            advective_cfl=advective_cfl_sampler(
+                self.velocity, config.time.dt, config.discretization.velocity_degree, degree
+            )
+            if "advective_cfl" in config.output.diagnostics or problem.initial_pressure is not None
+            else None,
         )
         self._fields = FieldWriter(folder)
         self._folder = folder
@@ -601,6 +608,12 @@ class TimeStepper:
                     self._scalar_states[name].levels[history_level].interpolate(
                         data.exact_solution(x, earlier)
                     )
+        if self._problem.initial_pressure is not None:
+            initial_pressure = self._problem.initial_pressure(x)
+            if PRESSURE_UNKNOWNS[self._config.convection.form] == "P":
+                initial_pressure -= ufl.inner(self._velocity, self._velocity) / 2
+            self._pressure.interpolate(initial_pressure)
+            self._normalize_pressure()
 
     def _initial_state(self) -> dict[str, float]:
         """|Ω|, d, and the energy and moments of u_h(0), which fix the conservation-run scales.
@@ -608,12 +621,41 @@ class TimeStepper:
         Spec: Conservation-run normalization (owner decision K-D2).
         """
         names = ("kinetic_energy", "linear_momentum", "angular_momentum")
-        return {
+        values = {
             "time": 0.0,
             "domain_volume": self._area,
             "dimension": self._problem.mesh.geometric_dimension,
             **evaluate_diagnostics(names, self._diagnostic_state),
         }
+        if self._problem.initial_pressure is not None:
+            normal = fd.FacetNormal(self._problem.mesh)
+            flux = ufl.dot(self.velocity, normal)
+            values.update(
+                evaluate_diagnostics(
+                    ("divergence_l2", "vertical_kinetic_energy", "advective_cfl"),
+                    self._diagnostic_state,
+                )
+            )
+            values["pressure_mean"] = scalar_functional(self.pressure * self._dx)() / self._area
+            values["boundary_flux"] = scalar_functional(flux * self._ds)()
+            values["boundary_normal_l2"] = scalar_functional(flux**2 * self._ds)() ** 0.5
+            if self.temperature is not None:
+                thermal = self._problem.thermal
+                mismatch = ufl.grad(self._physical_pressure) - buoyancy(
+                    self._temperature,
+                    thermal.expansion_coefficient,
+                    thermal.gravity,
+                    thermal.reference_temperature,
+                )
+                values["pressure_buoyancy_defect_l2"] = (
+                    scalar_functional(ufl.inner(mismatch, mismatch) * self._dx)() ** 0.5
+                )
+                for name, data in self._scalar_data.items():
+                    flux = data.diffusivity * ufl.dot(ufl.grad(self.scalar(name)), normal)
+                    values[f"{name}_boundary_flux_l2"] = (
+                        scalar_functional(flux**2 * self._ds)() ** 0.5
+                    )
+        return values
 
     def _step(self, step: int, last: bool, logs: IterationLogs, diagnostics: CsvWriter) -> None:
         started = time.perf_counter()

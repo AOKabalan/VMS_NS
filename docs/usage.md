@@ -562,3 +562,48 @@ The [G4 report](verification/free_slip_g4.md) records component/gauge tests,
 uniform preservation, nonuniform natural-traction decay, failure handling,
 serial/MPI checks and compatibility results. This completes the boundary gate
 for B7; it does not start the KH growth or cloud studies.
+
+## Kelvin–Helmholtz coupled smoke test (B7.1)
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/kh_smoke_static_asgs.toml
+python scripts/run_simulation.py configs/boussinesq/kh_smoke_static_oss.toml
+```
+
+These run three BDF1 steps on a uniform 24×24 triangular channel mesh with
+static linear subscales, temperature and monolithic passive moisture `q`.
+They exercise initialization and coupling; this coarse mesh is not a validated
+growth-rate or cloud configuration. The next step is B7.2 startup/resolution work.
+
+`kelvin_helmholtz_shear_layer` accepts dimensionless `reynolds`, `prandtl`,
+`schmidt`, `richardson`, `n_waves`, `wave_number`, `height`, perturbation
+`epsilon`, `epsilon_noise`, `random_seed`, `noise_modes`, wall `wall_buffer`,
+`wall_transition_width`, and moisture `moisture` (boolean), `rh_peak`,
+`moisture_width`, `saturation_height_rate`, `saturation_temperature_rate`.
+Use `[mesh].cells=[nx,nz]` for actual counts. Defaults and the exact profile
+definitions are in [the reference conventions](../data/references/kelvin_helmholtz/README.md).
+Unknown parameters are rejected; clustering is not exposed at B7.1.
+
+Horizontal velocity and temperature equal tanh in the core and flatten smoothly
+near insulated free-slip walls. The compact perturbation and moisture cutoff
+also satisfy the wall conditions. Physical pressure starts from the analytic
+hydrostatic primitive, interpolated and mean normalized. There is no holding
+force. This initializer is optional `Problem.initial_pressure` data; it supplies
+physical pressure, including when the solver uses a modified pressure unknown.
+Omitting it preserves the previous zero-pressure startup and output schema.
+
+`thermal_metadata.json` includes actual physical/scalar coefficients, case
+parameters, cutoff coordinates and generated Fourier phases.
+`initial_state.json` additionally records pressure mean, hydrostatic interpolation
+defect, divergence, vertical energy, normal-flow and scalar wall-flux norms.
+Opt-in `vertical_kinetic_energy` measures the final velocity component;
+`advective_cfl` samples `k*dt*|u|/h_min` at the common quadrature points and
+takes an MPI-global maximum each step. This is an endpoint sample rather than
+a continuous supremum. VTK names the temperature and `q` explicitly; condensate
+diagnostics and animations are reserved for B7.5.
+
+The [B7.1 report](verification/kelvin_helmholtz_b71.md) records the coarse startup
+motion and verification limits. A nonzero discrete pressure–buoyancy defect can
+generate vertical motion much larger than the tiny seed; do not infer instability
+growth from this smoke test. Scalar content under linear splitting and skew
+transport has the already documented G3 defect; the reported budget includes it.

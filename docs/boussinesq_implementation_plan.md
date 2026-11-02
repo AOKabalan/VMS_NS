@@ -1,6 +1,6 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
-Status: B0–B5 and boundary prerequisite G4 completed, 2 November 2026.
+Status: B0–B5, boundary prerequisite G4 and B7.1 completed, 3 November 2026.
 B7 now has its boundary prerequisite; B6 remains the separate compatibility
 extension. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
@@ -538,6 +538,17 @@ hydrostatic initialization, finite forms/Jacobians, pressure gauge, projection
 orthogonality, scalar names and initial divergence/net flux. Evolve a few static
 linear ASGS/OSS steps. This exercises the coupling but establishes no instability
 growth rate, cloud pattern or long-time conservation result.
+
+Implementation: `cases/kelvin_helmholtz_shear_layer.py`, the two
+`kh_smoke_static_*.toml` configs and the case reference definitions above.
+The B7.0 definitions needed by this test are included. The builder accepts
+uniform mesh counts through the existing `[mesh].cells`; it does not yet expose
+clustering. Initial physical pressure is optional problem data; old cases
+retain their zero-pressure initialization and original output schema.
+Hydrostatic interpolation defects are recorded explicitly. Per-step vertical
+energy and quadrature-sampled degree-weighted advective CFL are opt-in diagnostics.
+See [B7.1 verification](verification/kelvin_helmholtz_b71.md).
+Stop here before B7.2 startup/refinement work or the later application studies.
 
 #### B7.2 — Mesh, startup and reference preparation
 

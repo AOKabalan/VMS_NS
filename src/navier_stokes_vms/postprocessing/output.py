@@ -210,6 +210,8 @@ def write_thermal_metadata(comm: MPI.Comm, folder: Path, problem: Problem, confi
             }
         if problem.reference_values is not None:
             values["reference_values"] = dict(problem.reference_values)
+        if problem.case_metadata is not None:
+            values["case_metadata"] = dict(problem.case_metadata)
         groups = [name for name in config.output.diagnostics if name in THERMAL_BUDGETS]
         if groups:
             values["budget_diagnostics"] = {
