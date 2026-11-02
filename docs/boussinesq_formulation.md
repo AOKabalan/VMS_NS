@@ -922,6 +922,29 @@ the sinh map as curved geometry. Check positive cell Jacobians and aspect ratios
 The common shortest-edge $h$ makes stabilization sensitive to clustered spacing;
 record both minimum edge and maximum advective CFL.
 
+**Implemented B7.2 mesh/startup checks.** Clustering is now an optional case
+parameter, with zero selecting the original uniform mesh. The vertex map is
+evaluated before any spaces or geometric assembly. Reject collapsed rows and
+clustered wall cells extending beyond the flat plateau. The vertical cell-map
+Jacobian must stay positive. Firedrake's triangles have mixed reference
+orientations, so report absolute cell determinants and the positive determinant
+ratio relative to the uniform cells, rather than rejecting valid negative
+reference orientations. The reported aspect ratio is longest edge divided by
+shortest altitude, $h_{\max}^2/(2|K|)$, and stabilization still uses the actual
+shortest edge.
+
+Optional horizontal-profile output integrates FE line traces on mesh rows and
+midrows with Gauss points on each horizontal half-cell. This respects the
+triangle intersections and records evolving means of velocity, temperature and
+named tracers. Profile drift is measured relative to each run's own interpolated
+initial means; the base is not held steady. Zero-seed controls expose discrete
+hydrostatic/startup motion, which must be distinguished from an instability.
+The analytic pressure initializer remains an initial solve guess: replacing it
+alone cannot change a converged solution of the same discrete equations.
+Subtracting two energies is not the energy of the difference of their velocity
+fields. B7.2 therefore reports both raw energies and their ratio, without a
+growth fit or an assertion of production resolution.
+
 For the moisture **visualization proxy**, advect/diffuse total tracer $q_m$ and set
 
 $$

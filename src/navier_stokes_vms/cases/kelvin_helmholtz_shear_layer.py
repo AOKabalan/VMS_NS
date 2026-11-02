@@ -4,6 +4,7 @@ import math
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
 
+import firedrake as fd
 import numpy as np
 import ufl
 from ufl.core.expr import Expr
@@ -11,7 +12,7 @@ from ufl.core.expr import Expr
 from navier_stokes_vms.config import Config
 from navier_stokes_vms.problem.boundary_conditions import DiffusiveFlux, FreeSlip
 from navier_stokes_vms.problem.mesh_loading import builtin_cells, periodic_channel
-from navier_stokes_vms.problem.problem_definition import Problem
+from navier_stokes_vms.problem.problem_definition import HorizontalProfileGeometry, Problem
 from navier_stokes_vms.problem.scalar_problem import PassiveScalarProblem
 from navier_stokes_vms.problem.thermal_problem import ThermalProblem
 
@@ -38,6 +39,7 @@ class ShearLayerParameters:
     moisture_width: float = 1.5
     saturation_height_rate: float = 0.03
     saturation_temperature_rate: float = 0.0
+    clustering: float = 0.0
 
 
 def checked_parameters(values: Mapping[str, object]) -> ShearLayerParameters:
@@ -61,6 +63,7 @@ def checked_parameters(values: Mapping[str, object]) -> ShearLayerParameters:
         "moisture_width",
         "saturation_height_rate",
         "saturation_temperature_rate",
+        "clustering",
     ):
         value = getattr(parameters, name)
         if (
@@ -69,7 +72,13 @@ def checked_parameters(values: Mapping[str, object]) -> ShearLayerParameters:
             or not math.isfinite(value)
         ):
             raise ValueError(f"case_parameters.{name} must be finite")
-        if name in ("richardson", "epsilon", "epsilon_noise", "saturation_height_rate"):
+        if name in (
+            "richardson",
+            "epsilon",
+            "epsilon_noise",
+            "saturation_height_rate",
+            "clustering",
+        ):
             valid = value >= 0
         elif name == "saturation_temperature_rate":
             valid = True
@@ -103,6 +112,48 @@ def checked_parameters(values: Mapping[str, object]) -> ShearLayerParameters:
             "height must leave a positive unmodified core between the wall transitions"
         )
     return replace(parameters, noise_modes=tuple(parameters.noise_modes))
+
+
+def vertical_mesh_vertices(parameters: ShearLayerParameters, cells: int) -> np.ndarray:
+    """Uniform or sinh-clustered rows, checked for collapse and resolved wall plateaus."""
+    half_height = parameters.height / 2
+    vertices = np.linspace(-half_height, half_height, cells + 1)
+    strength = parameters.clustering
+    if strength > 0:
+        radius = np.abs(vertices) / half_height
+        vertices = (
+            half_height
+            * np.sign(vertices)
+            * np.exp(strength * (radius - 1))
+            * (-np.expm1(-2 * strength * radius) / -math.expm1(-2 * strength))
+        )
+        spacing = np.diff(vertices)
+        if not np.isfinite(vertices).all() or not (spacing > 0).all():
+            raise ValueError("clustering collapses mesh rows; reduce clustering or change nz")
+        if max(spacing[0], spacing[-1]) > parameters.wall_buffer * (1 + 1e-12):
+            raise ValueError("clustering needs a full wall cell in each plateau; increase nz")
+    return vertices
+
+
+def mesh_quality(mesh: fd.MeshGeometry, reference_jacobian: float) -> dict[str, float]:
+    """MPI-global cell measures, vertical-map Jacobian and longest-edge/altitude ratio."""
+    space = fd.FunctionSpace(mesh, "DG", 0)
+    quality = {}
+    for name, expression in {
+        "absolute_jacobian": abs(ufl.JacobianDeterminant(mesh)),
+        "map_jacobian": abs(ufl.JacobianDeterminant(mesh)) / reference_jacobian,
+        "edge": fd.MinCellEdgeLength(mesh),
+        "aspect": fd.MaxCellEdgeLength(mesh) ** 2 / (2 * fd.CellVolume(mesh)),
+    }.items():
+        field = fd.Function(space).interpolate(expression)
+        with field.dat.vec_ro as vector:
+            quality[f"minimum_{name}"] = float(vector.min()[1])
+            quality[f"maximum_{name}"] = float(vector.max()[1])
+    if not all(math.isfinite(value) and value > 0 for value in quality.values()):
+        raise ValueError(
+            "channel mesh must have finite positive Jacobians, edges and aspect ratios"
+        )
+    return quality
 
 
 def wall_profiles(z: Expr, parameters: ShearLayerParameters) -> tuple[Expr, Expr, Expr]:
@@ -151,13 +202,19 @@ def wall_profiles(z: Expr, parameters: ShearLayerParameters) -> tuple[Expr, Expr
 
 
 def build(config: Config) -> Problem:
-    """Build the uniform-mesh B7.1 case with zero forcing and zero scalar sources."""
+    """Build the shear-layer case on checked affine rows with zero force and scalar sources."""
     parameters = checked_parameters(config.case_parameters)
     length = parameters.n_waves * 2 * math.pi / parameters.wave_number
     cells = builtin_cells(config, (128 * parameters.n_waves, 192))
+    vertices = vertical_mesh_vertices(parameters, cells[1])
     mesh, tags = periodic_channel(
         cells, (0.0, -parameters.height / 2), (length, parameters.height / 2)
     )
+    if parameters.clustering > 0:
+        coordinates = mesh.coordinates.dat.data
+        rows = np.rint((coordinates[:, 1] / parameters.height + 0.5) * cells[1]).astype(int)
+        coordinates[:, 1] = vertices[rows]
+    quality = mesh_quality(mesh, length / cells[0] * parameters.height / cells[1])
     x = ufl.SpatialCoordinate(mesh)
     base, primitive, envelope = wall_profiles(x[1], parameters)
     phases = (
@@ -204,7 +261,9 @@ def build(config: Config) -> Problem:
         "temperature": "theta=(T-T_ref)/DeltaT",
         "domain_length": length,
         "mesh_cells": list(cells),
-        "minimum_edge": min(length / cells[0], parameters.height / cells[1]),
+        "minimum_edge": quality["minimum_edge"],
+        "mesh_quality": quality,
+        "vertical_vertices": vertices.tolist(),
         "wall_core": parameters.height / 2
         - parameters.wall_buffer
         - parameters.wall_transition_width,
@@ -218,7 +277,9 @@ def build(config: Config) -> Problem:
         "noise_normalization": "same spatial RMS as cos(k*x) for distinct integer modes",
         "moisture_wall_adjustment": "multiply core RH/saturation profile by the compact envelope",
         "subscale_initialization": "zero",
-        "mesh_clustering": "not enabled in B7.1",
+        "mesh_clustering": "uniform"
+        if parameters.clustering == 0
+        else "sinh vertex map; affine cells",
     }
     passive = (
         (
@@ -262,4 +323,5 @@ def build(config: Config) -> Problem:
             "temperature_scale": 1.0,
         },
         case_metadata=metadata,
+        horizontal_profile_geometry=HorizontalProfileGeometry(length, cells[0], tuple(vertices)),
     )

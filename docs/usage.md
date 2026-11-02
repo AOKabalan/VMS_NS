@@ -607,3 +607,43 @@ motion and verification limits. A nonzero discrete pressure–buoyancy defect ca
 generate vertical motion much larger than the tiny seed; do not infer instability
 growth from this smoke test. Scalar content under linear splitting and skew
 transport has the already documented G3 defect; the reported budget includes it.
+
+## Kelvin–Helmholtz mesh and startup checks (B7.2)
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/kh_startup_control.toml
+python scripts/run_simulation.py configs/boussinesq/kh_startup_seeded.toml
+python scripts/analyse_kh_startup.py \
+  results/kelvin_helmholtz_shear_layer/b72_startup_control \
+  results/kelvin_helmholtz_shear_layer/b72_startup_seeded \
+  --output /tmp/kh_startup.json --figure /tmp/kh_startup.png
+```
+
+The two base configs compare epsilon=0 and 1e-4 at Re=1000, Pr=1, Ri=0.1 with
+dynamic nonlinear OSS, BDF2, dt=0.05 and t_end=0.5. The `uniform_medium`,
+`uniform_fine`, `half_dt`, `p2` and `clustered` config pairs under the same
+`kh_startup_` prefix reproduce the spatial/time/degree/clustering checks.
+All integrations use `run_simulation.py`; the new analysis script reads
+completed output only and rejects mismatched or incomplete pairs.
+
+`case_parameters.clustering=0` retains the uniform mesh. A positive value
+applies the sinh map to vertex heights, leaving affine triangles. Collapsed
+rows and unresolved wall plateaus are rejected. `thermal_metadata.json` records
+the actual row heights and global map-Jacobian, cell-measure, edge and aspect
+ranges. The shortest mapped edge still controls stabilization and measured CFL.
+
+`output.horizontal_profiles_every` is an optional nonnegative integer (default
+0). Positive intervals write `horizontal_profiles.csv` and quadrature metadata.
+Each row names `velocity_x`, `velocity_y`, `temperature` and any passive scalars
+at a physical height and endpoint time. Output includes initialization, interval
+steps and the final/early-stop state. Profiles integrate FE traces on mesh rows
+and midrows using collective Gauss-point sampling on horizontal half-cells;
+they are horizontal means, not centreline samples. Unsupported cases are
+rejected before running. Disabled profile output adds no file and leaves the
+old resolved-config output schema unchanged.
+
+The analysis compares each mean to its own initial mean and retains both raw
+vertical-energy histories. Their difference is not perturbation energy.
+The [B7.2 report](verification/kelvin_helmholtz_b72.md) shows that zero-seed
+motion still dominates the tested seeded runs. It establishes no clean fitting
+window; further resolution and mode/control checks must precede a B7.3 rate fit.

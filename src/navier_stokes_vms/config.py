@@ -112,6 +112,7 @@ class OutputOptions:
     vtk_every: int = 10
     diagnostics: tuple[str, ...] = ("kinetic_energy", "divergence_l2")
     console_level: LogLevel = "INFO"
+    horizontal_profiles_every: int = 0
 
 
 @dataclass(frozen=True)
@@ -290,6 +291,11 @@ def config_as_dict(config: Config) -> dict[str, object]:
             item.name: _plain(getattr(section, item.name))
             for item in fields(section)
             if getattr(section, item.name) is not None
+            and not (
+                name == "output"
+                and item.name == "horizontal_profiles_every"
+                and section.horizontal_profiles_every == 0
+            )
         }
     if config.thermal is not None:
         data["thermal"]["temperature_degree"] = (
@@ -375,6 +381,10 @@ def _plain(value: object) -> object:
 def _check_bounds(config: Config) -> None:
     degrees, time, stabilization = config.discretization, config.time, config.stabilization
     solver, output = config.solver, config.output
+    if isinstance(output.horizontal_profiles_every, bool) or not isinstance(
+        output.horizontal_profiles_every, int
+    ):
+        raise ValueError("output.horizontal_profiles_every must be an integer >= 0")
     limits = (
         ("discretization.velocity_degree", degrees.velocity_degree, ">=", 1),
         ("discretization.pressure_degree", degrees.pressure_degree, ">=", 1),
@@ -391,6 +401,7 @@ def _check_bounds(config: Config) -> None:
         ("solver.subscale_rtol", solver.subscale_rtol, ">", 0),
         ("solver.subscale_max_iterations", solver.subscale_max_iterations, ">=", 1),
         ("output.vtk_every", output.vtk_every, ">=", 0),
+        ("output.horizontal_profiles_every", output.horizontal_profiles_every, ">=", 0),
     )
     for name, value, relation, bound in limits:
         within = value > bound if relation == ">" else value >= bound

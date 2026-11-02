@@ -1757,3 +1757,69 @@ Verification:
 
 B7.1 is complete. Stop here. B7.2 checks startup controls, mesh/refinement and
 base-profile drift before growth-rate or cloud studies.
+
+
+## Phase B7.2: shear-layer mesh and startup preparation (2026-11-03)
+
+Implemented the mesh/startup checkpoint:
+
+- Added nonnegative optional sinh vertex clustering to the KH case, evaluated
+  before spaces and geometry assembly. Reject collapsed rows and clustered wall
+  cells exceeding the flat buffer. Metadata records actual vertices and global
+  cell measure, vertical-map Jacobian, shortest-edge and aspect-ratio ranges.
+  A geometry probe found mixed reference orientations in Firedrake; checking
+  absolute cell determinants plus ordered rows avoids misclassifying valid
+  reference orientations as inverted cells. Cells remain affine.
+- Added plain `HorizontalProfileGeometry` problem data and opt-in
+  `output.horizontal_profiles_every`. Collective line integration at all rows
+  and midrows names velocity, temperature and passive scalars explicitly.
+  Horizontal half-cell Gauss rules respect triangle intersections; tests compare
+  random CG1/CG2/CG4 fields with independent overintegration. Initialization,
+  intervals, final/early-stop state and file closure are covered. Disabled output
+  preserves existing files and resolved-config schema.
+- Added six matched zero-seed/seeded config pairs for uniform refinement,
+  half dt, P2 and positive clustering, plus an analysis-only script, exported
+  figure, measured JSON, formulation/plan/reference/usage updates. Integrations
+  retain `scripts/run_simulation.py` as their entry point. No forcing, closure
+  change, pressure reformulation or seed-amplitude tuning was introduced.
+
+Verification and findings:
+
+- Full unit regression: **1,056 passed, one existing xfail in 476.92 s**
+  (`/tmp/vms-b72-all.log`), including the first 28 startup tests. The later
+  focused startup/analysis run passed **43 tests in 8.45 s**
+  (`/tmp/vms-b72-final-review.log`), adding pressure-guess/column-conflict checks and 12
+  analysis checks. Analysis was rechecked after final validation/provenance
+  edits: 12 passed (`/tmp/vms-b72-analysis-tests.log`).
+- All 12 configured simulations completed to t=0.5 with dynamic nonlinear OSS
+  and BDF2 lower-order startup. Uniform P1 initial hydrostatic L2 defects fall
+  from 0.104368 to 0.0522099 to 0.0348079 on 16×24, 32×48 and 48×72 meshes.
+  Their zero-seed final vertical energies fall from 5.339e-5 to 4.228e-6 to
+  9.815e-7, but control/seeded ratios remain 0.999844/0.997844/0.990619.
+  Half dt changes the medium control by about 0.288%; P2 and clustering also
+  reduce the error but do not make the tiny seed dominant. The clustered ratio
+  is 0.980811. These runs establish no clean KH fitting window.
+- Horizontal means evolve without a holding force: maximum sampled control
+  velocity changes are 3.78e-4–4.48e-4, with similar thermal changes. Maximum
+  measured degree-weighted CFL is below 0.181; absolute energy-budget residuals
+  remain below 1.7e-13. Initial wall compatibility and zero dynamic histories/
+  projections are checked for P1/P2 on uniform/clustered meshes. A separate test
+  finds the converged startup independent of hydrostatic versus zero initial
+  pressure within 1e-10: the pressure initializer is a solve guess, not a repair
+  of the discrete hydrostatic imbalance.
+- The wet clustered seeded run passed two-rank MPI. All profile differences
+  are below 4.45e-16, heights/times match exactly, and noise phases agree.
+  Maximum unnormalized diagnostic difference is 5.116e-13. Automatic approval
+  allowed the local MPI sockets outside the sandbox.
+- Four isothermal and three prior thermal baselines retain bitwise-identical
+  field arrays and diagnostic/inner/outer CSV plus initial/thermal JSON against
+  B7.1 `f7da5a0` (39 files; wall-clock timings excluded). Artifacts:
+  `/tmp/vms-b72-{before,after}-{isothermal,thermal}`.
+- Ruff lint/format, `git diff --check`, TOML/JSON parsing, local links, math
+  fences and measured-report consistency passed. The scientific plot was
+  inspected. Details and reproducible commands are in
+  `docs/verification/kelvin_helmholtz_b72.md`, its two JSON files and startup PNG.
+
+B7.2 is complete. Stop at this checkpoint. B7.3 must first resolve the measured
+control contamination and establish a seeded-mode/window criterion before
+fitting a growth rate; the proposed production resolution remains unvalidated.

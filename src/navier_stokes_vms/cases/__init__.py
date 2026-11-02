@@ -43,6 +43,8 @@ def build_problem(config: Config) -> Problem:
     if config.case not in CASES:
         raise ValueError(f"case = {config.case!r}: unknown; available: {', '.join(sorted(CASES))}")
     problem = CASES[config.case](config)
+    if config.output.horizontal_profiles_every and problem.horizontal_profile_geometry is None:
+        raise ValueError("output.horizontal_profiles_every requires horizontal profile geometry")
     check_problem(problem)
     check_thermal_supported(config, problem)
     check_startup_supported(config, has_exact_solution=problem.exact_velocity is not None)

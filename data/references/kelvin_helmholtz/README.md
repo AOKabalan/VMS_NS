@@ -1,4 +1,4 @@
-# Kelvin–Helmholtz shear-layer conventions (B7.1)
+# Kelvin–Helmholtz shear-layer conventions (B7.1–B7.2)
 
 This is an application/integration case, not an exact solution. B7.1 checks
 initialization and a few coupled steps. Reference growth rates, resolution,
@@ -95,5 +95,47 @@ normal flow and scalar diffusive wall flux norms. `advective_cfl` reports the
 MPI-global maximum of `k*dt*|u_h|/MinCellEdgeLength` sampled at the common
 quadrature points (`k` is velocity degree). It is a sampled endpoint maximum,
 not an analytic supremum or an implicit-solver stability bound. Smoke configs
-write it at every step. Uniform meshes only are implemented at this checkpoint;
-clustering and detailed startup/refinement studies belong to B7.2.
+write it at every step.
+
+## B7.2 mesh and startup preparation
+
+The optional nonnegative `clustering` parameter is zero by default. For positive
+`lambda`, map the uniform vertex heights by
+`z=H*sinh(lambda*z_uniform/H)/sinh(lambda)` and retain affine triangles.
+An exponential/expm1 form avoids overflow in this expression; collapsed rows
+are rejected. Mapping precedes all spaces/geometry-dependent assembly. The
+last cell at each wall must fit inside `wall_buffer`; increase nz if clustering
+makes the wall cells too large. Uniform meshes retain their previous behavior,
+including measured compatibility diagnostics for very coarse meshes.
+
+Metadata stores the actual vertical vertices and global ranges of absolute cell
+determinant, vertical-map determinant relative to the uniform mesh, shortest
+edge, and `h_max²/(2 area)`, the longest-edge/shortest-altitude aspect ratio.
+Triangle reference orientations in Firedrake can be either sign; orientation
+preservation follows from ordered mapped rows, not the sign of a raw reference
+determinant. The default uniform and tested lambda=2 meshes pass these checks.
+
+Set `[output].horizontal_profiles_every` to a positive step interval for
+`horizontal_profiles.csv` and quadrature metadata in `horizontal_profiles.json`.
+The optional `Problem.horizontal_profile_geometry` describes an x-periodic
+structured triangle channel starting at x=0; only cases supplying that geometry
+can request the output. Means are taken on every mesh row and midrow, including
+t=0 and the final/early-stop state. Two Gauss points per horizontal half-cell
+integrate CG1/CG2 traces exactly; higher degree uses enough Gauss points for its
+trace polynomial. All queried points are gathered/broadcast collectively by
+Firedrake's `PointEvaluator`, so the means are global rather than rank-local.
+The line quadrature is independent postprocessing; it does not alter the
+common volume quadrature or OSS projections.
+Profile CSV names `step`, `time`, `z`, `velocity_x` and `velocity_y` are reserved;
+colliding scalar names are rejected for this output rather than overwriting a column.
+
+The B7.2 study uses six matched pairs: uniform 16×24, 32×48 and 48×72 P1 meshes;
+32×48 with half dt; 16×24 P2; and lambda=2 on 32×48 with moisture. Dynamic
+nonlinear OSS, BDF2 with lower-order startup, and epsilon=0/1e-4 are compared to
+t=0.5. No body force, changed seed amplitude or altered closure removes startup
+motion. On these meshes zero-seed energy still dominates the seeded energy;
+the report does not certify a KH fitting window or the proposed production mesh.
+The analysis-only script reads completed outputs, matches numerical/physical
+setups, and reports raw energy ratios and maximum mean-profile changes at the
+recorded heights. It neither solves equations nor subtracts energies as if that
+gave perturbation energy. See [the B7.2 report](../../../docs/verification/kelvin_helmholtz_b72.md).

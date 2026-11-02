@@ -29,6 +29,15 @@ _CHECK_TIMES = (0.0, 1.0)
 
 
 @dataclass(frozen=True)
+class HorizontalProfileGeometry:
+    """Structured x-periodic triangle channel for exact line integration at rows and midrows."""
+
+    length: float
+    horizontal_cells: int
+    vertical_vertices: tuple[float, ...]
+
+
+@dataclass(frozen=True)
 class Problem:
     """Mesh, boundaries, viscosity, data and optional exact solution of one case."""
 
@@ -47,6 +56,7 @@ class Problem:
     passive_scalars: tuple[PassiveScalarProblem, ...] = ()
     initial_pressure: Callable[[Expr], Expr] | None = None
     case_metadata: Mapping[str, object] | None = None
+    horizontal_profile_geometry: HorizontalProfileGeometry | None = None
 
 
 def exact_solution_forcing(

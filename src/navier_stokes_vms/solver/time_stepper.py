@@ -51,6 +51,7 @@ from navier_stokes_vms.postprocessing.diagnostics import (
     diagnostic_columns,
     evaluate_diagnostics,
 )
+from navier_stokes_vms.postprocessing.horizontal_profiles import HorizontalProfiles
 from navier_stokes_vms.postprocessing.output import (
     CsvWriter,
     FieldWriter,
@@ -96,6 +97,10 @@ class TimeStepper:
         self, config: Config, problem: Problem, folder: Path, logger: logging.Logger
     ) -> None:
         check_thermal_supported(config, problem)
+        if config.output.horizontal_profiles_every and problem.horizontal_profile_geometry is None:
+            raise ValueError(
+                "output.horizontal_profiles_every requires horizontal profile geometry"
+            )
         check_free_slip_boundaries(problem.mesh, problem.boundary_conditions, problem.boundary_tags)
         self._config = config
         self._problem = problem
@@ -561,13 +566,26 @@ class TimeStepper:
         )
         columns = diagnostic_columns(self._config.output.diagnostics, self._problem)
         diagnostics = open_diagnostics_csv(comm, self._folder, columns)
+        profiles = None
         try:
             self._initialise()
             write_thermal_metadata(comm, self._folder, self._problem, self._config)
             write_initial_state(comm, self._folder, self._initial_state())
+            profile_every = self._config.output.horizontal_profiles_every
+            if profile_every:
+                profiles = HorizontalProfiles(
+                    self._folder,
+                    self._problem.horizontal_profile_geometry,
+                    self.velocity,
+                    {name: self.scalar(name) for name in self._scalar_data},
+                )
+                profiles.write(0, 0.0)
             for step in range(1, steps + 1):
                 self._step(step, step == steps, logs, diagnostics)
-                if after_step is not None and after_step(step, self._time(step)):
+                stopped = after_step is not None and after_step(step, self._time(step))
+                if profiles is not None and (step % profile_every == 0 or step == steps or stopped):
+                    profiles.write(step, self._time(step))
+                if stopped:
                     if self._config.output.vtk_every and step != steps:
                         self._fields.write(
                             self.velocity,
@@ -579,6 +597,8 @@ class TimeStepper:
                         )
                     break
         finally:
+            if profiles is not None:
+                profiles.close()
             logs.close()
             diagnostics.close()
 

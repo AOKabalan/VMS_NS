@@ -1,6 +1,6 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
-Status: B0–B5, boundary prerequisite G4 and B7.1 completed, 3 November 2026.
+Status: B0–B5, boundary prerequisite G4 and B7.1–B7.2 completed, 3 November 2026.
 B7 now has its boundary prerequisite; B6 remains the separate compatibility
 extension. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
@@ -541,9 +541,9 @@ growth rate, cloud pattern or long-time conservation result.
 
 Implementation: `cases/kelvin_helmholtz_shear_layer.py`, the two
 `kh_smoke_static_*.toml` configs and the case reference definitions above.
-The B7.0 definitions needed by this test are included. The builder accepts
-uniform mesh counts through the existing `[mesh].cells`; it does not yet expose
-clustering. Initial physical pressure is optional problem data; old cases
+The B7.0 definitions needed by this test are included. At B7.1 the builder
+accepted uniform mesh counts through the existing `[mesh].cells`; optional
+clustering is added at B7.2 below. Initial physical pressure is optional problem data; old cases
 retain their zero-pressure initialization and original output schema.
 Hydrostatic interpolation defects are recorded explicitly. Per-step vertical
 energy and quadrature-sampled degree-weighted advective CFL are opt-in diagnostics.
@@ -559,6 +559,30 @@ Keep subscales initially zero. Compare initialization transients and monitor
 the horizontal-mean profiles rather than treating tanh as a steady viscous
 solution. A no-perturbation control distinguishes numerical/hydrostatic startup
 motion from the intended tiny perturbation.
+
+Implemented B7.2: nonnegative `clustering` moves vertices before space/measure
+construction. Ordered rows guarantee positive vertical-map Jacobians; MPI-global
+cell-measure, map-Jacobian, edge and aspect-ratio ranges are recorded. Clustered
+meshes must retain a complete cell inside each wall plateau. The original uniform
+path and zero-clustering limit remain available.
+
+Opt-in `output.horizontal_profiles_every` writes endpoint velocity, temperature
+and each tracer mean on all horizontal rows/midrows, including initialization
+and the final/early-stop state. Gauss integration splits each horizontal cell
+at its midpoint so it respects triangle intersections at these heights.
+Disabled output preserves the prior output/config schema. An analysis-only
+script compares completed pairs and exports the measured drift and startup
+energy; it does not integrate or fit a growth rate.
+
+Six zero-seed/seeded pairs check uniform refinement, half dt, P2 and clustering.
+The zero-seed vertical energy falls with refinement but remains 98–99.98% of
+the seeded energy at t=0.5 on the tested meshes. These runs establish **no clean
+growth-fitting window**. Initial pressure is only a solve guess; changing that
+guess alone does not remove the converged discrete startup motion. Keep the
+formulation, zero subscale histories and seed amplitude unchanged. Before B7.3
+fits a rate, resolve this contamination through further reference-resolution
+checks and seeded-mode/control diagnostics; do not interpret a slope of the raw
+vertical energy as KH growth. See [B7.2 verification](verification/kelvin_helmholtz_b72.md).
 
 #### B7.3 — Linear growth study
 

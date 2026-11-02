@@ -1,0 +1,44 @@
+{
+  "mpi": {
+    "ranks": 2,
+    "exit_status": 0,
+    "folder": "results/kelvin_helmholtz_shear_layer/b72_clustered_seeded_mpi",
+    "maximum_profile_absolute_differences": {
+      "step": 0.0,
+      "time": 0.0,
+      "z": 0.0,
+      "velocity_x": 4.440892098500626e-16,
+      "velocity_y": 1.243918092906122e-17,
+      "temperature": 4.440892098500626e-16,
+      "q": 2.220446049250313e-16
+    },
+    "maximum_unnormalized_diagnostic_difference": 5.115907697472721e-13,
+    "maximum_normalized_budget_difference": 9.235700342791876e-13,
+    "noise_phases_identical": true,
+    "maximum_mesh_quality_difference": 0.0
+  },
+  "regression": {
+    "baseline_commit": "f7da5a0",
+    "isothermal_runs": 4,
+    "thermal_runs": 3,
+    "array_csv_json_files_identical": 39,
+    "wall_times_compared": false
+  },
+  "tests": {
+    "unit_regression": {
+      "passed": 1056,
+      "xfailed": 1,
+      "seconds": 476.92,
+      "log": "/tmp/vms-b72-all.log"
+    },
+    "final_startup_and_analysis": {
+      "passed": 43,
+      "seconds": 8.45,
+      "log": "/tmp/vms-b72-final-review.log"
+    },
+    "final_analysis_recheck": {
+      "passed": 12,
+      "log": "/tmp/vms-b72-analysis-tests.log"
+    }
+  }
+}

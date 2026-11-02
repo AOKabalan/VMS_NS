@@ -58,6 +58,8 @@ Horizontally periodic free-slip channels are supported; see the
 The stratified Kelvin–Helmholtz case with passive moisture is available as a
 [coupled smoke test](docs/usage.md#kelvinhelmholtz-coupled-smoke-test-b71);
 growth-rate and cloud studies remain later checkpoints.
+Optional vertical clustering and horizontal-mean profiles support the
+[startup controls and mesh checks](docs/verification/kelvin_helmholtz_b72.md).
 
 ## Quick start
 

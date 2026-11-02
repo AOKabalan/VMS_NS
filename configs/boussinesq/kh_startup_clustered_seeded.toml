@@ -1,0 +1,26 @@
+case = "kelvin_helmholtz_shear_layer"
+run_name = "b72_clustered_seeded"
+
+[case_parameters]
+clustering = 2.0
+epsilon = 0.0001
+moisture = true
+
+[mesh]
+cells = [32, 48]
+
+[time]
+scheme = "bdf2"
+dt = 0.05
+t_end = 0.5
+
+[solver.petsc]
+ksp_type = "preonly"
+pc_type = "lu"
+pc_factor_mat_solver_type = "mumps"
+mat_mumps_icntl_24 = 1
+
+[output]
+vtk_every = 0
+horizontal_profiles_every = 1
+diagnostics = ["kinetic_energy", "vertical_kinetic_energy", "divergence_l2", "advective_cfl", "thermal_content", "passive_scalar_content", "temperature_extrema", "boussinesq_energy_budget"]
