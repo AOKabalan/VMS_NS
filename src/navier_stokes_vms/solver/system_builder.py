@@ -58,11 +58,13 @@ def thermal_system(
     parameter_advector: Expr | None = None,
     velocity_history: Expr | None = None,
     scalar_histories: Mapping[str, Expr] | None = None,
+    advector: Expr | None = None,
 ) -> ThermalSystem:
-    """Compose Galerkin or linear ASGS/OSS for temperature and passive scalars."""
+    """Compose coupled transport at the given (possibly frozen or total) advector (B13–B14)."""
     fields = layout.bind(ufl.split(solution))
     tests = layout.bind(fd.TestFunctions(solution.function_space()))
     u, p, v, q = (fields["velocity"], fields["pressure"], tests["velocity"], tests["pressure"])
+    a = u if advector is None else advector
     thermal = problem.thermal
     level = replace(
         momentum_level,
@@ -75,7 +77,7 @@ def thermal_system(
         ),
     )
     form = galerkin_residual(
-        u, p, v, q, u, u, problem.viscosity, level, dx, None, config.convection.form
+        u, p, v, q, a, u, problem.viscosity, level, dx, None, config.convection.form
     )
     stabilization = config.stabilization
     chi = switches(stabilization) if stabilization.method == "vms" else None
@@ -84,7 +86,7 @@ def thermal_system(
     expected = set(scalar_levels) if dynamic else set()
     if dynamic != (velocity_history is not None) or set(histories) != expected:
         raise ValueError("dynamic thermal subscales require matching velocity and scalar histories")
-    a_tau = u if parameter_advector is None else parameter_advector
+    a_tau = a if parameter_advector is None else parameter_advector
     scalar_form = (config.thermal or ThermalOptions()).convection
     u_sub = None
     subscales = {}
@@ -102,7 +104,7 @@ def thermal_system(
             p,
             v,
             q,
-            u,
+            a,
             problem.viscosity,
             level,
             tau_t,
@@ -117,7 +119,7 @@ def thermal_system(
         u_sub = velocity_subscale(
             u,
             p,
-            u,
+            a,
             problem.viscosity,
             level,
             tau_t,
@@ -128,7 +130,7 @@ def thermal_system(
         )
         if not chi.is_asgs:
             residual = subscale_residual(
-                u, p, u, problem.viscosity, level, chi, velocity_history, config.convection.form
+                u, p, a, problem.viscosity, level, chi, velocity_history, config.convection.form
             )
             form += projection_equations(
                 xi, zeta, tests["xi"], tests.get("zeta"), residual, ufl.div(u), tau_t, tau_c, dx
@@ -137,7 +139,7 @@ def thermal_system(
         field, test = fields[scalar.name], tests[scalar.name]
         scalar_level = scalar_levels[scalar.name]
         form += scalar_galerkin_residual(
-            field, test, u, scalar.diffusivity, scalar_level, dx, scalar_form
+            field, test, a, scalar.diffusivity, scalar_level, dx, scalar_form
         )
         if chi is not None:
             tau = transport_parameter(
@@ -147,7 +149,7 @@ def thermal_system(
                 tau = dynamic_parameter(tau, scalar_level.alpha0, scalar_level.dt)
             history = histories.get(scalar.name)
             residual = scalar_residual(
-                field, u, scalar.diffusivity, scalar_level, chi.is_asgs, history
+                field, a, scalar.diffusivity, scalar_level, chi.is_asgs, history
             )
             projection = fields.get(f"eta_{scalar.name}")
             subscale = scalar_subscale(residual, tau, projection)
@@ -157,7 +159,7 @@ def thermal_system(
                 if dynamic and chi.is_asgs
                 else None
             )
-            form += scalar_vms_terms(subscale, test, u, scalar.diffusivity, dx, rate)
+            form += scalar_vms_terms(subscale, test, a, scalar.diffusivity, dx, rate)
             if not chi.is_asgs:
                 form += scalar_projection_equation(
                     projection, tests[f"eta_{scalar.name}"], residual, tau, dx

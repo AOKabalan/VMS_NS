@@ -363,8 +363,8 @@ convection qualifications.
 Thermal projection residuals use the corresponding thermal/mechanical reference
 scales and have independent initial-relative/absolute checks. Empty passive data
 preserve temperature-only fields/output, and isothermal configurations retain
-their original spaces and output columns. Nonlinear thermal splitting,
-free-slip/channel support and the KH application remain later phase work.
+their original spaces and output columns. B4 adds nonlinear thermal splitting
+below; free-slip/channel support and the KH application remain later phase work.
 
 
 ## Dynamic thermal subscales and time schemes (B3)
@@ -399,7 +399,44 @@ startup retains the existing global second-order limitation. The source-free
 order checks isolate the time operator with compatible zero OSS subscales.
 
 Failed steps preserve all resolved and subscale endpoint histories and write
-available physical fields at the attempted solve time. Nonlinear thermal
-splitting and Picard remain B4 work. Full thermal `energy_budget` and
+available physical fields at the attempted solve time. Full thermal `energy_budget` and
 `momentum_budget` diagnostics remain disabled until the B5 coupled work terms
 are implemented; isothermal budget behavior is unchanged.
+
+
+## Nonlinear thermal splitting and Picard (B4)
+
+All eight ASGS/OSS × static/dynamic × linear/nonlinear thermal variants now
+share the same solver, including passive scalars. For nonlinear scale splitting,
+set `stabilization.scale_splitting = "nonlinear"`. The total advector
+$u_h+\widetilde u^*$ enters both momentum and every scalar transport equation,
+their residuals and stabilization parameters. Scalar subscales remain explicit
+algebraic expressions; only the velocity subscale has an outer iterate.
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/manufactured_nonlinear_oss.toml
+python scripts/run_simulation.py configs/boussinesq/manufactured_nonlinear_asgs_picard.toml
+```
+
+Use `solver.linearization = "newton"` or `"picard"`; Newton also accepts
+`picard_iterations_before_newton`. Picard freezes the shared total advector and
+all stabilization weights while keeping temperature-driven buoyancy coupled
+implicitly. Both methods check the true coupled residual. The existing
+`newton_tau` choices apply to all transport/projection parameters. Local
+velocity updates support `subscale_update = "accelerated"` or `"fixed_point"`.
+Static nonlinear updates retain the known coarse-mesh convergence limitation;
+a failed local or coupled solve is reported without advancing histories.
+
+For nonlinear thermal runs, `outer_iterations.csv` additionally records
+`velocity_subscale_residual`, `<scalar>_subscale_change` (including temperature),
+and `<field>_residual` for every physical/projection equation after the local
+update. The velocity closure residual is the relative $L^2$ difference between
+the algebraic velocity subscale and its stored iterate. Scalar changes compare
+their algebraic values before and after the outer solve/update. All these
+changes and the velocity closure must meet `outer_rtol`; every scaled FE block
+must also pass its inner tolerance after the update. Scalar closures are exact
+by elimination and verified independently against the formulation.
+
+The thermal convection choices remain `skew_symmetric` and `nonconservative`;
+conservative thermal transport and coupled conservation budgets belong to B5.
+These manufactured examples do not start the cavity or Kelvin–Helmholtz studies.

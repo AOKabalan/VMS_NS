@@ -1,12 +1,12 @@
 # Thermal Boussinesq VMS formulation
 
-Status: B3 dynamic linear thermal subscales implemented, 2 November 2026. This document specifies the thermal
+Status: B4 nonlinear thermal splitting and Picard implemented, 2 November 2026. This document specifies the thermal
 buoyancy model requested for the existing incompressible Navier–Stokes framework;
 The implemented subset includes Taylor–Hood Galerkin and equal-order static
-or dynamic linear ASGS/OSS with temperature and optional passive scalars.
-Newton, BDF1–3 and Crank–Nicolson, Laplacian viscosity and the nonconservative/
-skew choices are supported on periodic or impermeable domains. Nonlinear
-thermal splitting and subsequent application phases remain proposed. The companion
+or dynamic, linear or nonlinear ASGS/OSS with temperature and optional passive scalars.
+Newton and Picard, BDF1–3 and Crank–Nicolson, Laplacian viscosity and the nonconservative/
+skew choices are supported on periodic or impermeable domains. Coupled budget
+diagnostics and subsequent application phases remain proposed. The companion
 [integration plan](boussinesq_implementation_plan.md) identifies the code changes
 and verification gates. Existing flow conventions remain defined by
 [formulation_spec.md](formulation_spec.md).
@@ -431,6 +431,44 @@ measures the first-order first-step defect of zero negative BDF3 subscale
 histories. Full thermal kinetic/potential and momentum budgets stay disabled
 until B5 supplies their coupled terms; §7 remains their derivation/specification.
 
+### Implemented B4 nonlinear splitting and Picard
+
+The same $a=u_h+\widetilde u^*$ enters resolved momentum/scalar convection,
+their strong residuals, subscale adjoint feedback, and every spatial/effective
+parameter and OSS weight. No spatial derivative of a stored quadrature subscale
+is taken. For example, nonconservative thermal transport adds
+$(\widetilde u^*\cdot\nabla T_h,s_h)$, and scalar subscale feedback adds
+$-(\widetilde T,\widetilde u^*\cdot\nabla s_h)_h$, each once. Skew transport uses
+the corresponding skew pairing in (B15). These are the scale-interaction terms
+in Codina (2010), §2.4, equations (31) and (34), printed pp. 499–500
+(PDF pages 9–10); the paper uses nonconservative resolved thermal convection.
+This nonlinearity comes from transport by the coupled velocity/scales, with
+constant $\kappa$ and linear buoyancy, rather than a nonlinear material law.
+
+Fixed-point and accelerated local velocity updates both include $f+b(T_h)$.
+The off-diagonal $-\beta g\widetilde T$ force remains excluded from the local
+velocity closure as required by (B7)/(B10); the separate coarse momentum
+feedback is unchanged. Each scalar subscale is evaluated algebraically at the
+updated advector. It needs no additional local nonlinear iteration.
+
+For thermal nonlinear splitting, convergence requires every named FE/projection
+change, the velocity-iterate change, each eliminated scalar-subscale change,
+and $\|\widetilde u-\widetilde u^*\|_h/\|\widetilde u\|_h$ to meet `outer_rtol`.
+Changes use the existing relative $L^2$ convention (absolute if the new norm is
+zero). The true FE residual is reassembled after the local update: both its
+combined criterion and each scaled equation's inner criterion must pass.
+The scalar closure is satisfied by algebraic elimination and is independently
+verified against (B10); scalar-subscale changes check its outer consistency.
+CSV records expose these changes, the velocity closure residual, and the
+post-update scaled FE residuals. Orthogonality is checked at convergence.
+
+Newton differentiates all coupled unknowns at fixed $\widetilde u^*$; frozen-τ
+Newton freezes all parameter/projection weights, while exact-τ Newton retains
+their derivatives. Picard freezes $a=u_h^{(k)}+\widetilde u^*$ and the same
+parameters in both equations, keeping temperature, buoyancy and projections
+unknown in an affine monolithic system. Its convergence check uses the true
+coupled residual. Picard warm-up before Newton is also supported.
+
 ### Galerkin and passive-temperature limits
 
 For `method = "none"`, remove every subscale and projection contribution from
@@ -463,8 +501,7 @@ must isolate this issue instead of promising BDF3 order for arbitrary startup.
 At a fixed nonlinear-splitting iterate $\widetilde{\boldsymbol u}^{*}$, solve
 the physical fields and all OSS projections **monolithically**. The temperature
 unknown must enter the momentum Jacobian through buoyancy, and velocity must
-enter the thermal Jacobian through transport. Newton is the first supported
-thermal linearization. A later Picard implementation freezes the shared advector
+enter the thermal Newton Jacobian through transport. Picard freezes the shared advector
 and parameters consistently while keeping resolved buoyancy coupled to the
 current temperature.
 

@@ -99,15 +99,13 @@ def check_thermal_problem(problem: Problem) -> None:
 
 
 def check_thermal_supported(config: Config, problem: Problem) -> None:
-    """Reject unsupported nonlinear thermal variants and missing startup data."""
+    """Reject unsupported thermal boundary/forms and missing startup data."""
     check_thermal_problem(problem)
     if problem.thermal is None:
         if config.thermal is not None:
             raise ValueError("[thermal] requires a case with thermal problem data")
         return
     validate_config(config)
-    if config.stabilization.method == "vms" and config.stabilization.scale_splitting != "linear":
-        raise ValueError("B3 thermal VMS requires linear splitting")
     if config.time.startup == "exact_history":
         missing = [] if problem.exact_velocity is not None else ["velocity"]
         missing += [s.name for s in transported_scalars(problem) if s.exact_solution is None]
@@ -118,23 +116,21 @@ def check_thermal_supported(config: Config, problem: Problem) -> None:
             )
     if {"energy_budget", "momentum_budget"}.intersection(config.output.diagnostics):
         raise ValueError("thermal energy/momentum budgets require the B5 coupling identities")
-    if config.solver.linearization != "newton" or config.solver.picard_iterations_before_newton:
-        raise ValueError("B3 thermal runs require Newton without Picard warm-up")
     if config.viscosity.form != "laplacian" or config.convection.form not in (
         "skew_symmetric_1",
         "nonconservative",
     ):
         raise ValueError(
-            "B3 thermal runs require Laplacian viscosity and "
+            "thermal runs require Laplacian viscosity and "
             "skew_symmetric_1 or nonconservative momentum convection"
         )
     if any(isinstance(bc, Outflow) for bc in problem.boundary_conditions.values()):
-        raise ValueError("B3 thermal runs require periodic or closed velocity boundaries")
+        raise ValueError("thermal runs require periodic or closed velocity boundaries")
     if (
         config.stabilization.method == "none"
         and config.discretization.velocity_degree != config.discretization.pressure_degree + 1
     ):
-        raise ValueError("B3 thermal Galerkin runs require Taylor–Hood velocity/pressure degrees")
+        raise ValueError("thermal Galerkin runs require Taylor–Hood velocity/pressure degrees")
     degree = config.thermal.temperature_degree if config.thermal is not None else None
     if degree is not None and degree != config.discretization.velocity_degree:
         raise ValueError("B1 temperature degree must equal the velocity degree")

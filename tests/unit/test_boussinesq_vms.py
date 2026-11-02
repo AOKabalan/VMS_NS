@@ -190,12 +190,16 @@ def test_asgs_temperature_subscale_buoyancy_sign(tmp_path: Path) -> None:
 @pytest.mark.parametrize("degree", [1, 2])
 @pytest.mark.parametrize("newton_tau", ["frozen", "exact"])
 @pytest.mark.parametrize("dynamics", ["static", "dynamic"])
+@pytest.mark.parametrize("splitting", ["linear", "nonlinear"])
 def test_thermal_jacobian_with_passive_scalar(
-    tmp_path: Path, mode: str, degree: int, newton_tau: str, dynamics: str
+    tmp_path: Path, mode: str, degree: int, newton_tau: str, dynamics: str, splitting: str
 ) -> None:
     config = replace(configuration(mode, degree), solver=SolverOptions(newton_tau=newton_tau))
     config = replace(
-        config, stabilization=replace(config.stabilization, subscale_dynamics=dynamics)
+        config,
+        stabilization=replace(
+            config.stabilization, subscale_dynamics=dynamics, scale_splitting=splitting
+        ),
     )
     problem = build_problem(config)
     thermal = problem.thermal
@@ -222,6 +226,10 @@ def test_thermal_jacobian_with_passive_scalar(
         ]
         for history in histories:
             history.dat.data[:] = rng.uniform(-0.5, 0.5, history.dat.data.shape)
+    subscale_iterate = ufl.zero((2,))
+    if splitting == "nonlinear":
+        subscale_iterate = stepper._iterate.value
+        subscale_iterate.dat.data[:] = rng.uniform(0.1, 0.3, subscale_iterate.dat.data.shape)
     base = solution.copy(deepcopy=True)
     x = fd.SpatialCoordinate(problem.mesh)
     level = SolveLevel(
@@ -246,11 +254,12 @@ def test_thermal_jacobian_with_passive_scalar(
         levels,
         stepper._dx,
         config,
-        base.subfunctions[0] if newton_tau == "frozen" else None,
+        base.subfunctions[0] + subscale_iterate if newton_tau == "frozen" else None,
         velocity_history=None if dynamics == "static" else stepper._subscales.history,
         scalar_histories={
             name: storage.history for name, storage in stepper._scalar_subscale_storage.items()
         },
+        advector=ufl.split(solution)[0] + subscale_iterate,
     ).residual
     J = stepper._step_solver._inner._newton._problem.J
     action = fd.assemble(ufl.action(J, direction))
@@ -392,16 +401,3 @@ def test_constant_gauge_is_confined_to_pressure(tmp_path: Path) -> None:
         with action.dat.vec_ro as vector:
             size = vector.norm()
         assert size < 1e-12 if name == "pressure" else size > 1e-8
-
-
-@pytest.mark.parametrize("dynamics,splitting", [("static", "nonlinear"), ("dynamic", "nonlinear")])
-def test_later_thermal_variants_are_rejected(dynamics: str, splitting: str) -> None:
-    config = configuration()
-    config = replace(
-        config,
-        stabilization=replace(
-            config.stabilization, subscale_dynamics=dynamics, scale_splitting=splitting
-        ),
-    )
-    with pytest.raises(ValueError, match="linear splitting"):
-        build_problem(config)

@@ -1,7 +1,7 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
-Status: B0–B3 completed, 2 November 2026. Nonlinear thermal splitting and
-Picard follow in B4. Equations refer to the companion
+Status: B0–B4 completed, 2 November 2026. Coupled budget diagnostics and
+verification/validation follow in B5. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
 solver for isothermal and thermally coupled problems, with small, explicit
 thermal components and unchanged isothermal defaults.
@@ -377,6 +377,27 @@ nonlinear thermal cross/subscale flux terms are present once; projections and
 both subscale closure residuals converge together; Newton and Picard agree when
 converged. Retain honest local-failure reporting for static nonlinear subscales
 on coarse meshes, instead of masking the existing singular-update limitation.
+
+B4 implementation passes an explicit shared advector into `thermal_system`,
+reuses the existing pointwise velocity update with resolved buoyancy, and leaves
+temperature/passive subscales algebraically eliminated. The outer solver samples
+each scalar subscale before its solve/update, checks its change afterward, and
+checks the relative velocity-closure residual. It reassembles the true coupled
+FE residual after every local update and requires each scaled equation block to
+pass its inner tolerance in addition to the combined outer residual criterion.
+Nonlinear thermal outer CSVs name scalar/projection changes, scalar-subscale
+changes, the velocity closure residual, and post-update FE block residuals;
+isothermal and linear thermal columns retain their existing schemas.
+
+Newton supports both parameter differentiation modes. Picard freezes the shared
+total advector and parameters, preserving implicit buoyancy and every projection
+unknown, including during optional warm-up before Newton. Tests independently
+expand the nonlinear scalar weak terms, check diagonal scalar/velocity closure
+and OSS orthogonality with dynamic history, compare both local update choices
+and Newton/Picard solutions, and preserve explicit local-failure reporting.
+Small examples live in `manufactured_nonlinear_oss.toml` and
+`manufactured_nonlinear_asgs_picard.toml`; they are integration checks rather
+than the B5 production validation or B7 shear-layer study.
 
 ### B5 — Conservation, verification and natural-convection validation
 

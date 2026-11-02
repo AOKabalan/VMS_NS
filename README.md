@@ -47,9 +47,10 @@ exactly with the subscale residual. As a result, energy, linear momentum and ang
 are all conserved by convection. Time stepping uses BDF1–3 or Crank–Nicolson, solved with
 Newton or Picard iterations.
 
-Thermal Boussinesq Galerkin and static/dynamic linear ASGS/OSS are available
-with Newton, BDF1–3, Crank–Nicolson and optional passive scalars. See [thermal usage](docs/usage.md#thermal-boussinesq-baseline-b1) and the
-[thermal formulation](docs/boussinesq_formulation.md); nonlinear thermal splitting is the next phase.
+Thermal Boussinesq Galerkin and all eight static/dynamic, linear/nonlinear
+ASGS/OSS variants are available with Newton or Picard, BDF1–3, Crank–Nicolson
+and optional passive scalars. See [thermal usage](docs/usage.md#thermal-boussinesq-baseline-b1)
+and the [thermal formulation](docs/boussinesq_formulation.md).
 
 ## Quick start
 

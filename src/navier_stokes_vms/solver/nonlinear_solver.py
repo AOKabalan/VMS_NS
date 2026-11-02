@@ -8,6 +8,7 @@ from types import MappingProxyType
 import firedrake as fd
 import ufl
 from firedrake.exceptions import ConvergenceError
+from firedrake.functionspaceimpl import WithGeometry
 from firedrake.petsc import PETSc
 from ufl.core.expr import Expr
 from ufl.form import Form
@@ -114,7 +115,7 @@ class InnerSolver:
         self._append(first_method, self._initial_norm, None, None)
         if not math.isfinite(self._initial_norm):
             return InnerSolveResult(False, tuple(self._rows), self._nonfinite_message("residual"))
-        converged = self._initial_norm <= self._tolerance and self._fields_converged()
+        converged = self._initial_norm <= self._tolerance and self.fields_converged()
         if self._picard is not None:
             # The warm-up counts toward inner_max_iterations.
             limit = min(self._picard_iterations, self._options.inner_max_iterations)
@@ -141,7 +142,13 @@ class InnerSolver:
             with component.dat.vec_ro as vector:
                 self._field_residuals[name] = vector.norm() / self._residual_scales[name]
 
-    def _fields_converged(self) -> bool:
+    @property
+    def field_residuals(self) -> Mapping[str, float]:
+        """Scaled equation residuals from the most recent true residual assembly."""
+        return MappingProxyType(dict(self._field_residuals))
+
+    def fields_converged(self) -> bool:
+        """Whether every scaled equation block meets its current inner tolerance."""
         return all(
             math.isfinite(value) and value <= self._field_tolerances[name]
             for name, value in self._field_residuals.items()
@@ -163,7 +170,7 @@ class InnerSolver:
             update_norm = update.norm()
         linear = solver.snes.getKSP().getIterationNumber()
         self._append("picard", residual, update_norm, linear)
-        return residual <= self._tolerance and self._fields_converged()
+        return residual <= self._tolerance and self.fields_converged()
 
     def _newton_iterations(self, solver: fd.NonlinearVariationalSolver, limit: int) -> bool:
         self._newton_max_iterations = limit
@@ -200,7 +207,7 @@ class InnerSolver:
         if not math.isfinite(norm):
             self._failure_reason = self._nonfinite_message("residual")
             return _REASON.DIVERGED_FNORM_NAN
-        if norm <= self._tolerance and self._fields_converged():
+        if norm <= self._tolerance and self.fields_converged():
             return _REASON.CONVERGED_FNORM_ABS
         if iteration >= self._newton_max_iterations:
             return _REASON.DIVERGED_MAX_IT
@@ -298,6 +305,9 @@ class OuterIteration:
     subscale_change: float | None
     fe_residual_norm: float
     converged: bool
+    scalar_subscale_changes: Mapping[str, float] | None = None
+    velocity_closure_residual: float | None = None
+    field_residuals: Mapping[str, float] | None = None
 
     @property
     def velocity_change(self) -> float:
@@ -344,6 +354,9 @@ class StepSolver:
         dx: Measure,
         options: SolverOptions,
         layout: FieldLayout,
+        scalar_subscales: Mapping[str, Expr] | None = None,
+        scalar_space: WithGeometry | None = None,
+        velocity_subscale: Expr | None = None,
     ) -> None:
         self._inner = inner
         self._solution = solution
@@ -357,6 +370,22 @@ class StepSolver:
             name: RelativeChange(current[name], previous[name], dx) for name in layout.names
         }
         self._previous_subscale = None
+        self._scalar_samples = {}
+        self._scalar_changes = {}
+        self._velocity_closure = None
+        if scalar_subscales:
+            if subscale is None or scalar_space is None or velocity_subscale is None:
+                raise ValueError(
+                    "coupled subscale checks require the iterate, scalar space and closure"
+                )
+            for name, expression in scalar_subscales.items():
+                previous_scalar = fd.Function(scalar_space)
+                self._scalar_samples[name] = (
+                    reusable_assembler(fd.interpolate(expression, scalar_space)),
+                    previous_scalar,
+                )
+                self._scalar_changes[name] = RelativeChange(expression, previous_scalar, dx)
+            self._velocity_closure = RelativeChange(velocity_subscale, subscale.value, dx)
         if subscale is not None:
             self._previous_subscale = fd.Function(subscale.value.function_space())
             self._subscale_change = RelativeChange(subscale.value, self._previous_subscale, dx)
@@ -367,6 +396,8 @@ class StepSolver:
         limit = self._options.outer_max_iterations if self._subscale is not None else 1
         reference = 0.0
         for iteration in range(1, limit + 1):
+            for sample, previous_scalar in self._scalar_samples.values():
+                sample.assemble(tensor=previous_scalar)
             self._previous.assign(self._solution)
             inner = self._inner.solve()
             if iteration == 1:
@@ -388,12 +419,14 @@ class StepSolver:
             changes = (
                 *row.field_changes.values(),
                 subscale_change,
+                *(row.scalar_subscale_changes or {}).values(),
+                row.velocity_closure_residual,
             )
             tolerance = self._options.outer_rtol
-            converged = max(
-                change for change in changes if change is not None
-            ) <= tolerance and row.fe_residual_norm <= max(
-                self._options.inner_atol, tolerance * reference
+            converged = (
+                self._inner.fields_converged()
+                and max(change for change in changes if change is not None) <= tolerance
+                and row.fe_residual_norm <= max(self._options.inner_atol, tolerance * reference)
             )
             rows.append(replace(row, converged=converged))
             if converged:
@@ -432,4 +465,15 @@ class StepSolver:
             subscale_change=subscale_change,
             fe_residual_norm=residual,
             converged=converged,
+            scalar_subscale_changes=MappingProxyType(
+                {name: change() for name, change in self._scalar_changes.items()}
+            )
+            if self._scalar_changes
+            else None,
+            velocity_closure_residual=self._velocity_closure()
+            if self._velocity_closure is not None
+            else None,
+            field_residuals=self._inner.field_residuals
+            if self._velocity_closure is not None
+            else None,
         )

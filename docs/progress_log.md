@@ -1489,3 +1489,68 @@ Verification:
 
 B3 is complete. Stop at this phase boundary; B4 adds nonlinear thermal splitting
 and Picard linearization.
+
+
+## Boussinesq B4: nonlinear splitting and coupled Picard (2026-11-02)
+
+Implemented:
+
+- `thermal_system` accepts one shared advector for both resolved transports,
+  strong residuals, subscale feedback and all parameter/projection weights.
+  Nonlinear splitting supplies $a=u_h+\widetilde u^*$, reusing the existing
+  scalar-generic kernels without spatial differentiation of quadrature fields.
+- Both fixed-point and accelerated velocity updates include resolved buoyancy
+  $f+b(T_h)$. The diagonal closure is unchanged: no temperature-subscale force
+  is added locally, and the separate coarse momentum feedback remains present.
+  Temperature/passive subscales are eliminated algebraically at the updated
+  advector, without a second local nonlinear iteration.
+- Nonlinear thermal outer convergence checks every physical/projection field
+  change, the velocity-iterate change, scalar-subscale changes, and the relative
+  velocity-closure residual. After every local update, the true FE residual is
+  reassembled and every scaled block must satisfy its inner criterion, alongside
+  the combined outer residual criterion. The new quantities are named in
+  nonlinear thermal outer CSVs; previous linear thermal/isothermal schemas stay
+  unchanged. Scalar closures are independently checked against their equations.
+- Coupled Picard freezes the total advector and all parameters in both equations,
+  preserving implicit temperature-driven buoyancy and projection unknowns.
+  Picard and optional warm-up before Newton use true coupled residual checks.
+  Newton retains both frozen/exact parameter modes at a fixed outer iterate.
+- Added nonlinear OSS/Newton/BDF2 and ASGS/Picard/CN examples under
+  `configs/boussinesq/`. Updated the formulation, integration plan, usage and
+  README, including Codina (2010) equations (31)/(34), the origin of the scale
+  interaction terms, and the remaining B5 budget gate.
+
+Verification:
+
+- The 39 B4 tests pass in focused groups: 12 matrix checks compare Newton and
+  Picard for all eight thermal variants, including both local updates for
+  nonlinear splitting; 15 checks cover actual CN solve-level scalar/velocity
+  closure and OSS orthogonality with history, Galerkin/ASGS/OSS Picard warm-up
+  with BDF3, and the zero-expansion isothermal limit under both supported
+  momentum forms; 12 checks independently expand scalar weak cross terms for
+  both thermal forms, verify affine Picard with implicit buoyancy, and check
+  local-failure reporting and unchanged endpoint histories/output.
+- All 32 passive-scalar directional Jacobian checks pass across P1/P2,
+  ASGS/OSS, static/dynamic, linear/nonlinear and frozen/exact parameters.
+  Logs: `/tmp/vms-b4-second.log` (matrix portion), `/tmp/vms-b4-close.log`,
+  `/tmp/vms-b4-extra.log` and `/tmp/vms-b4-jac.log`. An initial CN closure-test
+  fixture incorrectly averaged data on its BDF1 startup step; the corrected
+  fixture advances through startup and tests the actual second-step CN forms.
+- Galerkin, static ASGS and static OSS thermal baseline fields and all
+  diagnostic/inner/outer CSV records match B3 bitwise. Four isothermal baselines
+  likewise retain identical fields and records. Artifacts:
+  `/tmp/vms-b4-before`, `/tmp/vms-b4-after`, `/tmp/vms-b4-isothermal`.
+- Both nonlinear CLI examples completed ten steps through the single entry
+  point. Final mixed residuals: 7.660e-14 (dynamic nonlinear OSS/Newton/BDF2)
+  and 2.025e-15 (dynamic nonlinear ASGS/Picard/CN). Final relative velocity
+  closure residuals were 6.760e-15 and 4.597e-16; scalar-subscale changes were
+  4.685e-14 and 3.341e-14. Artifacts are under
+  `results/manufactured_boussinesq/nonlinear_*`.
+- Full unit regression passed **853 tests with 1 known xfail in 361.66 s**.
+  The xfail remains the accepted near-inviscid nonlinear ASGS limitation.
+  Log: `/tmp/vms-b4-all.log`. `ruff check src tests scripts`,
+  `ruff format --check src tests scripts` (81 files), `git diff --check`,
+  TOML parsing, and documentation-link/math-fence checks passed.
+
+B4 is complete. Stop at this phase boundary; B5 adds conservative thermal
+transport, coupled budget diagnostics, and their verification/validation.

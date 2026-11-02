@@ -3,6 +3,7 @@
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import firedrake as fd
@@ -25,6 +26,7 @@ from navier_stokes_vms.discretization.quadrature import (
     volume_measure,
 )
 from navier_stokes_vms.discretization.time_schemes import StepCoefficients, step_coefficients
+from navier_stokes_vms.formulation.boussinesq import buoyancy
 from navier_stokes_vms.formulation.convective_forms import PRESSURE_UNKNOWNS, physical_pressure
 from navier_stokes_vms.formulation.galerkin import SolveLevel, galerkin_residual
 from navier_stokes_vms.formulation.oss_projections import projection_equations
@@ -74,7 +76,7 @@ from navier_stokes_vms.problem.thermal_problem import check_thermal_supported
 from navier_stokes_vms.solver.field_history import FieldHistory
 from navier_stokes_vms.solver.nonlinear_solver import InnerSolver, StepSolver, StepSolveResult
 from navier_stokes_vms.solver.subscale_storage import SubscaleIterate, SubscaleStorage
-from navier_stokes_vms.solver.system_builder import thermal_system
+from navier_stokes_vms.solver.system_builder import ThermalSystem, thermal_system
 
 
 class TimeStepper:
@@ -223,32 +225,9 @@ class TimeStepper:
                 )
                 for name, data in self._scalar_data.items()
             }
-            system = thermal_system(
-                self._solution,
-                layout,
-                problem,
-                level,
-                scalar_levels,
-                self._dx,
-                config,
-                velocity_history=u_sub_history,
-                scalar_histories={
-                    name: storage.history for name, storage in self._scalar_subscale_storage.items()
-                },
-            )
-            newton = system.residual
-            self._u_sub = system.velocity_subscale
-            self._scalar_subscales = system.scalar_subscales
-            for name, data in self._scalar_data.items():
-                for boundary, bc in data.boundary_conditions.items():
-                    if isinstance(bc, DiffusiveFlux) and bc.value is not None:
-                        newton += (
-                            self._at_solve_level(bc.value, x)
-                            * tests[name]
-                            * named_boundary_measure(self._ds, (boundary,), problem.boundary_tags)
-                        )
-            if chi is not None and config.solver.newton_tau == "frozen":
-                frozen_system = thermal_system(
+
+            def thermal_at(advector: Expr, parameter_advector: Expr | None = None) -> ThermalSystem:
+                return thermal_system(
                     self._solution,
                     layout,
                     problem,
@@ -256,17 +235,34 @@ class TimeStepper:
                     scalar_levels,
                     self._dx,
                     config,
-                    frozen,
+                    parameter_advector,
                     velocity_history=u_sub_history,
                     scalar_histories={
                         name: storage.history
                         for name, storage in self._scalar_subscale_storage.items()
                     },
+                    advector=advector,
                 )
+
+            system = thermal_at(a)
+            flux = 0
+            self._u_sub = system.velocity_subscale
+            self._scalar_subscales = system.scalar_subscales
+            for name, data in self._scalar_data.items():
+                for boundary, bc in data.boundary_conditions.items():
+                    if isinstance(bc, DiffusiveFlux) and bc.value is not None:
+                        flux += (
+                            self._at_solve_level(bc.value, x)
+                            * tests[name]
+                            * named_boundary_measure(self._ds, (boundary,), problem.boundary_tags)
+                        )
+            newton = system.residual + flux
+            picard = thermal_at(a_hat).residual + flux
+            if chi is not None and config.solver.newton_tau == "frozen":
+                frozen_system = thermal_at(a, a_hat)
                 jacobian = ufl.replace(
                     fd.derivative(frozen_system.residual, self._solution), {frozen: u}
                 )
-            picard = newton
         else:
             newton = coupled(a, u, tau_t, tau_c)
             picard = coupled(a_hat, frozen, tau_t_hat, tau_c_hat)
@@ -280,21 +276,33 @@ class TimeStepper:
             self._u_sub = velocity_subscale(
                 u, p, a, nu, level, tau_t, chi, u_sub_history, xi, **forms
             )
-            if chi.is_nonlinear:
-                update = (
-                    self._u_sub
-                    if config.solver.subscale_update == "fixed_point"
-                    else accelerated_subscale(
-                        u, p, nu, level, tau_t, chi, u_sub_history, xi, **forms
-                    )
+        if chi is not None and chi.is_nonlinear:
+            local_level = level
+            if thermal is not None:
+                local_level = replace(
+                    level,
+                    forcing=level.forcing
+                    + buoyancy(
+                        unknowns["temperature"],
+                        thermal.expansion_coefficient,
+                        thermal.gravity,
+                        thermal.reference_temperature,
+                    ),
                 )
-                self._iterate = SubscaleIterate(
-                    u_sub_iterate,
-                    update,
-                    config.solver.subscale_rtol,
-                    config.solver.subscale_max_iterations,
-                    is_static=not chi.is_dynamic,
+            update = (
+                self._u_sub
+                if config.solver.subscale_update == "fixed_point"
+                else accelerated_subscale(
+                    u, p, nu, local_level, tau_t, chi, u_sub_history, xi, **forms
                 )
+            )
+            self._iterate = SubscaleIterate(
+                u_sub_iterate,
+                update,
+                config.solver.subscale_rtol,
+                config.solver.subscale_max_iterations,
+                is_static=not chi.is_dynamic,
+            )
         bcs = [
             dirichlet_bc(
                 space.sub(layout.index("velocity")),
@@ -373,7 +381,19 @@ class TimeStepper:
             residual_scales,
         )
         self._step_solver = StepSolver(
-            inner, self._solution, self._iterate, self._dx, config.solver, layout
+            inner,
+            self._solution,
+            self._iterate,
+            self._dx,
+            config.solver,
+            layout,
+            scalar_subscales=self._scalar_subscales if self._iterate is not None else None,
+            scalar_space=scalar_subscale_space(mesh, degree)
+            if thermal is not None and self._iterate is not None
+            else None,
+            velocity_subscale=self._u_sub
+            if thermal is not None and self._iterate is not None
+            else None,
         )
         self._conservation = None
         requested = [name for name in config.output.diagnostics if name in CONSERVATION_DIAGNOSTICS]
@@ -479,6 +499,7 @@ class TimeStepper:
             if self._temperature is not None
             else (),
             self._layout.names if self._temperature is not None else (),
+            tuple(self._scalar_data) if self._iterate is not None else (),
         )
         columns = diagnostic_columns(self._config.output.diagnostics, self._problem)
         diagnostics = open_diagnostics_csv(comm, self._folder, columns)
@@ -589,6 +610,21 @@ class TimeStepper:
                 zeta_change=outer.zeta_change,
                 fe_residual_norm=outer.fe_residual_norm,
                 converged=outer.converged,
+                **(
+                    {
+                        "velocity_subscale_residual": outer.velocity_closure_residual,
+                        **{
+                            f"{name}_subscale_change": change
+                            for name, change in outer.scalar_subscale_changes.items()
+                        },
+                        **{
+                            f"{name}_residual": value
+                            for name, value in outer.field_residuals.items()
+                        },
+                    }
+                    if outer.scalar_subscale_changes is not None
+                    else {}
+                ),
             )
         outer_iterations = len(result.iterations)
         inner_iterations = sum(len(outer.inner.iterations) - 1 for outer in result.iterations)

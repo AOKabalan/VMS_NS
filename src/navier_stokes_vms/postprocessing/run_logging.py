@@ -70,6 +70,7 @@ def open_iteration_logs(
     folder: Path,
     scalar_names: Sequence[str] = (),
     residual_names: Sequence[str] = (),
+    subscale_names: Sequence[str] = (),
 ) -> IterationLogs:
     """Create the three files with their plan §9 columns."""
     residual_columns = (
@@ -85,7 +86,13 @@ def open_iteration_logs(
         outer=CsvWriter(
             comm,
             folder / "outer_iterations.csv",
-            (*OUTER_COLUMNS, *(f"{name}_change" for name in scalar_names)),
+            (
+                *OUTER_COLUMNS,
+                *(f"{name}_change" for name in scalar_names),
+                *(("velocity_subscale_residual",) if subscale_names else ()),
+                *(f"{name}_subscale_change" for name in subscale_names),
+                *(residual_columns if subscale_names else ()),
+            ),
         ),
         time_steps=CsvWriter(comm, folder / "time_steps.csv", TIME_STEP_COLUMNS),
     )

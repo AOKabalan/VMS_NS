@@ -19,7 +19,6 @@ from navier_stokes_vms.config import (
     DiscretizationOptions,
     MeshOptions,
     OutputOptions,
-    SolverOptions,
     StabilizationOptions,
     ThermalOptions,
     TimeOptions,
@@ -276,7 +275,6 @@ def test_thermal_config_roundtrip_and_inactive_omission(tmp_path: Path) -> None:
     [
         dict(stabilization=StabilizationOptions()),
         dict(time=TimeOptions(startup="exact_history")),
-        dict(solver=SolverOptions(linearization="picard")),
         dict(thermal=ThermalOptions(temperature_degree=1)),
     ],
 )
