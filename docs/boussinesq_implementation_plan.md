@@ -1,7 +1,7 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
-Status: B0 completed, 2 November 2026. Named isothermal field handling is
-implemented and verified; thermal equations start in B1. Equations refer to the companion
+Status: B0 and B1 completed, 2 November 2026. Thermal stabilization starts
+in B2. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
 solver for isothermal and thermally coupled problems, with small, explicit
 thermal components and unchanged isothermal defaults.
@@ -265,6 +265,18 @@ Acceptance:
    $f=\partial_tu+u\cdot\nabla u-\nu\Delta u+\nabla p-b(T)$ and
    $s=\partial_tT+u\cdot\nabla T-\kappa\Delta T$; a directional Jacobian check
    detects missing $u\leftrightarrow T$ derivatives.
+
+B1 implementation uses `ThermalProblem`, optional `ThermalOptions`, independent
+`Dirichlet`/`DiffusiveFlux` scalar boundaries, and the shared `FieldHistory`
+helper. `galerkin_thermal_system` composes the existing momentum kernel with
+scalar-generic transport and resolved buoyancy. `manufactured_boussinesq` and
+`configs/boussinesq/manufactured_galerkin.toml` exercise the single entry point.
+Physical coefficients and resolved thermal choices are recorded in
+`thermal_metadata.json`; temperature VTK, error/content/work diagnostics, and
+named temperature changes are available. Each equation also has its own
+initial-relative/absolute Newton check using configurable positive reference
+scales; the normalized algebraic block norms and chosen scales are recorded. Unsupported thermal combinations fail
+explicitly. The progress log records acceptance and regression results.
 
 ### B2 — Static linear ASGS and OSS
 

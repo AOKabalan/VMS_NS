@@ -84,7 +84,7 @@ def emac_reference(
     v, q, *projection_tests = fd.TestFunctions(solution.function_space())
     alpha0, dt = stepper._alpha0, fd.Constant(stepper._config.time.dt)
     f = problem.forcing(fd.SpatialCoordinate(problem.mesh), stepper._t_new)
-    u_hist, s_hist = stepper._velocity_history, stepper._subscales.history
+    u_hist, s_hist = stepper._velocity_states.history, stepper._subscales.history
     s_star = stepper._iterate.value if nonlinear else ufl.zero(u.ufl_shape)
     a = u + s_star
     tau_m, tau_c = stabilization_parameters(a_tau, nu, 2, 4.0, 2.0)
@@ -165,7 +165,7 @@ def test_emac_newton_jacobian_matches_finite_differences(
     rng = np.random.default_rng(57)
     for field in (*solution.subfunctions, *direction.subfunctions):
         field.dat.data[:] = rng.uniform(0.2, 1.0, field.dat.data.shape)
-    stored = [stepper._velocity_history, stepper._subscales.history]
+    stored = [stepper._velocity_states.history, stepper._subscales.history]
     if splitting == "nonlinear":
         stored.append(stepper._iterate.value)
     for field in stored:

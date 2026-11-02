@@ -11,9 +11,16 @@ from ufl.measure import Measure
 
 @dataclass(frozen=True)
 class Dirichlet:
-    """Strong velocity data u_h = g(x, t) (spec: Boundary conditions and quadrature)."""
+    """Strong field data prescribed as g(x, t) (spec: Boundary conditions and quadrature)."""
 
     value: Callable[[Expr, Expr], Expr]
+
+
+@dataclass(frozen=True)
+class DiffusiveFlux:
+    """Prescribed outward scalar flux −κ∇T·n; None denotes insulation (B3)."""
+
+    value: Callable[[Expr, Expr], Expr] | None = None
 
 
 @dataclass(frozen=True)

@@ -85,7 +85,7 @@ def test_newton_jacobian_matches_finite_differences(
     level = SolveLevel(
         stepper._alpha0,
         fd.Constant(config.time.dt),
-        stepper._velocity_history,
+        stepper._velocity_states.history,
         problem.forcing(fd.SpatialCoordinate(problem.mesh), stepper._t_new),
     )
     a, a_tau = u, frozen if newton_tau == "frozen" else u
@@ -154,7 +154,7 @@ def test_each_iteration_logs_the_true_asgs_residual(
     level = SolveLevel(
         stepper._alpha0,
         fd.Constant(config.time.dt),
-        stepper._velocity_history,
+        stepper._velocity_states.history,
         problem.forcing(fd.SpatialCoordinate(problem.mesh), stepper._t_new),
     )
     tau_m, tau_c = stabilization_parameters(u, problem.viscosity, 1, 4.0, 2.0)

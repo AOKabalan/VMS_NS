@@ -35,9 +35,9 @@ class FieldLayout:
         return dict(zip(self.names, components, strict=True))
 
 
-def flow_layout(stabilization: StabilizationOptions) -> FieldLayout:
-    """Named physical and projection fields of the configured isothermal method."""
-    names = ("velocity", "pressure")
+def flow_layout(stabilization: StabilizationOptions, thermal: bool = False) -> FieldLayout:
+    """Named physical and projection fields of the configured method."""
+    names = ("velocity", "pressure") + (("temperature",) if thermal else ())
     if stabilization.method == "vms" and stabilization.subscale_space == "oss":
         names += ("xi",)
         if stabilization.pressure_subscale:
@@ -45,11 +45,19 @@ def flow_layout(stabilization: StabilizationOptions) -> FieldLayout:
     return FieldLayout(names)
 
 
-def mixed_space(mesh: MeshGeometry, velocity_degree: int, pressure_degree: int) -> WithGeometry:
-    """W = V × Q with continuous Lagrange velocity and pressure of the configured degrees."""
+def mixed_space(
+    mesh: MeshGeometry,
+    velocity_degree: int,
+    pressure_degree: int,
+    temperature_degree: int | None = None,
+) -> WithGeometry:
+    """W = V × Q (× S) with continuous Lagrange fields of the configured degrees."""
     velocity = fd.VectorFunctionSpace(mesh, "CG", velocity_degree)
     pressure = fd.FunctionSpace(mesh, "CG", pressure_degree)
-    return velocity * pressure
+    spaces = [velocity, pressure]
+    if temperature_degree is not None:
+        spaces.append(fd.FunctionSpace(mesh, "CG", temperature_degree))
+    return fd.MixedFunctionSpace(spaces)
 
 
 def oss_space(mesh: MeshGeometry, degree: int, pressure_projection: bool) -> WithGeometry:

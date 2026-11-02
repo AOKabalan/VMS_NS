@@ -14,7 +14,13 @@ from ufl.constantvalue import Zero
 from ufl.core.expr import Expr
 
 from navier_stokes_vms.cases import CASES, build_problem
-from navier_stokes_vms.config import Config, MeshOptions, TimeOptions
+from navier_stokes_vms.config import (
+    Config,
+    DiscretizationOptions,
+    MeshOptions,
+    StabilizationOptions,
+    TimeOptions,
+)
 from navier_stokes_vms.problem.boundary_conditions import Dirichlet, Outflow, dirichlet_bc
 from navier_stokes_vms.problem.mesh_loading import box, gmsh_mesh, periodic_rectangle, rectangle
 from navier_stokes_vms.problem.problem_definition import (
@@ -152,7 +158,15 @@ def test_each_case_builds_on_a_coarse_mesh(case: str) -> None:
         if case == "cylinder_dfg_2d"
         else MeshOptions(cells=(4,) * dimension)
     )
-    problem = build_problem(Config(case=case, run_name="test", mesh=options))
+    config = Config(case=case, run_name="test", mesh=options)
+    if case == "manufactured_boussinesq":
+        config = replace(
+            config,
+            discretization=DiscretizationOptions(2, 1),
+            stabilization=StabilizationOptions(method="none"),
+            time=TimeOptions(scheme="bdf1"),
+        )
+    problem = build_problem(config)
     if case in ("cylinder_dfg_2d", "lid_driven_cavity"):
         assert problem.reference_values
         assert set(problem.boundary_conditions) == set(problem.boundary_tags)

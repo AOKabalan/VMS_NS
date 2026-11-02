@@ -12,6 +12,7 @@ from ufl.domain import extract_unique_domain
 
 from navier_stokes_vms.config import Config
 from navier_stokes_vms.problem.boundary_conditions import Dirichlet, Outflow, boundary_tag
+from navier_stokes_vms.problem.thermal_problem import ThermalProblem, check_thermal_problem
 
 SpaceTimeExpression = Callable[[Expr, Expr], Expr]
 
@@ -35,6 +36,7 @@ class Problem:
     reference_values: Mapping[str, float] | None = None
     force_boundaries: tuple[str, ...] = ()
     monitor_region: Callable[[Expr], Expr] | None = None
+    thermal: ThermalProblem | None = None
 
 
 def exact_solution_forcing(
@@ -83,6 +85,7 @@ def case_parameters(config: Config, defaults: Mapping[str, float]) -> dict[str, 
 
 def check_problem(problem: Problem) -> None:
     """Every named boundary has exactly one known condition; an exact velocity is solenoidal."""
+    check_thermal_problem(problem)
     for name in problem.boundary_conditions:
         boundary_tag(name, problem.boundary_tags)
     for name in problem.force_boundaries:

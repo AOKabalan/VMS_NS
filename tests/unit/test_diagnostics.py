@@ -195,7 +195,7 @@ def test_crank_nicolson_force_uses_half_velocity_and_pressure(tmp_path: Path) ->
     coefficients = step_coefficients("crank_nicolson", "lower_order", 2)
     stepper._set_level(2, coefficients)
     x = fd.SpatialCoordinate(problem.mesh)
-    stepper._history[0].interpolate(ufl.as_vector((0.1 * x[1], 0)))
+    stepper._velocity_states.levels[0].interpolate(ufl.as_vector((0.1 * x[1], 0)))
     stepper._velocity.interpolate(ufl.as_vector((0.15 * x[1], 0)))
     stepper._pressure.interpolate(0.15 * x[0])
     stepper._advance(coefficients)

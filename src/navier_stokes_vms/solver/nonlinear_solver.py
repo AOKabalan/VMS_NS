@@ -31,6 +31,7 @@ class InnerIteration:
     relative_residual: float
     update_norm: float | None
     linear_iterations: int | None
+    field_residuals: Mapping[str, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -55,12 +56,21 @@ class InnerSolver:
         null_space: fd.MixedVectorSpaceBasis | None,
         options: SolverOptions,
         newton_jacobian: Form | None = None,
+        residual_scales: Mapping[str, float] | None = None,
     ) -> None:
         self._solution = solution
         self._newton_residual = newton_residual
         # Preprocessing the form once keeps repeated residual norms cheap.
         self._residual_assembler = reusable_assembler(newton_residual)
         self._residual = fd.Cofunction(solution.function_space().dual())
+        self._residual_scales = residual_scales
+        self._field_residuals: dict[str, float] = {}
+        self._field_tolerances: dict[str, float] = {}
+        self._residual_components = (
+            {}
+            if residual_scales is None
+            else FieldLayout(tuple(residual_scales)).bind(self._residual.subfunctions)
+        )
         self._frozen_advector = frozen_advector
         self._bcs = list(bcs)
         self._options = options
@@ -96,11 +106,15 @@ class InnerSolver:
         self._tolerance = max(
             self._options.inner_atol, self._options.inner_rtol * self._initial_norm
         )
+        self._field_tolerances = {
+            name: max(self._options.inner_atol, self._options.inner_rtol * value)
+            for name, value in self._field_residuals.items()
+        }
         first_method = "picard" if self._picard is not None else "newton"
         self._append(first_method, self._initial_norm, None, None)
         if not math.isfinite(self._initial_norm):
             return InnerSolveResult(False, tuple(self._rows), self._nonfinite_message("residual"))
-        converged = self._initial_norm <= self._tolerance
+        converged = self._initial_norm <= self._tolerance and self._fields_converged()
         if self._picard is not None:
             # The warm-up counts toward inner_max_iterations.
             limit = min(self._picard_iterations, self._options.inner_max_iterations)
@@ -118,8 +132,20 @@ class InnerSolver:
         residual = self._residual_assembler.assemble(tensor=self._residual)
         for bc in self._bcs:
             bc.zero(residual)
+        self._update_field_residuals()
         with residual.dat.vec_ro as vector:
             return vector.norm()
+
+    def _update_field_residuals(self) -> None:
+        for name, component in self._residual_components.items():
+            with component.dat.vec_ro as vector:
+                self._field_residuals[name] = vector.norm() / self._residual_scales[name]
+
+    def _fields_converged(self) -> bool:
+        return all(
+            math.isfinite(value) and value <= self._field_tolerances[name]
+            for name, value in self._field_residuals.items()
+        )
 
     def _picard_iteration(self, solver: fd.NonlinearVariationalSolver) -> bool:
         self._frozen_advector.assign(self._solution.subfunctions[0])
@@ -137,7 +163,7 @@ class InnerSolver:
             update_norm = update.norm()
         linear = solver.snes.getKSP().getIterationNumber()
         self._append("picard", residual, update_norm, linear)
-        return residual <= self._tolerance
+        return residual <= self._tolerance and self._fields_converged()
 
     def _newton_iterations(self, solver: fd.NonlinearVariationalSolver, limit: int) -> bool:
         self._newton_max_iterations = limit
@@ -165,10 +191,16 @@ class InnerSolver:
         self, _snes: PETSc.SNES, iteration: int, norms: tuple[float, float, float]
     ) -> int:
         norm = norms[2]
+        if self._residual_scales is not None:
+            with self._residual.dat.vec as vector:
+                _snes.getFunction()[0].copy(vector)
+            for bc in self._bcs:
+                bc.zero(self._residual)
+            self._update_field_residuals()
         if not math.isfinite(norm):
             self._failure_reason = self._nonfinite_message("residual")
             return _REASON.DIVERGED_FNORM_NAN
-        if norm <= self._tolerance:
+        if norm <= self._tolerance and self._fields_converged():
             return _REASON.CONVERGED_FNORM_ABS
         if iteration >= self._newton_max_iterations:
             return _REASON.DIVERGED_MAX_IT
@@ -216,7 +248,19 @@ class InnerSolver:
 
     def _append(self, method: str, norm: float, update: float | None, linear: int | None) -> None:
         relative = norm / self._initial_norm if self._initial_norm > 0 else 0.0
-        self._rows.append(InnerIteration(len(self._rows), method, norm, relative, update, linear))
+        self._rows.append(
+            InnerIteration(
+                len(self._rows),
+                method,
+                norm,
+                relative,
+                update,
+                linear,
+                None
+                if self._residual_scales is None
+                else MappingProxyType(dict(self._field_residuals)),
+            )
+        )
 
     def _iteration(self) -> int:
         return len(self._rows) - 1

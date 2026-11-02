@@ -1,0 +1,24 @@
+case = "manufactured_boussinesq"
+run_name = "galerkin_bdf1"
+
+[mesh]
+cells = [8, 8]
+
+[discretization]
+velocity_degree = 2
+pressure_degree = 1
+
+[stabilization]
+method = "none"
+
+[time]
+scheme = "bdf1"
+dt = 0.01
+t_end = 0.1
+
+[thermal]
+convection = "skew_symmetric"
+
+[output]
+vtk_every = 5
+diagnostics = ["kinetic_energy", "divergence_l2", "temperature_l2", "temperature_error_l2", "thermal_content", "buoyancy_power"]

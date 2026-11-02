@@ -15,7 +15,8 @@ import firedrake as fd
 from mpi4py import MPI
 from petsc4py import PETSc
 
-from navier_stokes_vms.config import Config, config_to_toml
+from navier_stokes_vms.config import Config, ThermalOptions, config_to_toml
+from navier_stokes_vms.problem.problem_definition import Problem
 
 
 class CsvWriter:
@@ -49,6 +50,7 @@ class FieldWriter:
     def __init__(self, folder: Path) -> None:
         self._folder = folder / "fields"
         self._files: tuple[fd.VTKFile, fd.VTKFile] | None = None
+        self._temperature_file: fd.VTKFile | None = None
 
     def write(
         self,
@@ -56,6 +58,7 @@ class FieldWriter:
         pressure: fd.Function,
         velocity_time: float,
         pressure_time: float,
+        temperature: fd.Function | None = None,
     ) -> None:
         """Append the velocity at velocity_time and the pressure at pressure_time."""
         if self._files is None:
@@ -65,6 +68,10 @@ class FieldWriter:
             )
         self._files[0].write(velocity, time=velocity_time)
         self._files[1].write(pressure, time=pressure_time)
+        if temperature is not None:
+            if self._temperature_file is None:
+                self._temperature_file = fd.VTKFile(str(self._folder / "temperature.pvd"))
+            self._temperature_file.write(temperature, time=velocity_time)
 
 
 def open_diagnostics_csv(comm: MPI.Comm, folder: Path, names: Sequence[str]) -> CsvWriter:
@@ -170,3 +177,26 @@ def _git(cwd: Path, *arguments: str) -> str:
 
 def _now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def write_thermal_metadata(comm: MPI.Comm, folder: Path, problem: Problem, config: Config) -> None:
+    """Record derived thermal physical and numerical parameters only for active thermal runs."""
+    thermal = problem.thermal
+    if thermal is not None and comm.rank == 0:
+        values = {
+            "scaling": thermal.scaling,
+            "viscosity": problem.viscosity,
+            "diffusivity": thermal.diffusivity,
+            "expansion_coefficient": thermal.expansion_coefficient,
+            "gravity": thermal.gravity,
+            "reference_temperature": thermal.reference_temperature,
+            "temperature_degree": config.discretization.velocity_degree,
+            "convection": (config.thermal or ThermalOptions()).convection,
+            "residual_scales": {
+                name: getattr(config.thermal or ThermalOptions(), f"{name}_residual_scale")
+                for name in ("momentum", "continuity", "temperature")
+            },
+        }
+        (folder / "thermal_metadata.json").write_text(
+            json.dumps(values, indent=2) + "\n", encoding="utf-8"
+        )

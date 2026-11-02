@@ -1295,3 +1295,65 @@ Verification:
   this structural phase.
 
 B0 is complete. Stop at this phase boundary; B1 is the next implementation phase.
+
+## Boussinesq B1: coupled Galerkin baseline (2026-11-02)
+
+Implementation:
+
+- Added `ThermalProblem` physical data and optional numerical `ThermalOptions`.
+  Material coefficients, gravity dimension, independent boundary coverage and
+  supported combinations are validated. Omitted thermal options stay omitted
+  from isothermal resolved configurations; active options round-trip with the
+  resolved scalar degree and reference residual scales.
+- Added scalar-generic Galerkin transport, Boussinesq buoyancy, and a monolithic
+  system builder. Newton differentiates momentum with respect to temperature
+  and scalar transport with respect to velocity. The pressure gauge acts on
+  pressure alone; transient insulated temperature retains its mass term.
+- Added independent temperature Dirichlet and prescribed outward diffusive-flux
+  conditions. B1 checks zero prescribed normal velocity on physical boundaries.
+  Supported thermal settings are Taylor–Hood velocity/pressure, temperature of
+  the velocity degree, Newton without warm-up, BDF1/lower-order startup,
+  Laplacian viscosity and nonconservative/skew convection. Later combinations
+  are explicitly rejected.
+- Extracted `FieldHistory` for shared velocity/scalar history and endpoint
+  handling. Successful steps advance both fields; failure snapshots include
+  available temperature without advancing its history. Tests accessing private
+  velocity-history storage were adapted to the extracted helper; their
+  independent equations and numerical assertions were preserved.
+- Added separate normalized momentum, continuity and temperature residual
+  checks alongside the mixed Newton norm. Each uses its own initial-relative
+  and absolute criterion with positive recorded reference scales. Thermal
+  inner logs include these algebraic block norms; outer logs include the named
+  temperature change. Isothermal schemas retain their existing columns.
+- Added temperature VTK output, thermal metadata (including scaling convention
+  and residual scales), temperature norm/error, thermal content and buoyancy
+  power diagnostics. Added the nondimensional `manufactured_boussinesq` case
+  and `configs/boussinesq/manufactured_galerkin.toml` for the existing entry point.
+
+Verification:
+
+- Twenty B1 tests cover diffusion-mode decay; an exact quadratic-temperature
+  source/nonzero-flux balance; represented vertical hydrostatic conduction;
+  acceleration against gravity; the zero-expansion isothermal-flow limit;
+  both scalar convection forms; both Newton coupling directions against finite
+  differences; thermal output/metadata, scaled equation convergence, failed-step
+  history preservation, config round-trip and invalid combinations/data.
+- Four isothermal two-step runs (Galerkin, ASGS and OSS with/without pressure
+  projection) match B0 exactly in velocity/pressure arrays and diagnostic/inner/
+  outer CSV records. Artifacts: `/tmp/vms-b1-isothermal`; reference:
+  `/tmp/vms-b0-after`.
+- The example also completed through `scripts/run_simulation.py`, writing
+  `results/manufactured_boussinesq/b1_verified/`. At t = 0.1 on the 8×8 P2/P1/P2
+  mesh, temperature L² error was 3.626e-6 and the final mixed residual was
+  2.566e-15. This is a smoke/accuracy check, not a convergence study.
+- Full unit regression: **718 passed, 1 xfailed in 198.12 s**. The expected
+  failure remains the documented near-inviscid nonlinear ASGS limitation.
+  After the final metadata and block-residual refresh changes, the thermal and
+  time-stepper checks passed again: **45 passed in 20.72 s**. Logs are
+  `/tmp/vms-b1-final.log` and `/tmp/vms-b1-inner-final.log`.
+- `ruff check src tests scripts`, `ruff format --check src tests scripts`
+  (77 files) and `git diff --check` passed. Compiler caches remain in the
+  git-ignored workspace cache from B0. Production cavity/KH studies and the
+  slow verification suite are outside B1.
+
+B1 is complete. Stop at this phase boundary; B2 adds static thermal ASGS/OSS.

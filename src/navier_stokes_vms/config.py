@@ -115,6 +115,17 @@ class OutputOptions:
 
 
 @dataclass(frozen=True)
+class ThermalOptions:
+    """Thermal scalar degree and convection; physical properties belong to the case."""
+
+    temperature_degree: int | None = None
+    convection: Literal["skew_symmetric", "nonconservative"] = "skew_symmetric"
+    momentum_residual_scale: float = 1.0
+    continuity_residual_scale: float = 1.0
+    temperature_residual_scale: float = 1.0
+
+
+@dataclass(frozen=True)
 class Config:
     """A fully resolved run configuration."""
 
@@ -129,6 +140,7 @@ class Config:
     viscosity: ViscosityOptions = field(default_factory=ViscosityOptions)
     solver: SolverOptions = field(default_factory=SolverOptions)
     output: OutputOptions = field(default_factory=OutputOptions)
+    thermal: ThermalOptions | None = None
 
 
 _SECTIONS: dict[str, type] = {
@@ -140,6 +152,7 @@ _SECTIONS: dict[str, type] = {
     "viscosity": ViscosityOptions,
     "solver": SolverOptions,
     "output": OutputOptions,
+    "thermal": ThermalOptions,
 }
 
 _NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
@@ -165,7 +178,11 @@ def _config_from_dict(data: Mapping[str, object], default_run_name: str) -> Conf
     if not isinstance(case_parameters, dict):
         raise ValueError("case_parameters: expected a table")
     sections = {
-        name: _parse_section(name, options, data.get(name, {}))
+        name: (
+            None
+            if name == "thermal" and name not in data
+            else _parse_section(name, options, data.get(name, {}))
+        )
         for name, options in _SECTIONS.items()
     }
     return Config(
@@ -188,6 +205,22 @@ def validate_config(config: Config) -> None:
                 f"{name} = {value!r}: use letters, digits, '_', '-' and '.', "
                 "starting with a letter, digit or '_'"
             )
+    if config.thermal is not None:
+        for name in (
+            "momentum_residual_scale",
+            "continuity_residual_scale",
+            "temperature_residual_scale",
+        ):
+            scale = getattr(config.thermal, name)
+            if isinstance(scale, bool) or not math.isfinite(scale) or scale <= 0:
+                raise ValueError(f"thermal.{name} must be finite and positive")
+        degree = config.thermal.temperature_degree
+        if degree is not None and (
+            isinstance(degree, bool) or not isinstance(degree, int) or degree < 1
+        ):
+            raise ValueError("thermal.temperature_degree must be a positive integer")
+        if config.thermal.convection not in ("skew_symmetric", "nonconservative"):
+            raise ValueError("unsupported thermal.convection")
     _check_bounds(config)
     steps = config.time.t_end / config.time.dt
     if abs(steps - round(steps)) > 1e-9 * steps:
@@ -251,11 +284,17 @@ def config_as_dict(config: Config) -> dict[str, object]:
     }
     for name in _SECTIONS:
         section = getattr(config, name)
+        if section is None:
+            continue
         data[name] = {
             item.name: _plain(getattr(section, item.name))
             for item in fields(section)
             if getattr(section, item.name) is not None
         }
+    if config.thermal is not None:
+        data["thermal"]["temperature_degree"] = (
+            config.thermal.temperature_degree or config.discretization.velocity_degree
+        )
     return data
 
 

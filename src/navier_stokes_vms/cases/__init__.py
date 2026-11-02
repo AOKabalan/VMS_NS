@@ -9,12 +9,14 @@ from navier_stokes_vms.cases import (
     kovasznay,
     lattice_vortex,
     lid_driven_cavity,
+    manufactured_boussinesq,
     manufactured_spatial,
     manufactured_temporal,
     taylor_green_2d,
 )
 from navier_stokes_vms.config import Config, check_startup_supported
 from navier_stokes_vms.problem.problem_definition import Problem, check_problem
+from navier_stokes_vms.problem.thermal_problem import check_thermal_supported
 
 CASES: dict[str, Callable[[Config], Problem]] = {
     "cylinder_dfg_2d": cylinder_dfg_2d.build,
@@ -23,6 +25,7 @@ CASES: dict[str, Callable[[Config], Problem]] = {
     "ethier_steinman_3d": ethier_steinman_3d.build,
     "gresho": gresho.build,
     "kovasznay": kovasznay.build,
+    "manufactured_boussinesq": manufactured_boussinesq.build,
     "manufactured_spatial": manufactured_spatial.build,
     "manufactured_temporal": manufactured_temporal.build,
     "taylor_green_2d": taylor_green_2d.build,
@@ -35,5 +38,6 @@ def build_problem(config: Config) -> Problem:
         raise ValueError(f"case = {config.case!r}: unknown; available: {', '.join(sorted(CASES))}")
     problem = CASES[config.case](config)
     check_problem(problem)
+    check_thermal_supported(config, problem)
     check_startup_supported(config, has_exact_solution=problem.exact_velocity is not None)
     return problem

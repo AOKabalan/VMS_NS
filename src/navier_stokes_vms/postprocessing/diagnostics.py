@@ -17,6 +17,12 @@ from navier_stokes_vms.formulation.convective_forms import (
     predicted_momentum_defect,
 )
 from navier_stokes_vms.formulation.operators import viscous_bilinear, viscous_operator
+from navier_stokes_vms.postprocessing.thermal_diagnostics import (
+    buoyancy_power,
+    temperature_error_l2,
+    temperature_l2,
+    thermal_content,
+)
 from navier_stokes_vms.problem.boundary_conditions import named_boundary_measure
 from navier_stokes_vms.problem.problem_definition import Problem
 from navier_stokes_vms.solver.reusable_assembly import reusable_assembler
@@ -274,6 +280,7 @@ class DiagnosticState:
     subscale_velocity: Expr | None
     subscale_time: fd.Constant | None
     conservation: Conservation | None = None
+    temperature: fd.Function | None = None
 
 
 @dataclass(frozen=True)
@@ -380,6 +387,10 @@ def _momentum_budget(state: DiagnosticState) -> dict[str, float | None]:
 
 
 DIAGNOSTICS: dict[str, Diagnostic] = {
+    "temperature_l2": Diagnostic(temperature_l2, needs_exact_solution=False),
+    "temperature_error_l2": Diagnostic(temperature_error_l2, needs_exact_solution=False),
+    "thermal_content": Diagnostic(thermal_content, needs_exact_solution=False),
+    "buoyancy_power": Diagnostic(buoyancy_power, needs_exact_solution=False),
     "kinetic_energy": Diagnostic(_kinetic_energy, needs_exact_solution=False),
     "subscale_kinetic_energy": Diagnostic(_subscale_kinetic_energy, needs_exact_solution=False),
     "linear_momentum": Diagnostic(_linear_momentum, needs_exact_solution=False),
@@ -426,6 +437,11 @@ REGION_DIAGNOSTICS = ("region_velocity_l2", "region_subscale_l2")
 
 def check_diagnostics_supported(names: Sequence[str], problem: Problem) -> None:
     """Reject diagnostics whose exact solution, force boundaries or monitor region are absent."""
+    thermal_names = {"temperature_l2", "temperature_error_l2", "thermal_content", "buoyancy_power"}
+    if thermal_names.intersection(names) and problem.thermal is None:
+        raise ValueError("thermal diagnostics require thermal problem data")
+    if "temperature_error_l2" in names and problem.thermal.exact_temperature is None:
+        raise ValueError("temperature_error_l2 requires an exact temperature")
     if "force" in names and not problem.force_boundaries:
         raise ValueError("output.diagnostics: force requires the case to declare force_boundaries")
     regional = [name for name in names if name in REGION_DIAGNOSTICS]

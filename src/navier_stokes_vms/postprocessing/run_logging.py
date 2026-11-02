@@ -1,6 +1,7 @@
 """Console and run.log logging and the iteration and time-step CSV files, on rank 0 (plan §9)."""
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -64,11 +65,22 @@ class IterationLogs:
             writer.close()
 
 
-def open_iteration_logs(comm: MPI.Comm, folder: Path) -> IterationLogs:
+def open_iteration_logs(
+    comm: MPI.Comm, folder: Path, scalar_names: Sequence[str] = ()
+) -> IterationLogs:
     """Create the three files with their plan §9 columns."""
+    residual_columns = (
+        tuple(f"{name}_residual" for name in ("velocity", "pressure", *scalar_names))
+        if scalar_names
+        else ()
+    )
     return IterationLogs(
-        inner=CsvWriter(comm, folder / "inner_iterations.csv", INNER_COLUMNS),
-        outer=CsvWriter(comm, folder / "outer_iterations.csv", OUTER_COLUMNS),
+        inner=CsvWriter(comm, folder / "inner_iterations.csv", (*INNER_COLUMNS, *residual_columns)),
+        outer=CsvWriter(
+            comm,
+            folder / "outer_iterations.csv",
+            (*OUTER_COLUMNS, *(f"{name}_change" for name in scalar_names)),
+        ),
         time_steps=CsvWriter(comm, folder / "time_steps.csv", TIME_STEP_COLUMNS),
     )
 

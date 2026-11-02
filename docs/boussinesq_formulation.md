@@ -1,8 +1,11 @@
 # Thermal Boussinesq VMS formulation
 
-Status: proposed extension, 2 November 2026. This document specifies the thermal
+Status: B1 Galerkin baseline implemented, 2 November 2026. This document specifies the thermal
 buoyancy model requested for the existing incompressible Navier–Stokes framework;
-it does not describe an implemented feature. The companion
+The implemented subset is Taylor–Hood Galerkin with equal velocity/temperature
+degree, Newton, BDF1, Laplacian viscosity, and the nonconservative or
+skew-symmetric convection choices on periodic or impermeable domains.
+Subscales and the subsequent application phases remain proposed. The companion
 [integration plan](boussinesq_implementation_plan.md) identifies the code changes
 and verification gates. Existing flow conventions remain defined by
 [formulation_spec.md](formulation_spec.md).
@@ -370,6 +373,18 @@ space under these same constant-coefficient/equal-space assumptions, so its
 direct contribution to the OSS velocity subscale is projected out. The
 resolved buoyancy force remains active. Keep this force in the residual and
 projection code to preserve consistency and avoid special-case algebra.
+
+### Implemented B1 baseline
+
+The monolithic Galerkin residual uses the physical force (B1) in the existing
+momentum kernel and adds only the resolved terms of (B14). Newton differentiates
+both transport and buoyancy. Independent scalar Dirichlet and outward-flux data
+use the same solve-level data weights as velocity. B1 exposes only BDF1 with
+lower-order startup and the two stated convection choices; later time/subscale
+choices below remain phase-gated. The existing solver's combined algebraic
+residual criterion is supplemented by a criterion for each equation, normalized
+by a recorded positive reference scale and compared with its own initial norm
+and absolute tolerance. These algebraic criteria are distinct from energy norms.
 
 ### Galerkin and passive-temperature limits
 

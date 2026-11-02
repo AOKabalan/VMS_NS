@@ -272,3 +272,51 @@ The `formulation/` layer uses the spec's symbols so that it reads side by side w
 | D_t | `time_derivative` | Discrete time derivative |
 | α₀, g_hist | `alpha0`, `history` | Time-scheme coefficients |
 | χ_A, χ_D | `is_asgs`, `is_dynamic` | Spec switches |
+
+
+## Thermal Boussinesq baseline (B1)
+
+Run the coupled manufactured problem with the existing entry point:
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/manufactured_galerkin.toml
+```
+
+B1 uses Taylor–Hood Galerkin velocity/pressure, continuous temperature of the
+velocity degree, BDF1 with lower-order startup, Newton without Picard warm-up,
+and Laplacian viscosity. Momentum convection may be `skew_symmetric_1` or
+`nonconservative`; `[thermal].convection` is `skew_symmetric` (default) or
+`nonconservative`. An omitted temperature degree resolves to the velocity degree.
+Thermal VMS, other integrators, stress viscosity, other momentum forms, and open
+thermal boundaries become available through later phase gates.
+
+A thermal case attaches `ThermalProblem` to `Problem`. It supplies positive
+thermal diffusivity, nonnegative expansion coefficient, a gravity vector pointing
+downwards, constant reference temperature, source, initial temperature and an
+independent boundary map. Reuse `Dirichlet` for prescribed temperature and
+`DiffusiveFlux` for the outward flux `-kappa grad(T) dot n`; `DiffusiveFlux()`
+means insulation. A volumetric heating rate must be divided by `rho_0 c_p`
+before supplying the temperature source. Boundary coverage is checked, and
+B1 requires zero prescribed normal velocity. `[thermal]` alone does not enable
+physics for an isothermal case.
+
+Thermal runs add `fields/temperature.pvd`, `thermal_metadata.json`, and a
+`temperature_change` outer-iteration column. Request `temperature_l2`,
+`temperature_error_l2` (needs an exact temperature), `thermal_content`, or
+`buoyancy_power` in the diagnostic list. BDF1 writes all physical fields at the
+endpoint. Failure snapshots include the available temperature without advancing
+its successful history. Isothermal runs retain their existing output files and
+columns. The complete equations and later gates are in
+[boussinesq_formulation.md](boussinesq_formulation.md) and
+[boussinesq_implementation_plan.md](boussinesq_implementation_plan.md).
+
+Thermal Newton runs check the momentum, continuity and temperature residuals
+separately, in addition to the full mixed-vector norm. Set
+`thermal.momentum_residual_scale`, `thermal.continuity_residual_scale` and
+`thermal.temperature_residual_scale` to positive characteristic equation scales
+when working in different physical units; all default to 1 for the supplied
+nondimensional example. Each normalized block must meet its own initial-relative
+and absolute tolerance. These are algebraic load-vector norms, not physical
+energy norms. Their values appear in `inner_iterations.csv` as
+`velocity_residual`, `pressure_residual` and `temperature_residual`, and the
+chosen scales are recorded in thermal metadata.

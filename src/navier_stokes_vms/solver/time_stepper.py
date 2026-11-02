@@ -10,7 +10,7 @@ import ufl
 from firedrake.exceptions import ConvergenceError
 from ufl.core.expr import Expr
 
-from navier_stokes_vms.config import Config, method_name
+from navier_stokes_vms.config import Config, ThermalOptions, method_name
 from navier_stokes_vms.discretization.function_spaces import (
     constant_pressure_null_space,
     flow_layout,
@@ -52,9 +52,11 @@ from navier_stokes_vms.postprocessing.output import (
     FieldWriter,
     open_diagnostics_csv,
     write_initial_state,
+    write_thermal_metadata,
 )
 from navier_stokes_vms.postprocessing.run_logging import IterationLogs, open_iteration_logs
 from navier_stokes_vms.problem.boundary_conditions import (
+    DiffusiveFlux,
     Dirichlet,
     Outflow,
     check_dirichlet_flux,
@@ -66,8 +68,11 @@ from navier_stokes_vms.problem.problem_definition import (
     SpaceTimeExpression,
     uses_pressure_null_space,
 )
+from navier_stokes_vms.problem.thermal_problem import check_thermal_supported
+from navier_stokes_vms.solver.field_history import FieldHistory
 from navier_stokes_vms.solver.nonlinear_solver import InnerSolver, StepSolver, StepSolveResult
 from navier_stokes_vms.solver.subscale_storage import SubscaleIterate, SubscaleStorage
+from navier_stokes_vms.solver.system_builder import galerkin_thermal_system
 
 
 class TimeStepper:
@@ -76,6 +81,7 @@ class TimeStepper:
     def __init__(
         self, config: Config, problem: Problem, folder: Path, logger: logging.Logger
     ) -> None:
+        check_thermal_supported(config, problem)
         self._config = config
         self._problem = problem
         self._logger = logger
@@ -85,22 +91,30 @@ class TimeStepper:
         self._ds = boundary_measure(mesh, degree)
         stabilization = config.stabilization
         k = config.discretization.velocity_degree
-        layout = flow_layout(stabilization)
+        thermal = problem.thermal
+        layout = flow_layout(stabilization, thermal=thermal is not None)
         if stabilization.method == "vms" and stabilization.subscale_space == "oss":
             # ξ_h, ζ_h are unknowns of the inner solve; they start at zero and then carry over.
             space = oss_space(mesh, k, stabilization.pressure_subscale)
         else:
-            space = mixed_space(mesh, k, config.discretization.pressure_degree)
+            space = mixed_space(
+                mesh, k, config.discretization.pressure_degree, k if thermal is not None else None
+            )
         velocity_space = space.sub(layout.index("velocity")).collapse()
         self._solution = fd.Function(space)
         fields = layout.bind(self._solution.subfunctions)
         self._velocity, self._pressure = fields["velocity"], fields["pressure"]
         self._pressure.rename("pressure")
-        self._history = [
-            fd.Function(velocity_space, name="velocity") for _ in range(self._history_levels())
-        ]
-        self._endpoint = fd.Function(velocity_space, name="velocity")
-        self._velocity_history = fd.Function(velocity_space)
+        self._velocity_states = FieldHistory(velocity_space, self._history_levels(), "velocity")
+        self._temperature = fields.get("temperature")
+        self._temperature_states = None
+        if thermal is not None:
+            self._temperature.rename("temperature")
+            self._temperature_states = FieldHistory(
+                space.sub(layout.index("temperature")).collapse(),
+                self._history_levels(),
+                "temperature",
+            )
         self._frozen = fd.Function(velocity_space)
         self._alpha0 = fd.Constant(1.0)
         self._t_new = fd.Constant(0.0)
@@ -112,7 +126,7 @@ class TimeStepper:
         level = SolveLevel(
             self._alpha0,
             fd.Constant(config.time.dt),
-            self._velocity_history,
+            self._velocity_states.history,
             self._at_solve_level(problem.forcing, x),
         )
         conditions = problem.boundary_conditions
@@ -141,7 +155,9 @@ class TimeStepper:
             if chi.is_dynamic or chi.is_nonlinear:
                 quadrature_space = subscale_space(mesh, degree)
             if chi.is_dynamic:
-                self._subscales = SubscaleStorage(quadrature_space, len(self._history))
+                self._subscales = SubscaleStorage(
+                    quadrature_space, len(self._velocity_states.levels)
+                )
                 u_sub_history = self._subscales.history
             if chi.is_nonlinear:
                 u_sub_iterate = fd.Function(quadrature_space)
@@ -177,8 +193,36 @@ class TimeStepper:
                 )
             return form
 
-        newton = coupled(a, u, tau_t, tau_c)
-        picard = coupled(a_hat, frozen, tau_t_hat, tau_c_hat)
+        if thermal is not None:
+            scalar_level = SolveLevel(
+                self._alpha0,
+                level.dt,
+                self._temperature_states.history,
+                self._at_solve_level(thermal.source, x),
+            )
+            newton = galerkin_thermal_system(
+                self._solution,
+                layout,
+                nu,
+                level,
+                scalar_level,
+                thermal,
+                self._dx,
+                config.convection.form,
+                (config.thermal or ThermalOptions()).convection,
+            )
+            for name, bc in thermal.boundary_conditions.items():
+                if isinstance(bc, DiffusiveFlux) and bc.value is not None:
+                    newton += (
+                        self._at_solve_level(bc.value, x)
+                        * tests["temperature"]
+                        * named_boundary_measure(self._ds, (name,), problem.boundary_tags)
+                    )
+            picard = newton
+        else:
+            newton = coupled(a, u, tau_t, tau_c)
+            picard = coupled(a_hat, frozen, tau_t_hat, tau_c_hat)
+
         if chi is not None:
             if config.solver.linearization == "newton" and config.solver.newton_tau == "frozen":
                 # τ on the frozen advector, then restored after differentiating: J has no τ′,
@@ -213,6 +257,17 @@ class TimeStepper:
             for name, bc in conditions.items()
             if isinstance(bc, Dirichlet)
         ]
+        if thermal is not None:
+            bcs.extend(
+                dirichlet_bc(
+                    space.sub(layout.index("temperature")),
+                    name,
+                    self._at_solve_level(bc.value, x),
+                    problem.boundary_tags,
+                )
+                for name, bc in thermal.boundary_conditions.items()
+                if isinstance(bc, Dirichlet)
+            )
         null_space = (
             constant_pressure_null_space(space) if uses_pressure_null_space(problem) else None
         )
@@ -221,7 +276,7 @@ class TimeStepper:
         self._zero_mean_pressure = null_space is not None
         self._boundary_velocity = None
         self._boundary_bcs = []
-        if null_space is not None and bcs:
+        if null_space is not None and any(isinstance(bc, Dirichlet) for bc in conditions.values()):
             self._boundary_velocity = fd.Function(velocity_space)
             self._boundary_bcs = [
                 dirichlet_bc(
@@ -246,8 +301,26 @@ class TimeStepper:
                 fd.FunctionSpace(mesh, "CG", output_degree), name="pressure"
             )
             reported_pressure = self._physical_pressure - self._pressure_offset
+        thermal_options = config.thermal or ThermalOptions()
+        residual_scales = (
+            None
+            if thermal is None
+            else {
+                "velocity": thermal_options.momentum_residual_scale,
+                "pressure": thermal_options.continuity_residual_scale,
+                "temperature": thermal_options.temperature_residual_scale,
+            }
+        )
         inner = InnerSolver(
-            self._solution, newton, picard, frozen, bcs, null_space, config.solver, jacobian
+            self._solution,
+            newton,
+            picard,
+            frozen,
+            bcs,
+            null_space,
+            config.solver,
+            jacobian,
+            residual_scales,
         )
         self._step_solver = StepSolver(
             inner, self._solution, self._iterate, self._dx, config.solver, layout
@@ -261,7 +334,7 @@ class TimeStepper:
                     velocity=u,
                     advector=a,
                     subscale=self._u_sub,
-                    endpoint_velocity=self._history[0],
+                    endpoint_velocity=self._velocity_states.levels[0],
                     endpoint_subscale=None if self._subscales is None else self._subscales.latest,
                     zeta=zeta,
                     tau_m=tau_m,
@@ -286,7 +359,7 @@ class TimeStepper:
             subscale_velocity = self._iterate.value
         self._diagnostic_state = DiagnosticState(
             problem=problem,
-            velocity=self._history[0],
+            velocity=self._velocity_states.levels[0],
             pressure=reported_pressure,
             velocity_time=self._t_new,
             pressure_time=self._pressure_time,
@@ -298,6 +371,9 @@ class TimeStepper:
             subscale_velocity=subscale_velocity,
             subscale_time=subscale_time,
             conservation=self._conservation,
+            temperature=None
+            if self._temperature_states is None
+            else self._temperature_states.levels[0],
         )
         self._fields = FieldWriter(folder)
         self._folder = folder
@@ -317,22 +393,30 @@ class TimeStepper:
     @property
     def velocity(self) -> fd.Function:
         """Endpoint velocity u_h of the last completed step."""
-        return self._history[0]
+        return self._velocity_states.levels[0]
 
     @property
     def pressure(self) -> fd.Function:
         """Reported pressure of the last completed step at its solve level, physical for EMAC."""
         return self._reported_pressure
 
+    @property
+    def temperature(self) -> fd.Function | None:
+        """Endpoint temperature of the last successful step, when thermal physics is active."""
+        return None if self._temperature_states is None else self._temperature_states.levels[0]
+
     def run(self, after_step: Callable[[int, float], bool] | None = None) -> None:
         """Integrate from t = 0 to t_end, writing iteration logs, diagnostics and fields."""
         comm = self._problem.mesh.comm
         steps = round(self._config.time.t_end / self._config.time.dt)
-        logs = open_iteration_logs(comm, self._folder)
+        logs = open_iteration_logs(
+            comm, self._folder, ("temperature",) if self._temperature is not None else ()
+        )
         columns = diagnostic_columns(self._config.output.diagnostics, self._problem)
         diagnostics = open_diagnostics_csv(comm, self._folder, columns)
         try:
             self._initialise()
+            write_thermal_metadata(comm, self._folder, self._problem, self._config)
             write_initial_state(comm, self._folder, self._initial_state())
             for step in range(1, steps + 1):
                 self._step(step, step == steps, logs, diagnostics)
@@ -343,6 +427,7 @@ class TimeStepper:
                             self.pressure,
                             self._time(step),
                             float(self._pressure_time),
+                            self.temperature,
                         )
                     break
         finally:
@@ -351,15 +436,22 @@ class TimeStepper:
 
     def _initialise(self) -> None:
         x = fd.SpatialCoordinate(self._problem.mesh)
-        self._history[0].interpolate(self._problem.initial_velocity(x))
+        self._velocity_states.levels[0].interpolate(self._problem.initial_velocity(x))
         timing = self._config.time
         if timing.startup == "exact_history":
             first = step_coefficients(timing.scheme, timing.startup, step=1)
             for level in range(1, len(first.history_weights)):
                 earlier = fd.Constant(-level * timing.dt)
-                self._history[level].interpolate(self._problem.exact_velocity(x, earlier))
-        self._velocity.assign(self._history[0])
+                self._velocity_states.levels[level].interpolate(
+                    self._problem.exact_velocity(x, earlier)
+                )
+        self._velocity.assign(self._velocity_states.levels[0])
         self._pressure.assign(0.0)
+        if self._temperature_states is not None:
+            self._temperature_states.levels[0].interpolate(
+                self._problem.thermal.initial_temperature(x)
+            )
+            self._temperature.assign(self._temperature_states.levels[0])
 
     def _initial_state(self) -> dict[str, float]:
         """|Ω|, d, and the energy and moments of u_h(0), which fix the conservation-run scales.
@@ -394,12 +486,24 @@ class TimeStepper:
                     relative_residual=row.relative_residual,
                     update_norm=row.update_norm,
                     linear_iterations=row.linear_iterations,
+                    **(
+                        {}
+                        if row.field_residuals is None
+                        else {
+                            f"{name}_residual": value for name, value in row.field_residuals.items()
+                        }
+                    ),
                 )
             logs.outer.write(
                 step=step,
                 time=t,
                 outer_iteration=outer.iteration,
                 inner_iterations=len(outer.inner.iterations) - 1,
+                **(
+                    {"temperature_change": outer.field_changes["temperature"]}
+                    if self._temperature is not None
+                    else {}
+                ),
                 velocity_change=outer.velocity_change,
                 pressure_change=outer.pressure_change,
                 subscale_change=outer.subscale_change,
@@ -461,7 +565,9 @@ class TimeStepper:
         )
         vtk_every = self._config.output.vtk_every
         if vtk_every and (step % vtk_every == 0 or last):
-            self._fields.write(self._history[0], self.pressure, t, float(self._pressure_time))
+            self._fields.write(
+                self.velocity, self.pressure, t, float(self._pressure_time), self.temperature
+            )
 
     def _normalize_pressure(self) -> None:
         if self._zero_mean_pressure:
@@ -489,8 +595,14 @@ class TimeStepper:
                 raise ValueError(
                     f"step {step}, solve time {float(self._pressure_time):g}: {error}"
                 ) from error
-        weighted = zip(coefficients.history_weights, self._history, strict=False)
-        self._velocity_history.assign(sum(weight * velocity for weight, velocity in weighted))
+        if self._problem.thermal is not None and self._boundary_velocity is not None:
+            normal = fd.FacetNormal(self._problem.mesh)
+            flux_square = fd.assemble(ufl.dot(self._boundary_velocity, normal) ** 2 * self._ds)
+            if flux_square > 1e-20:
+                raise ValueError("B1 thermal boundaries require zero normal velocity")
+        self._velocity_states.form_history(coefficients)
+        if self._temperature_states is not None:
+            self._temperature_states.form_history(coefficients)
         if self._subscales is not None:
             self._subscales.form_history(coefficients)
             if self._iterate is not None:
@@ -499,18 +611,16 @@ class TimeStepper:
     def _advance(self, coefficients: StepCoefficients) -> None:
         if self._subscales is not None:
             self._subscales.store(self._u_sub, coefficients)
-        self._endpoint.assign(
-            coefficients.extrapolation_weight_solve * self._velocity
-            + coefficients.extrapolation_weight_old * self._history[0]
-        )
-        for level in range(len(self._history) - 1, 0, -1):
-            self._history[level].assign(self._history[level - 1])
-        self._history[0].assign(self._endpoint)
+        self._velocity_states.advance(self._velocity, coefficients)
+        if self._temperature_states is not None:
+            self._temperature_states.advance(self._temperature, coefficients)
 
     def _fail(self, step: int, result: StepSolveResult) -> None:
         solve_time = float(self._pressure_time)
-        self._endpoint.assign(self._velocity)
-        self._fields.write(self._endpoint, self.pressure, solve_time, solve_time)
+        self._velocity_states.endpoint.assign(self._velocity)
+        self._fields.write(
+            self._velocity_states.endpoint, self.pressure, solve_time, solve_time, self._temperature
+        )
         self._logger.error("Step %d: %s. Iteration history:", step, result.failure_reason)
         for outer in result.iterations:
             self._logger.error(

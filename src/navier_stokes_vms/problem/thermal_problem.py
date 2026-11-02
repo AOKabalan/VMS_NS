@@ -1,0 +1,102 @@
+"""Thermal problem data and validation for the Boussinesq extension."""
+
+from __future__ import annotations
+
+import math
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
+
+from ufl.core.expr import Expr
+
+from navier_stokes_vms.config import Config, validate_config
+from navier_stokes_vms.problem.boundary_conditions import DiffusiveFlux, Dirichlet, Outflow
+
+if TYPE_CHECKING:
+    from navier_stokes_vms.problem.problem_definition import Problem
+
+
+@dataclass(frozen=True)
+class ThermalProblem:
+    """Constant thermal properties, independent boundary data and optional exact temperature."""
+
+    diffusivity: float
+    expansion_coefficient: float
+    gravity: tuple[float, ...]
+    reference_temperature: float
+    source: Callable[[Expr, Expr], Expr]
+    initial_temperature: Callable[[Expr], Expr]
+    boundary_conditions: Mapping[str, Dirichlet | DiffusiveFlux]
+    exact_temperature: Callable[[Expr, Expr], Expr] | None = None
+    scaling: Literal["dimensional", "nondimensional"] = "dimensional"
+
+
+def check_thermal_problem(problem: Problem) -> None:
+    """Check material values and complete, independent thermal boundary coverage."""
+    thermal = problem.thermal
+    if thermal is None:
+        return
+    if thermal.scaling not in ("dimensional", "nondimensional"):
+        raise ValueError("thermal scaling must be dimensional or nondimensional")
+    for name, value, positive in (
+        ("viscosity", problem.viscosity, True),
+        ("diffusivity", thermal.diffusivity, True),
+        ("expansion_coefficient", thermal.expansion_coefficient, False),
+    ):
+        if (
+            not isinstance(value, int | float)
+            or isinstance(value, bool)
+            or not math.isfinite(value)
+            or (value <= 0 if positive else value < 0)
+        ):
+            raise ValueError(
+                f"thermal {name} must be finite and {'positive' if positive else 'nonnegative'}"
+            )
+    if (
+        not isinstance(thermal.reference_temperature, int | float)
+        or isinstance(thermal.reference_temperature, bool)
+        or not math.isfinite(thermal.reference_temperature)
+    ):
+        raise ValueError("thermal reference_temperature must be finite")
+    if len(thermal.gravity) != problem.mesh.geometric_dimension or not all(
+        isinstance(g, int | float) and not isinstance(g, bool) and math.isfinite(g)
+        for g in thermal.gravity
+    ):
+        raise ValueError("thermal gravity must be finite and match the mesh dimension")
+    if set(thermal.boundary_conditions) != set(problem.boundary_tags):
+        raise ValueError("thermal boundaries must cover exactly the named mesh boundaries")
+    if any(
+        not isinstance(bc, Dirichlet | DiffusiveFlux) for bc in thermal.boundary_conditions.values()
+    ):
+        raise ValueError("thermal boundaries require Dirichlet or DiffusiveFlux conditions")
+
+
+def check_thermal_supported(config: Config, problem: Problem) -> None:
+    """Reject options outside the current B1 Galerkin thermal implementation."""
+    if problem.thermal is None:
+        if config.thermal is not None:
+            raise ValueError("[thermal] requires a case with thermal problem data")
+        return
+    validate_config(config)
+    check_thermal_problem(problem)
+    if config.stabilization.method != "none":
+        raise ValueError("B1 thermal runs require stabilization.method = 'none'")
+    if config.time.scheme != "bdf1" or config.time.startup != "lower_order":
+        raise ValueError("B1 thermal runs require BDF1 with lower_order startup")
+    if config.solver.linearization != "newton" or config.solver.picard_iterations_before_newton:
+        raise ValueError("B1 thermal runs require Newton without Picard warm-up")
+    if config.viscosity.form != "laplacian" or config.convection.form not in (
+        "skew_symmetric_1",
+        "nonconservative",
+    ):
+        raise ValueError(
+            "B1 thermal runs require Laplacian viscosity and "
+            "skew_symmetric_1 or nonconservative momentum convection"
+        )
+    if any(isinstance(bc, Outflow) for bc in problem.boundary_conditions.values()):
+        raise ValueError("B1 thermal runs require periodic or closed velocity boundaries")
+    if config.discretization.velocity_degree != config.discretization.pressure_degree + 1:
+        raise ValueError("B1 thermal Galerkin runs require Taylor–Hood velocity/pressure degrees")
+    degree = config.thermal.temperature_degree if config.thermal is not None else None
+    if degree is not None and degree != config.discretization.velocity_degree:
+        raise ValueError("B1 temperature degree must equal the velocity degree")

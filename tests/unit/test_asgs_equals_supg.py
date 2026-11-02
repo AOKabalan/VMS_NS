@@ -115,7 +115,7 @@ def test_dynamic_asgs_step_equals_independent_classical_form(
     problem = build_problem(config)
     stepper = TimeStepper(config, problem, tmp_path, logging.getLogger(__name__))
     rng = np.random.default_rng(7)
-    velocities, subscales = stepper._history, stepper._subscales._levels
+    velocities, subscales = stepper._velocity_states.levels, stepper._subscales._levels
     for field in (*velocities, *subscales):
         field.dat.data[:] = rng.standard_normal(field.dat.data.shape)
     stepper._set_level(2, step_coefficients(scheme, "lower_order", 2))

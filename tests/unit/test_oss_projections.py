@@ -99,7 +99,7 @@ def test_converged_subscale_is_orthogonal_to_the_velocity_space(
     x = fd.SpatialCoordinate(problem.mesh)
     dt = fd.Constant(config.time.dt)
     level = SolveLevel(
-        stepper._alpha0, dt, stepper._velocity_history, problem.forcing(x, stepper._t_new)
+        stepper._alpha0, dt, stepper._velocity_states.history, problem.forcing(x, stepper._t_new)
     )
     a = u + stepper._iterate.value if chi.is_nonlinear else u
     tau_m, _ = stabilization_parameters(a, problem.viscosity, k, 4.0, 2.0)
