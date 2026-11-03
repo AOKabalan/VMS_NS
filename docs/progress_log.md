@@ -1925,3 +1925,30 @@ profiles, excluding timings. Trapezoid-versus-Simpson rate changes are below
 rerun for this configuration/data checkpoint. Diff checks, JSON/report
 consistency and local links passed. Full reference/Ri/Re/stabilization studies,
 dry billows and cloud diagnostics remain pending under the bounded budget.
+
+## Downloaded unstratified KH reference data (2026-11-03)
+
+At the owner's request, downloaded the complete public
+`KHdata/KelvinHelmholtz` repository at commit
+`42eba2cf80ee5e9d59903274fd72c7f2f5d93cbe`. Stored the unchanged 24,438,580-byte
+archive, provenance/checksum manifest and usage notes under
+`data/references/kelvin_helmholtz_unstratified/`; all 495 files are unpacked
+locally under its ignored `upstream/` directory (92,312,986 bytes).
+
+Confirmed the owner's observation: this is a constant-density incompressible
+Navier–Stokes benchmark, without thermal buoyancy or moisture. Its proposed
+reference results at Re=100/1000/10000 and its separate sensitivity experiments
+are identified explicitly. No Boussinesq validation is claimed from this data.
+
+Verification: all 495 extracted files match the upstream Git blob IDs and have
+recorded SHA-256 checksums; gzip integrity passed. All 61 time-series tables
+and 401 spectra parse with finite values; time-series axes increase and
+physical/scaled time columns obey the factor 28. Five VTK headers were checked.
+Upstream plotting labels confirm the half-factor energy convention and
+normalized vorticity thickness; independent initial-condition integration
+matches the finest Re=1000 initial energy within 3e-15. A conflicting Reynolds
+number in one upstream perturbation README is documented without editing it.
+
+No solver, case, config or test was changed and no new simulation was launched.
+The new reference README records paths, source, revision, extraction command,
+table conventions and archive integrity information.
