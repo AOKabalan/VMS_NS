@@ -60,6 +60,9 @@ The stratified Kelvin–Helmholtz case with passive moisture is available as a
 growth-rate and cloud studies remain later checkpoints.
 Optional vertical clustering and horizontal-mean profiles support the
 [startup controls and mesh checks](docs/verification/kelvin_helmholtz_b72.md).
+Optional Fourier profile output supports the
+[bounded growth pilot](docs/verification/kelvin_helmholtz_b73.md); full growth
+validation and cloud visualization remain pending.
 
 ## Quick start
 

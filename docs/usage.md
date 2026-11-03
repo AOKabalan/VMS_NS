@@ -647,3 +647,38 @@ vertical-energy histories. Their difference is not perturbation energy.
 The [B7.2 report](verification/kelvin_helmholtz_b72.md) shows that zero-seed
 motion still dominates the tested seeded runs. It establishes no clean fitting
 window; further resolution and mode/control checks must precede a B7.3 rate fit.
+
+## Kelvin–Helmholtz Fourier growth measurements (B7.3)
+
+Add `horizontal_fourier_modes = [1, 2]` under `[output]` with a positive
+`horizontal_profiles_every` to record sine/cosine coefficients of every named
+field alongside its mean. Indices are distinct positive integers, with physical
+wavenumber `2*pi*m/domain_length`. The option defaults to an empty tuple and
+is omitted from existing resolved configs when unused. Single-wave pilots
+measure index 1 and its second harmonic. Horizontal weights are overintegrated;
+metadata records their normalization and quadrature.
+
+```bash
+python scripts/run_simulation.py configs/boussinesq/kh_growth_pilot_control.toml
+python scripts/run_simulation.py configs/boussinesq/kh_growth_pilot_seeded.toml
+python scripts/analyse_kh_growth.py \
+  results/kelvin_helmholtz_shear_layer/b73_pilot_control \
+  results/kelvin_helmholtz_shear_layer/b73_pilot_seeded \
+  --window 10 20 --output /tmp/kh_growth.json --figure /tmp/kh_growth.png
+```
+
+The analysis reads completed matched runs only. Omitting `--window` exports
+energies without fitting. The explicit window must contain at least six positive
+energy samples. Results include total-energy and Fourier-energy fits separately,
+fit residuals, half-window slopes, shape overlap, control contamination and
+recorded base-profile drift. The seeded-minus-control mode energy is computed
+from coefficient differences, never by subtracting two energies. Check the
+reported second harmonic and perturbation amplitude before interpreting a fit
+as linear growth. Its OLS error is not a mesh-convergence certificate.
+
+`kh_growth_coarse_*` and `kh_growth_pilot_*` provide the bounded 32×48/48×72
+comparison at Ri=0.1, Re=1000, dt=0.05, to t=20. They are preliminary resolutions.
+`kh_growth_reference_timing.toml` measures three steps on 128×192.
+The 36 configs under `configs/boussinesq/kh_growth/` prepare the full
+Ri=0/0.1/0.3, Re=1000/2000, reference/refined/half-dt matched-pair matrix.
+Preparing these inputs does not establish that the corresponding runs passed.

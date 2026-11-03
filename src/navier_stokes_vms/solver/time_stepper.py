@@ -578,6 +578,7 @@ class TimeStepper:
                     self._problem.horizontal_profile_geometry,
                     self.velocity,
                     {name: self.scalar(name) for name in self._scalar_data},
+                    self._config.output.horizontal_fourier_modes,
                 )
                 profiles.write(0, 0.0)
             for step in range(1, steps + 1):

@@ -1,0 +1,77 @@
+case = "kelvin_helmholtz_shear_layer"
+run_name = "b73_ri010_re1000_reference_seeded"
+
+[case_parameters]
+richardson = 0.1
+reynolds = 1000
+epsilon = 0.0001
+epsilon_noise = 0.0
+moisture = false
+
+[mesh]
+cells = [
+    128,
+    192,
+]
+
+[discretization]
+velocity_degree = 1
+pressure_degree = 1
+
+[time]
+scheme = "bdf2"
+dt = 0.05
+t_end = 20.0
+startup = "lower_order"
+
+[stabilization]
+method = "vms"
+subscale_space = "oss"
+subscale_dynamics = "dynamic"
+scale_splitting = "nonlinear"
+c1 = 4.0
+c2 = 2.0
+pressure_subscale = true
+
+[convection]
+form = "skew_symmetric_1"
+
+[viscosity]
+form = "laplacian"
+
+[solver]
+linearization = "newton"
+newton_tau = "frozen"
+picard_iterations_before_newton = 0
+inner_rtol = 1e-10
+inner_atol = 1e-12
+inner_max_iterations = 30
+outer_rtol = 1e-08
+outer_max_iterations = 30
+subscale_update = "accelerated"
+subscale_rtol = 1e-10
+subscale_max_iterations = 50
+
+[solver.petsc]
+ksp_type = "preonly"
+pc_type = "lu"
+pc_factor_mat_solver_type = "mumps"
+mat_mumps_icntl_24 = 1
+
+[output]
+vtk_every = 0
+diagnostics = [
+    "kinetic_energy",
+    "vertical_kinetic_energy",
+    "divergence_l2",
+    "advective_cfl",
+    "thermal_content",
+    "temperature_extrema",
+    "boussinesq_energy_budget",
+]
+console_level = "INFO"
+horizontal_profiles_every = 10
+horizontal_fourier_modes = [
+    1,
+    2,
+]

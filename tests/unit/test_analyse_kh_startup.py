@@ -4,7 +4,9 @@ import csv
 import importlib.util
 import json
 from pathlib import Path
+from types import ModuleType
 
+import numpy as np
 import pytest
 
 SPEC = importlib.util.spec_from_file_location(
@@ -151,3 +153,89 @@ def test_unmatched_pairs_are_rejected(tmp_path: Path, mismatch: str) -> None:
         path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="exactly one"):
         ANALYSIS.compare(paths)
+
+
+@pytest.fixture
+def growth(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "scripts"))
+    return importlib.import_module("analyse_kh_growth")
+
+
+def test_fourier_growth_uses_difference_coefficients_before_squaring(
+    tmp_path: Path, growth: ModuleType
+) -> None:
+    times = np.arange(7) * 0.1
+    rate = 0.17
+    folders = []
+    for name, epsilon, amplitude in (("control", 0, 0.3), ("seeded", 0.1, 0.4)):
+        folder = fixture_run(tmp_path / name, epsilon)
+        folders.append(folder)
+        config = folder / "config_resolved.toml"
+        config.write_text(config.read_text().replace("t_end = 0.2", "t_end = 0.6"))
+        (folder / "horizontal_profiles.json").write_text(
+            json.dumps(
+                {
+                    "fourier_modes": [1],
+                    "heights": [-1, 0, 1],
+                    "length": 2 * np.pi,
+                }
+            )
+        )
+        write_table(
+            folder / "horizontal_profiles.csv",
+            [
+                {
+                    "step": step,
+                    "time": time,
+                    "z": z,
+                    "velocity_x": z,
+                    "velocity_y": 0,
+                    "temperature": z,
+                    "velocity_y_mode_1_cos": amplitude * np.exp(rate * time) * (z + 2),
+                    "velocity_y_mode_1_sin": 0,
+                }
+                for step, time in enumerate(times)
+                for z in (-1, 0, 1)
+            ],
+        )
+        write_table(
+            folder / "diagnostics.csv",
+            [
+                {
+                    "step": step,
+                    "time": time,
+                    "vertical_kinetic_energy": 20 + amplitude**2 * np.exp(2 * rate * time),
+                    "advective_cfl": 0.1,
+                    "boussinesq_energy_budget_residual": 1e-13,
+                }
+                for step, time in enumerate(times[1:], 1)
+            ],
+        )
+    report = growth.compare(folders, 1, (0, 0.6))
+    pair = report["pairs"][0]
+    expected = 2 * np.pi * (26 / 3) * 0.1**2 * np.exp(2 * rate * times)
+    np.testing.assert_allclose(pair["energies"]["difference_mode"], expected, rtol=1e-13)
+    assert pair["fits"]["difference_mode"]["sigma"] == pytest.approx(rate, abs=1e-14)
+    assert pair["fits"]["difference_mode"]["rms_log_energy_residual"] < 1e-14
+    assert pair["maximum_control_over_difference_mode"] == pytest.approx(9)
+    assert pair["window_endpoint_mode_shape_coherence"] == pytest.approx(1)
+    output = tmp_path / "growth.json"
+    assert (
+        growth.main([*(str(p) for p in folders), "--window", "0", "0.6", "--output", str(output)])
+        == 0
+    )
+    assert json.loads(output.read_text())["phase"] == "B7.3"
+    with pytest.raises(ValueError, match="not recorded"):
+        growth.compare(folders, 2, None)
+
+
+def test_growth_fits_reject_bad_windows_and_report_curvature(growth: ModuleType) -> None:
+    times = np.linspace(0, 1, 11)
+    exponential = np.exp(0.4 * times)
+    curved = np.exp(0.4 * times + times**2)
+    assert growth.fit_energy(times, curved, (0, 1))["half_window_sigma_difference"] > 0.4
+    for window in ((0.2, 0.2), (0, 2), (0, float("nan")), (0, 0.1)):
+        with pytest.raises(ValueError):
+            growth.fit_energy(times, exponential, window)
+    with pytest.raises(ValueError, match="positive finite"):
+        growth.fit_energy(times, np.zeros_like(times), (0, 1))

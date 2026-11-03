@@ -1,0 +1,529 @@
+{
+  "window_sensitivity": {
+    "0:3": [
+      {
+        "cells": [
+          32,
+          48
+        ],
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              0.0,
+              3.0
+            ],
+            "samples": 7,
+            "sigma": 0.2384623495489086,
+            "rms_log_energy_residual": 0.0681716132737885,
+            "maximum_log_energy_residual": 0.12313547030960259,
+            "ols_sigma_standard_error": 0.015243636141601806,
+            "half_window_sigmas": [
+              0.1345093631840416,
+              0.2801439857819671
+            ],
+            "half_window_sigma_difference": 0.14563462259792548
+          },
+          "difference_mode": {
+            "window": [
+              0.0,
+              3.0
+            ],
+            "samples": 7,
+            "sigma": 0.23846234954881013,
+            "rms_log_energy_residual": 0.06817161327351154,
+            "maximum_log_energy_residual": 0.12313547030897332,
+            "ols_sigma_standard_error": 0.015243636141539878,
+            "half_window_sigmas": [
+              0.1345093631844554,
+              0.28014398578187616
+            ],
+            "half_window_sigma_difference": 0.14563462259742077
+          },
+          "raw_vertical": {
+            "window": [
+              0.0,
+              3.0
+            ],
+            "samples": 61,
+            "sigma": 0.8464353404044708,
+            "rms_log_energy_residual": 1.0437782647576903,
+            "maximum_log_energy_residual": 4.918211871412695,
+            "ols_sigma_standard_error": 0.07717939969613204,
+            "half_window_sigmas": [
+              2.0118191408721997,
+              0.21714161723155959
+            ],
+            "half_window_sigma_difference": 1.79467752364064
+          }
+        },
+        "shape_coherence": 0.6896944708036568
+      },
+      {
+        "cells": [
+          48,
+          72
+        ],
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              0.0,
+              3.0
+            ],
+            "samples": 7,
+            "sigma": 0.2422953911059381,
+            "rms_log_energy_residual": 0.06972274262954219,
+            "maximum_log_energy_residual": 0.12635131244608155,
+            "ols_sigma_standard_error": 0.015590479209737877,
+            "half_window_sigmas": [
+              0.13567278753169065,
+              0.2843575488409941
+            ],
+            "half_window_sigma_difference": 0.14868476130930347
+          },
+          "difference_mode": {
+            "window": [
+              0.0,
+              3.0
+            ],
+            "samples": 7,
+            "sigma": 0.24229539110601372,
+            "rms_log_energy_residual": 0.06972274262985523,
+            "maximum_log_energy_residual": 0.1263513124465394,
+            "ols_sigma_standard_error": 0.015590479209807875,
+            "half_window_sigmas": [
+              0.1356727875314063,
+              0.28435754884143627
+            ],
+            "half_window_sigma_difference": 0.14868476131002997
+          },
+          "raw_vertical": {
+            "window": [
+              0.0,
+              3.0
+            ],
+            "samples": 61,
+            "sigma": 0.8315685686059499,
+            "rms_log_energy_residual": 0.9347231865662481,
+            "maximum_log_energy_residual": 3.5704907226739757,
+            "ols_sigma_standard_error": 0.06911561282413371,
+            "half_window_sigmas": [
+              1.9377652600501127,
+              0.21013674696175738
+            ],
+            "half_window_sigma_difference": 1.7276285130883553
+          }
+        },
+        "shape_coherence": 0.6846421187062974
+      }
+    ],
+    "5:10": [
+      {
+        "cells": [
+          32,
+          48
+        ],
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              5.0,
+              10.0
+            ],
+            "samples": 11,
+            "sigma": 0.14841290317203792,
+            "rms_log_energy_residual": 0.0378851839837229,
+            "maximum_log_energy_residual": 0.07050820642262468,
+            "ols_sigma_standard_error": 0.003993449032103194,
+            "half_window_sigmas": [
+              0.17626012292948995,
+              0.1281981705912519
+            ],
+            "half_window_sigma_difference": 0.04806195233823804
+          },
+          "difference_mode": {
+            "window": [
+              5.0,
+              10.0
+            ],
+            "samples": 11,
+            "sigma": 0.14841290317206984,
+            "rms_log_energy_residual": 0.03788518398379143,
+            "maximum_log_energy_residual": 0.07050820642250422,
+            "ols_sigma_standard_error": 0.003993449032110418,
+            "half_window_sigmas": [
+              0.1762601229295676,
+              0.12819817059121366
+            ],
+            "half_window_sigma_difference": 0.04806195233835395
+          },
+          "raw_vertical": {
+            "window": [
+              5.0,
+              10.0
+            ],
+            "samples": 101,
+            "sigma": -0.006091227827888485,
+            "rms_log_energy_residual": 0.0017013651033522985,
+            "maximum_log_energy_residual": 0.004215447695143676,
+            "ols_sigma_standard_error": 5.86503300753718e-05,
+            "half_window_sigmas": [
+              -0.006744436198724764,
+              -0.004813692318223245
+            ],
+            "half_window_sigma_difference": 0.0019307438805015193
+          }
+        },
+        "shape_coherence": 0.977408491205419
+      },
+      {
+        "cells": [
+          48,
+          72
+        ],
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              5.0,
+              10.0
+            ],
+            "samples": 11,
+            "sigma": 0.15101884962095719,
+            "rms_log_energy_residual": 0.03783781755502912,
+            "maximum_log_energy_residual": 0.07042355293162061,
+            "ols_sigma_standard_error": 0.003988456172126517,
+            "half_window_sigmas": [
+              0.17882789230996,
+              0.13082910183525875
+            ],
+            "half_window_sigma_difference": 0.047998790474701236
+          },
+          "difference_mode": {
+            "window": [
+              5.0,
+              10.0
+            ],
+            "samples": 11,
+            "sigma": 0.15101884962089168,
+            "rms_log_energy_residual": 0.03783781755495229,
+            "maximum_log_energy_residual": 0.07042355293151292,
+            "ols_sigma_standard_error": 0.003988456172118418,
+            "half_window_sigmas": [
+              0.17882789230983598,
+              0.1308291018352302
+            ],
+            "half_window_sigma_difference": 0.047998790474605785
+          },
+          "raw_vertical": {
+            "window": [
+              5.0,
+              10.0
+            ],
+            "samples": 101,
+            "sigma": -0.0035532733384997205,
+            "rms_log_energy_residual": 0.002393362163151496,
+            "maximum_log_energy_residual": 0.0057569542480245366,
+            "ols_sigma_standard_error": 8.250520748436595e-05,
+            "half_window_sigmas": [
+              -0.004892661726056151,
+              -0.0017847243606936272
+            ],
+            "half_window_sigma_difference": 0.003107937365362524
+          }
+        },
+        "shape_coherence": 0.9776656173760464
+      }
+    ],
+    "10:15": [
+      {
+        "cells": [
+          32,
+          48
+        ],
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              10.0,
+              15.0
+            ],
+            "samples": 11,
+            "sigma": 0.10971271928513679,
+            "rms_log_energy_residual": 0.00192998795589209,
+            "maximum_log_energy_residual": 0.004140744559879672,
+            "ols_sigma_standard_error": 0.00020343859324371973,
+            "half_window_sigmas": [
+              0.11110676975815736,
+              0.10985096656582354
+            ],
+            "half_window_sigma_difference": 0.0012558031923338292
+          },
+          "difference_mode": {
+            "window": [
+              10.0,
+              15.0
+            ],
+            "samples": 11,
+            "sigma": 0.10971271928511613,
+            "rms_log_energy_residual": 0.001929987955915044,
+            "maximum_log_energy_residual": 0.004140744560027443,
+            "ols_sigma_standard_error": 0.00020343859324613932,
+            "half_window_sigmas": [
+              0.11110676975822836,
+              0.10985096656574689
+            ],
+            "half_window_sigma_difference": 0.001255803192481475
+          },
+          "raw_vertical": {
+            "window": [
+              10.0,
+              15.0
+            ],
+            "samples": 101,
+            "sigma": -0.0017564885497759431,
+            "rms_log_energy_residual": 0.0009831568489133413,
+            "maximum_log_energy_residual": 0.002305415613374294,
+            "ols_sigma_standard_error": 3.3891886927158776e-05,
+            "half_window_sigmas": [
+              -0.0024293075287842823,
+              -0.0011300381500182965
+            ],
+            "half_window_sigma_difference": 0.0012992693787659858
+          }
+        },
+        "shape_coherence": 0.9990419930478415
+      },
+      {
+        "cells": [
+          48,
+          72
+        ],
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              10.0,
+              15.0
+            ],
+            "samples": 11,
+            "sigma": 0.11194904127508003,
+            "rms_log_energy_residual": 0.002076220048437317,
+            "maximum_log_energy_residual": 0.004755788202700395,
+            "ols_sigma_standard_error": 0.00021885280922556794,
+            "half_window_sigmas": [
+              0.11359485194710815,
+              0.11186514301326243
+            ],
+            "half_window_sigma_difference": 0.0017297089338457194
+          },
+          "difference_mode": {
+            "window": [
+              10.0,
+              15.0
+            ],
+            "samples": 11,
+            "sigma": 0.11194904127511322,
+            "rms_log_energy_residual": 0.002076220048431913,
+            "maximum_log_energy_residual": 0.004755788202683631,
+            "ols_sigma_standard_error": 0.00021885280922499833,
+            "half_window_sigmas": [
+              0.11359485194714777,
+              0.11186514301331722
+            ],
+            "half_window_sigma_difference": 0.001729708933830551
+          },
+          "raw_vertical": {
+            "window": [
+              10.0,
+              15.0
+            ],
+            "samples": 101,
+            "sigma": 0.0030656267608481693,
+            "rms_log_energy_residual": 0.002518032514132767,
+            "maximum_log_energy_residual": 0.0059265138700510134,
+            "ols_sigma_standard_error": 8.680290773768421e-05,
+            "half_window_sigmas": [
+              0.0014478066303031806,
+              0.00477201218065486
+            ],
+            "half_window_sigma_difference": 0.0033242055503516794
+          }
+        },
+        "shape_coherence": 0.9990669659349637
+      }
+    ],
+    "15:20": [
+      {
+        "cells": [
+          32,
+          48
+        ],
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              15.0,
+              20.0
+            ],
+            "samples": 11,
+            "sigma": 0.11595516942775132,
+            "rms_log_energy_residual": 0.0020903067471944904,
+            "maximum_log_energy_residual": 0.004339786780179988,
+            "ols_sigma_standard_error": 0.00022033767765174562,
+            "half_window_sigmas": [
+              0.11425639861644579,
+              0.1169157866211551
+            ],
+            "half_window_sigma_difference": 0.002659388004709301
+          },
+          "difference_mode": {
+            "window": [
+              15.0,
+              20.0
+            ],
+            "samples": 11,
+            "sigma": 0.11595516942767865,
+            "rms_log_energy_residual": 0.002090306747357003,
+            "maximum_log_energy_residual": 0.004339786780511168,
+            "ols_sigma_standard_error": 0.000220337677668876,
+            "half_window_sigmas": [
+              0.11425639861624905,
+              0.11691578662116257
+            ],
+            "half_window_sigma_difference": 0.0026593880049135266
+          },
+          "raw_vertical": {
+            "window": [
+              15.0,
+              20.0
+            ],
+            "samples": 101,
+            "sigma": 0.0015041941784920605,
+            "rms_log_energy_residual": 0.001836704355574362,
+            "maximum_log_energy_residual": 0.00437461251945491,
+            "ols_sigma_standard_error": 6.331581416184916e-05,
+            "half_window_sigmas": [
+              0.00033953775252330235,
+              0.0027643985992378836
+            ],
+            "half_window_sigma_difference": 0.0024248608467145813
+          }
+        },
+        "shape_coherence": 0.999886649900549
+      },
+      {
+        "cells": [
+          48,
+          72
+        ],
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              15.0,
+              20.0
+            ],
+            "samples": 11,
+            "sigma": 0.11780665601306013,
+            "rms_log_energy_residual": 0.0022744988608937684,
+            "maximum_log_energy_residual": 0.004577486829638433,
+            "ols_sigma_standard_error": 0.000239753231196093,
+            "half_window_sigmas": [
+              0.11600552951941213,
+              0.11891119240399038
+            ],
+            "half_window_sigma_difference": 0.0029056628845782473
+          },
+          "difference_mode": {
+            "window": [
+              15.0,
+              20.0
+            ],
+            "samples": 11,
+            "sigma": 0.11780665601307422,
+            "rms_log_energy_residual": 0.0022744988608854834,
+            "maximum_log_energy_residual": 0.004577486829650201,
+            "ols_sigma_standard_error": 0.00023975323119521965,
+            "half_window_sigmas": [
+              0.11600552951943047,
+              0.11891119240399575
+            ],
+            "half_window_sigma_difference": 0.0029056628845652854
+          },
+          "raw_vertical": {
+            "window": [
+              15.0,
+              20.0
+            ],
+            "samples": 101,
+            "sigma": 0.014199850008795792,
+            "rms_log_energy_residual": 0.006496956878670169,
+            "maximum_log_energy_residual": 0.015208717209865982,
+            "ols_sigma_standard_error": 0.00022396642829258716,
+            "half_window_sigmas": [
+              0.01003804031673051,
+              0.018633660375236737
+            ],
+            "half_window_sigma_difference": 0.008595620058506228
+          }
+        },
+        "shape_coherence": 0.9999028027249276
+      }
+    ]
+  },
+  "mesh_relative_rate_difference_10_20": 0.017276979255012342,
+  "mpi": {
+    "ranks": [
+      1,
+      2
+    ],
+    "maximum_absolute_profile_difference": 4.440892098500626e-16,
+    "rows": 147,
+    "columns": [
+      "step",
+      "time",
+      "z",
+      "velocity_x",
+      "velocity_y",
+      "temperature",
+      "velocity_x_mode_1_cos",
+      "velocity_y_mode_1_cos",
+      "temperature_mode_1_cos",
+      "velocity_x_mode_1_sin",
+      "velocity_y_mode_1_sin",
+      "temperature_mode_1_sin",
+      "velocity_x_mode_2_cos",
+      "velocity_y_mode_2_cos",
+      "temperature_mode_2_cos",
+      "velocity_x_mode_2_sin",
+      "velocity_y_mode_2_sin",
+      "temperature_mode_2_sin"
+    ]
+  },
+  "regression": {
+    "baseline_commit": "ebdef44",
+    "runs": 7,
+    "files": 46,
+    "equal": true,
+    "excluded": [
+      "wall_time"
+    ]
+  },
+  "unit_tests": {
+    "passed": 1016,
+    "expected_failure": 1,
+    "seconds": 905.36
+  },
+  "analysis_tests_after_final_changes": {
+    "passed": 14
+  },
+  "collected": 1086,
+  "timing_run": {
+    "git_commit": "ebdef44d3a1ff914521eb7df470dfc677d432e4e",
+    "git_dirty": true,
+    "firedrake_version": "2026.10.0",
+    "petsc_version": "3.26.0",
+    "python_version": "3.14.4",
+    "mpi_size": 1,
+    "host": "ali-Lenovo-Legion-5P-15IMH05",
+    "start_time": "2026-11-03T10:01:45+02:00",
+    "end_time": "2026-11-03T10:03:21+02:00",
+    "wall_time_seconds": 95.67854103515856,
+    "exit_status": 0
+  },
+  "scope": "bounded pilot only; 36 full-study configs not launched; full B7.3 pending"
+}

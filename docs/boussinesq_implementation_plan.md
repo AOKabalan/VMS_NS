@@ -1,6 +1,8 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
 Status: B0–B5, boundary prerequisite G4 and B7.1–B7.2 completed, 3 November 2026.
+B7.3 Fourier diagnostics and the bounded pilot are the current checkpoint;
+the full reference and stabilization-spread studies remain pending.
 B7 now has its boundary prerequisite; B6 remains the separate compatibility
 extension. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
@@ -585,6 +587,21 @@ checks and seeded-mode/control diagnostics; do not interpret a slope of the raw
 vertical energy as KH growth. See [B7.2 verification](verification/kelvin_helmholtz_b72.md).
 
 #### B7.3 — Linear growth study
+
+The bounded checkpoint adds opt-in `output.horizontal_fourier_modes` to the
+existing collective profile writer. It records real sine/cosine coefficients
+for every physical field; the analysis forms mode energy and matched
+coefficient-difference energy, reports total-energy fits separately, and requires
+an explicit fitting window. It also records half-window slope drift, mode-shape
+coherence and second-harmonic content. A clean mode does not by itself validate
+the total-energy growth criterion below.
+
+At the owner's compute-budget choice, first assess uniform 32×48/48×72 matched
+pilots to t=20 at Ri=0.1, Re=1000, dt=0.05. The 128×192 three-step timing run
+measures the cost of the proposed reference mesh. Thirty-six physical/mesh/time
+study configs are prepared under `configs/boussinesq/kh_growth/` and remain
+unlaunched; stabilization-spread inputs follow a usable resolved fitting window.
+See the [bounded pilot report](verification/kelvin_helmholtz_b73.md).
 
 Run one wave for Ri = 0, 0.1, 0.3 and Re = 1000, 2000, with the reference mesh,
 1.5× refinement and a timestep refinement. Fit

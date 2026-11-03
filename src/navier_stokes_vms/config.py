@@ -113,6 +113,7 @@ class OutputOptions:
     diagnostics: tuple[str, ...] = ("kinetic_energy", "divergence_l2")
     console_level: LogLevel = "INFO"
     horizontal_profiles_every: int = 0
+    horizontal_fourier_modes: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -293,8 +294,16 @@ def config_as_dict(config: Config) -> dict[str, object]:
             if getattr(section, item.name) is not None
             and not (
                 name == "output"
-                and item.name == "horizontal_profiles_every"
-                and section.horizontal_profiles_every == 0
+                and (
+                    (
+                        item.name == "horizontal_profiles_every"
+                        and section.horizontal_profiles_every == 0
+                    )
+                    or (
+                        item.name == "horizontal_fourier_modes"
+                        and not section.horizontal_fourier_modes
+                    )
+                )
             )
         }
     if config.thermal is not None:
@@ -381,6 +390,16 @@ def _plain(value: object) -> object:
 def _check_bounds(config: Config) -> None:
     degrees, time, stabilization = config.discretization, config.time, config.stabilization
     solver, output = config.solver, config.output
+    modes = output.horizontal_fourier_modes
+    if (
+        any(isinstance(m, bool) or not isinstance(m, int) or m <= 0 for m in modes)
+        or len(set(modes)) != len(modes)
+        or (modes and not output.horizontal_profiles_every)
+    ):
+        raise ValueError(
+            "output.horizontal_fourier_modes requires distinct positive integer modes "
+            "and output.horizontal_profiles_every > 0"
+        )
     if isinstance(output.horizontal_profiles_every, bool) or not isinstance(
         output.horizontal_profiles_every, int
     ):

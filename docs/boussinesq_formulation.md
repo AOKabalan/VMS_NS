@@ -1,7 +1,8 @@
 # Thermal Boussinesq VMS formulation
 
 Status: B5 budgets and G4 periodic/free-slip boundary support implemented,
-2 November 2026. This document specifies the thermal
+with KH setup/startup and optional Fourier measurements, 3 November 2026.
+This document specifies the thermal
 buoyancy model requested for the existing incompressible Navier–Stokes framework;
 The implemented subset includes Taylor–Hood Galerkin and equal-order static
 or dynamic, linear or nonlinear ASGS/OSS with temperature and optional passive scalars.
@@ -854,6 +855,42 @@ these fields even when endpoint solution fields are written at the same output
 event, and label the times.
 
 ## 8. Stratified Kelvin–Helmholtz application with a moisture proxy
+
+### Growth measurements
+
+For an integer streamwise Fourier index $m$, define $k_m=2\pi m/L_x$ and
+the endpoint resolved-velocity coefficients
+
+$$
+C_m(z,t)=\frac1{L_x}\int_0^{L_x}w_h(x,z,t)\cos(k_mx)\,dx,
+\qquad
+S_m(z,t)=\frac1{L_x}\int_0^{L_x}w_h(x,z,t)\sin(k_mx)\,dx.
+$$
+
+The real mode is $2(C_m\cos k_mx+S_m\sin k_mx)$ and its vertical kinetic
+energy is $E_m=L_x\int(C_m^2+S_m^2)\,dz$. For matched seeded and zero-seed
+solutions, subtract their coefficients before computing this energy:
+$E_{\delta,m}=L_x\int[(C_m^s-C_m^c)^2+(S_m^s-S_m^c)^2],dz$.
+The difference of two kinetic energies is not this quantity. For the single-wave
+case the imposed wave is $m=1$; on an $n$-wave box it is $m=n$.
+
+The implementation overintegrates the trigonometric horizontal weights with
+eight Gauss points per half-cell for P1/P2, then applies composite Simpson
+integration to the coefficient squares at vertical mesh rows and midrows.
+Unlike polynomial horizontal means, the weighted integrals and vertical energy
+are numerical approximations; their sensitivity belongs in the mesh study.
+
+Fit $\log E=a+2\sigma t$ only over an explicitly recorded time window.
+Keep the total resolved vertical energy, seeded-mode energy, control-mode
+energy and coefficient-difference energy separately. Report logarithmic fit
+residuals, half-window slopes, phase-independent mode-shape overlap between
+window endpoints, second-harmonic content when recorded, and base-profile
+drift. OLS slope uncertainty describes the fit residuals, not spatial/time
+discretization error or changes in the underlying base state. A pure Fourier
+signal or a good exponential fit alone does not establish an eigenmode or
+discretization convergence.
+
+### Case definition
 
 Use a two-dimensional $(x,z)$ channel, periodic in $x$, with free-slip,
 impermeable horizontal walls and insulated temperature/moisture. With scales

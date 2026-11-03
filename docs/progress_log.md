@@ -1845,3 +1845,44 @@ existing strict Gresho xfail in 537.30 seconds (`/tmp/vms-test-review-all.log`).
 All 1,083 cases collect successfully. Slow verification runs were not repeated
 for this test-only cleanup. Ruff lint over source/tests/scripts, test formatting
 and `git diff --check` passed.
+
+## Phase B7.3 checkpoint: Fourier diagnostics and bounded growth pilot (2026-11-03)
+
+The owner selected the bounded pilot/refinement assessment after the reference
+timing showed that the full study would take hours per run. Added optional
+`output.horizontal_fourier_modes` to the existing collective horizontal-profile
+writer, coefficient-difference mode energies, explicit-window growth fits,
+half-window slope and shape diagnostics, harmonic content, and an analysis plot.
+The default profile/output schema and the formulation/seed/subscale histories
+are preserved. The measurement definitions are in the thermal formulation and
+usage documentation; all simulations still use `scripts/run_simulation.py`.
+
+Completed four dry Ri=0.1, Re=1000, dynamic nonlinear OSS/BDF2 runs to t=20:
+matched controls/seeds on uniform 32×48 and 48×72 meshes, dt=0.05. All 1,600
+steps converged. Mode-1 control energy is below 1.1e-23 of perturbation-mode
+energy. The t=10–20 modal fits are 0.112618 and 0.114598 (1.73% mesh difference),
+but half-window slopes drift by 5.62% / 5.15%. Total vertical energy is still
+dominated by startup motion at other wavelengths; its fitted rate is different.
+Base-profile evolution is also resolution-sensitive. These are preliminary
+modal diagnostics, not a validated asymptotic KH rate or a passed B7.3 gate.
+
+The separate 128×192 three-step timing completed in 95.68 s, about 30–31 s per
+later step at the observed concurrent load. Prepared 36 full physical/mesh/time
+matrix configs, without launching them. Stabilization spread, the other Ri/Re
+values, timestep sensitivity and the full reference study remain pending.
+The [bounded pilot report](verification/kelvin_helmholtz_b73.md), paired JSON,
+checks JSON and PNG record the measurements, cost limits and reproduction.
+
+Validation: exact FE sine/cosine attenuation checks the Fourier normalization;
+prescribed exponential coefficients with a nonzero control check the energy
+subtraction and fitted rate. Curvature/window checks protect interpretation.
+The full unit suite passed with 1,016 passed and the existing strict Gresho
+xfail in 905.36 s (`/tmp/vms-b73-all.log`); final analysis tests passed 14 cases.
+All 1,086 cases collect. Serial/two-rank profile differences are below 4.45e-16.
+Seven previous isothermal/thermal baselines match across 46 field/CSV/JSON files
+against `ebdef44`, excluding timing columns. Ruff, diff checks, config round
+trips, local links and measured-report consistency passed; the plot was viewed.
+
+Stop at the owner-selected bounded checkpoint. B7.3 remains in progress.
+Next assess a later interval, timestep sensitivity and one more mesh before
+expanding to the full physical matrix or the dry/cloud application phases.

@@ -255,3 +255,48 @@ def test_converged_startup_does_not_depend_on_pressure_guess(tmp_path: Path) -> 
     ):
         assert fd.assemble(ufl.inner(difference, difference) * first._dx) ** 0.5 < 1e-10
     assert fd.assemble(first.velocity[1] ** 2 * first._dx) > 1e-10
+
+
+def test_fourier_profiles_match_piecewise_linear_sine_and_cosine(tmp_path: Path) -> None:
+    config = replace(
+        configuration(),
+        mesh=MeshOptions(cells=(8, 24)),
+        output=OutputOptions(
+            vtk_every=0, horizontal_profiles_every=1, horizontal_fourier_modes=(1, 2)
+        ),
+    )
+    path = tmp_path / "fourier.toml"
+    path.write_text(config_to_toml(config))
+    assert load_config(path) == config
+    assert "horizontal_fourier_modes" not in config_to_toml(configuration())
+    problem = build_problem(config)
+    geometry = problem.horizontal_profile_geometry
+    x, z = fd.SpatialCoordinate(problem.mesh)
+    angle = 2 * ufl.pi * x / geometry.length
+    velocity = fd.Function(fd.VectorFunctionSpace(problem.mesh, "CG", 1)).interpolate(
+        ufl.as_vector((z, 2 * ufl.sin(angle)))
+    )
+    tracer = fd.Function(fd.FunctionSpace(problem.mesh, "CG", 1)).interpolate(
+        3 + ufl.cos(2 * angle)
+    )
+    writer = HorizontalProfiles(tmp_path, geometry, velocity, {"q": tracer}, (1, 2))
+    writer.write(0, 0)
+    writer.close()
+    with (tmp_path / "horizontal_profiles.csv").open() as stream:
+        records = list(csv.DictReader(stream))
+    for record in records:
+        assert float(record["velocity_y_mode_1_sin"]) == pytest.approx(
+            np.sinc(1 / geometry.horizontal_cells) ** 2, abs=2e-13
+        )
+        assert float(record["q_mode_2_cos"]) == pytest.approx(
+            0.5 * np.sinc(2 / geometry.horizontal_cells) ** 2, abs=2e-13
+        )
+        for name in ("velocity_x_mode_1_sin", "velocity_x_mode_1_cos", "q_mode_1_cos"):
+            assert abs(float(record[name])) < 1e-13
+    for modes in ((0,), (True,), (1, 1)):
+        with pytest.raises(ValueError, match="horizontal_fourier_modes"):
+            validate_config(
+                replace(config, output=replace(config.output, horizontal_fourier_modes=modes))
+            )
+    with pytest.raises(ValueError, match="horizontal_profiles_every"):
+        validate_config(replace(config, output=OutputOptions(horizontal_fourier_modes=(1,))))
