@@ -22,7 +22,6 @@ from navier_stokes_vms.config import (
 )
 from navier_stokes_vms.discretization.quadrature import volume_measure
 from navier_stokes_vms.discretization.time_schemes import step_coefficients
-from navier_stokes_vms.formulation.boussinesq import buoyancy
 from navier_stokes_vms.formulation.galerkin import SolveLevel
 from navier_stokes_vms.formulation.stabilization_parameters import transport_parameter
 from navier_stokes_vms.formulation.thermal import scalar_residual, scalar_subscale, scalar_vms_terms
@@ -88,39 +87,6 @@ def test_scalar_stabilization_sign_and_viscous_terms(degree: int) -> None:
         value = fd.assemble(scalar_vms_terms(sub, polynomial, a, kappa, dx))
         target = fd.assemble(-sub * (ufl.dot(a, ufl.as_vector((2 * x, 2 * y))) + 4 * kappa) * dx)
         assert value == pytest.approx(target, abs=1e-11)
-
-
-@pytest.mark.parametrize("degree", [1, 2])
-def test_pointwise_weighted_projection_cancels_fe_buoyancy(degree: int) -> None:
-    mesh = fd.UnitSquareMesh(3, 3)
-    S = fd.FunctionSpace(mesh, "CG", degree)
-    V = fd.VectorFunctionSpace(mesh, "CG", degree)
-    x, y = fd.SpatialCoordinate(mesh)
-    a = fd.Function(V).interpolate(ufl.as_vector((1 + x, 1 + y)))
-    T = fd.Function(S).interpolate(x + y if degree == 1 else x * y)
-    tau = transport_parameter(a, 0.1, degree, 4.0, 2.0)
-    dx = volume_measure(mesh, 3 * degree)
-    force = buoyancy(T, 0.7, (0.0, -1.0), 0.2)
-    trial, test = fd.TrialFunction(V), fd.TestFunction(V)
-    xi = fd.Function(V)
-    fd.solve(
-        tau * ufl.inner(trial, test) * dx == tau * ufl.inner(force, test) * dx,
-        xi,
-        solver_parameters={"ksp_type": "preonly", "pc_type": "lu"},
-    )
-    assert fd.assemble(ufl.inner(tau * (force - xi), tau * (force - xi)) * dx) < 1e-22
-    source = 1 + x * x + y**3
-    eta = fd.Function(S)
-    t, s = fd.TrialFunction(S), fd.TestFunction(S)
-    fd.solve(
-        tau * t * s * dx == tau * source * s * dx,
-        eta,
-        solver_parameters={"ksp_type": "preonly", "pc_type": "lu"},
-    )
-    sub = tau * (source - eta)
-    assert fd.assemble(sub**2 * dx) > 1e-10
-    assert dual_norm(0.7 * sub * ufl.dot(ufl.as_vector((0.0, -1.0)), test) * dx) < 1e-12
-    assert dual_norm(0.7 * tau * source * ufl.dot(ufl.as_vector((0.0, -1.0)), test) * dx) > 1e-5
 
 
 @pytest.mark.parametrize("degree", [1, 2])

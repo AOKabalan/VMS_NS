@@ -168,6 +168,11 @@ def test_short_run_writes_every_output_with_sensible_contents(
         assert pvd_times(folder / "fields" / "velocity.pvd") == pytest.approx(
             [step * config.time.dt for step in written]
         )
+    if case == "manufactured_temporal":
+        assert pvd_times(folder / "fields" / "pressure.pvd") == pytest.approx([0.375, 0.625])
+        assert [float(row["time"]) for row in diagnostics] == [0.25, 0.5, 0.75]
+        assert [float(row["pressure_time"]) for row in diagnostics] == [0.25, 0.375, 0.625]
+        assert all(row["subscale_time"] == "" for row in diagnostics)
 
 
 def test_after_step_callback_can_stop_the_run_early(tmp_path: Path) -> None:
@@ -192,19 +197,6 @@ def test_after_step_callback_can_stop_the_run_early(tmp_path: Path) -> None:
     assert [row["step"] for row in rows(tmp_path / "time_steps.csv")] == ["1", "2", "3"]
     # The state at the stop is written even though step 3 is not a VTK step.
     assert pvd_times(tmp_path / "fields" / "velocity.pvd") == pytest.approx([0.3])
-
-
-def test_crank_nicolson_pressure_is_written_at_the_half_level(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    status, folder = run(tmp_path, monkeypatch, config_text("manufactured_temporal"))
-    assert status == 0
-    assert pvd_times(folder / "fields" / "velocity.pvd") == pytest.approx([0.5, 0.75])
-    assert pvd_times(folder / "fields" / "pressure.pvd") == pytest.approx([0.375, 0.625])
-    diagnostics = rows(folder / "diagnostics.csv")
-    assert [float(row["time"]) for row in diagnostics] == [0.25, 0.5, 0.75]
-    assert [float(row["pressure_time"]) for row in diagnostics] == [0.25, 0.375, 0.625]
-    assert all(row["subscale_time"] == "" for row in diagnostics)
 
 
 def test_inner_solve_failure_exits_nonzero_and_writes_the_last_state(
@@ -300,6 +292,11 @@ def test_newton_picard_and_warm_started_newton_reach_the_same_solution() -> None
     )
     assert newton_result.converged and picard_result.converged and warm_result.converged
     assert {row.method for row in newton_result.iterations} == {"newton"}
+    later = newton_result.iterations[1:]
+    assert later and all(row.update_norm > 0 and row.linear_iterations == 1 for row in later)
+    assert newton_result.iterations[-1].residual_norm < (
+        1e-10 * newton_result.iterations[0].residual_norm
+    )
     assert {row.method for row in picard_result.iterations} == {"picard"}
     assert [row.method for row in warm_result.iterations[1:4]] == ["picard"] * 3
     assert {row.method for row in warm_result.iterations[4:]} == {"newton"}
@@ -363,15 +360,6 @@ def test_pressure_has_zero_spatial_mean_exactly_with_the_null_space(
         assert abs(mean) > 1e-6 * size
     else:
         assert abs(mean) <= 1e-13 * size
-
-
-def test_newton_logs_updates_and_linear_iterations() -> None:
-    _, _, result = steady_kovasznay_solve(kovasznay(), SolverOptions())
-    assert result.converged
-    later = result.iterations[1:]
-    assert later and all(row.update_norm > 0 and row.linear_iterations == 1 for row in later)
-    norms = [row.residual_norm for row in result.iterations]
-    assert norms[-1] < 1e-10 * norms[0]
 
 
 def nonlinear_asgs_text(

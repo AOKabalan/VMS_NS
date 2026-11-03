@@ -267,10 +267,3 @@ def test_problem_check_rejects_a_divergent_exact_velocity() -> None:
     divergent = replace(dirichlet_square(), exact_velocity=lambda x, _t: ufl.as_vector((x[0], 0)))
     with pytest.raises(ValueError, match="exact velocity is not divergence-free at t = 0.0"):
         check_problem(divergent)
-
-
-def test_pressure_null_space_exactly_without_outflow() -> None:
-    problem = dirichlet_square()
-    assert uses_pressure_null_space(problem)
-    with_outflow = {**problem.boundary_conditions, "x_max": Outflow()}
-    assert not uses_pressure_null_space(replace(problem, boundary_conditions=with_outflow))

@@ -42,6 +42,11 @@ def test_bdf_differentiates_polynomials_up_to_its_order_exactly(
     coefficients = step_coefficients(scheme, "lower_order", step=order)
     assert coefficients.scheme == scheme
     assert coefficients.solve_level == 1.0
+    assert (coefficients.data_weight_new, coefficients.data_weight_old) == (1.0, 0.0)
+    assert (coefficients.extrapolation_weight_solve, coefficients.extrapolation_weight_old) == (
+        1.0,
+        0.0,
+    )
     for power in range(order + 2):
         g, dg = monomial(power)
         error = discrete_derivative(coefficients, g(T_NEW), g) - dg(T_NEW)
@@ -123,23 +128,6 @@ def test_exact_history_first_step_needs_levels_back_to_t_minus_two(
     scheme: TimeScheme, levels: int
 ) -> None:
     assert len(step_coefficients(scheme, "exact_history", step=1).history_weights) == levels
-
-
-@pytest.mark.parametrize("scheme", ["bdf1", "bdf2", "bdf3", "crank_nicolson"])
-@pytest.mark.parametrize("startup", ["lower_order", "exact_history"])
-def test_every_step_is_consistent(scheme: TimeScheme, startup: Startup) -> None:
-    for step in range(1, 5):
-        coefficients = step_coefficients(scheme, startup, step)
-        assert sum(coefficients.history_weights) == pytest.approx(coefficients.alpha0)
-        assert coefficients.data_weight_new + coefficients.data_weight_old == 1.0
-        assert (
-            coefficients.extrapolation_weight_solve + coefficients.extrapolation_weight_old == 1.0
-        )
-        if coefficients.scheme != "crank_nicolson":
-            assert (coefficients.data_weight_new, coefficients.extrapolation_weight_solve) == (
-                1.0,
-                1.0,
-            )
 
 
 def test_steps_are_numbered_from_one() -> None:

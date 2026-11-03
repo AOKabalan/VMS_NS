@@ -205,27 +205,6 @@ def assert_every_step_converged(folder: Path, steps: int, stepper: TimeStepper) 
         assert np.all(np.isfinite(field.dat.data_ro))
 
 
-@pytest.mark.parametrize("space", ["asgs", "oss"])
-@pytest.mark.parametrize("form", FORMS)
-def test_each_form_runs_and_converges_on_a_periodic_mesh(
-    tmp_path: Path, form: str, space: str
-) -> None:
-    config = chapter5_config(
-        "taylor_green_2d",
-        MeshOptions(cells=(4, 4)),
-        1,
-        TimeOptions(scheme="crank_nicolson", dt=0.01, t_end=0.03),
-        form,
-        "stress",
-        space,
-        "nonlinear",
-        SolverOptions(),
-    )
-    stepper = TimeStepper(config, build_problem(config), tmp_path, LOGGER)
-    stepper.run()
-    assert_every_step_converged(tmp_path, 3, stepper)
-
-
 @pytest.mark.parametrize("form", FORMS)
 def test_each_form_runs_and_converges_with_an_outflow_boundary(tmp_path: Path, form: str) -> None:
     config = chapter5_config(

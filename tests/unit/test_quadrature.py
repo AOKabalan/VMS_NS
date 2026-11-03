@@ -15,7 +15,6 @@ from navier_stokes_vms.discretization.quadrature import (
     boundary_measure,
     check_positive_weights,
     quadrature_degree,
-    quadrature_element,
     reference_rule,
     volume_measure,
 )
@@ -40,21 +39,6 @@ def test_rule_has_positive_weights_and_integrates_monomials_exactly(cell: str, d
             continue
         computed = weights @ np.prod(points**exponents, axis=1)
         assert computed == pytest.approx(exact_simplex_integral(exponents), rel=1e-13, abs=1e-16)
-
-
-@pytest.mark.parametrize("degree", [3, 6])
-@pytest.mark.parametrize("dimension", [2, 3])
-def test_quadrature_space_samples_the_dx_rule(dimension: int, degree: int) -> None:
-    mesh = fd.UnitSquareMesh(2, 2) if dimension == 2 else fd.UnitCubeMesh(1, 1, 1)
-    x = fd.SpatialCoordinate(mesh)
-    f = ufl.exp(x[0]) * ufl.sin(5 * x[1]) / (1 + x[0] * x[dimension - 1])
-    space = fd.FunctionSpace(mesh, quadrature_element(mesh.ufl_cell(), degree))
-    sampled = fd.Function(space).interpolate(f)
-    dx = volume_measure(mesh, degree)
-    direct = fd.assemble(f * dx)
-    assert fd.assemble(sampled * dx) == pytest.approx(direct, rel=1e-14, abs=1e-15)
-    other_rule = fd.assemble(f * fd.dx(domain=mesh, degree=degree + 4))
-    assert abs(other_rule - direct) > 1e-9
 
 
 @pytest.mark.parametrize("velocity_degree", [1, 2])

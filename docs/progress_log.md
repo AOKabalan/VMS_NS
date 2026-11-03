@@ -1823,3 +1823,25 @@ Verification and findings:
 B7.2 is complete. Stop at this checkpoint. B7.3 must first resolve the measured
 control contamination and establish a seeded-mode/window criterion before
 fitting a growth rate; the proposed production resolution remains unvalidated.
+
+## Test suite review (2026-11-03)
+
+At the owner's request, reviewed all 41 test modules and their helpers for
+distinct regression coverage. Removed nine redundant test functions and
+repeated parameter combinations: 58 fewer collected cases, from 1,141 to
+1,083. Moved unique CN timestamp and Newton logging assertions into existing
+runs. Removed duplicate snapshots of benchmark mesh/time/solver settings,
+retaining configuration validity, unique destinations and generator consistency.
+The removal rationale and complete module inventory are in
+[test_suite_review.md](verification/test_suite_review.md).
+
+Retained independent equation checks, Jacobian and budget variant matrices,
+conservation budgets, failure handling, and all 69 slow verification cases.
+Production code and configurations are unchanged; no further Boussinesq phase
+was started.
+
+Validation: the full retained unit suite passed with 1,013 passed and the
+existing strict Gresho xfail in 537.30 seconds (`/tmp/vms-test-review-all.log`).
+All 1,083 cases collect successfully. Slow verification runs were not repeated
+for this test-only cleanup. Ruff lint over source/tests/scripts, test formatting
+and `git diff --check` passed.

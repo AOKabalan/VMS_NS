@@ -10,8 +10,6 @@ import pytest
 from navier_stokes_vms.config import (
     Config,
     MeshOptions,
-    check_diagnostics_known,
-    check_startup_supported,
     config_to_toml,
     load_config,
     method_name,
@@ -185,41 +183,33 @@ def test_rule2_vms_needs_equal_order(tmp_path: Path) -> None:
         load_text(tmp_path, text)
 
 
-def test_rule3_exact_history_needs_an_exact_solution(tmp_path: Path) -> None:
-    exact_history = load_text(tmp_path, GALERKIN + '\n[time]\nstartup = "exact_history"\n')
-    with pytest.raises(ValueError, match="time.startup = 'exact_history'"):
-        check_startup_supported(exact_history, has_exact_solution=False)
-    check_startup_supported(exact_history, has_exact_solution=True)
-    check_startup_supported(load_text(tmp_path, GALERKIN), has_exact_solution=False)
-
-
 def test_rule4_picard_warmup_needs_newton(tmp_path: Path) -> None:
     text = GALERKIN + '\n[solver]\nlinearization = "picard"\npicard_iterations_before_newton = 2\n'
     with pytest.raises(ValueError, match="solver.picard_iterations_before_newton = 2 requires"):
         load_text(tmp_path, text)
 
 
-def test_rule6_diagnostics_must_be_registered(tmp_path: Path) -> None:
-    config = load_text(tmp_path, GALERKIN)
-    with pytest.raises(ValueError, match="output.diagnostics: unknown divergence_l2"):
-        check_diagnostics_known(config, available={"kinetic_energy"})
-    check_diagnostics_known(config, available={"kinetic_energy", "divergence_l2"})
-
-
-@pytest.mark.parametrize("degree", [1, 2])
-@pytest.mark.parametrize("pressure_subscale", ["true", "false"])
-@pytest.mark.parametrize("space", ["asgs", "oss"])
-@pytest.mark.parametrize(("dynamics", "name"), [("static", "Sta"), ("dynamic", "Dyn")])
-@pytest.mark.parametrize(("splitting", "label"), [("linear", "Lin"), ("nonlinear", "Nl")])
+@pytest.mark.parametrize(
+    "space,dynamics,splitting,degree,pressure_subscale,expected",
+    [
+        ("asgs", "static", "linear", 1, "true", "Sta-Lin-ASGS"),
+        ("asgs", "static", "nonlinear", 2, "false", "Sta-Nl-ASGS"),
+        ("asgs", "dynamic", "linear", 1, "false", "Dyn-Lin-ASGS"),
+        ("asgs", "dynamic", "nonlinear", 2, "true", "Dyn-Nl-ASGS"),
+        ("oss", "static", "linear", 2, "true", "Sta-Lin-OSS"),
+        ("oss", "static", "nonlinear", 1, "false", "Sta-Nl-OSS"),
+        ("oss", "dynamic", "linear", 2, "false", "Dyn-Lin-OSS"),
+        ("oss", "dynamic", "nonlinear", 1, "true", "Dyn-Nl-OSS"),
+    ],
+)
 def test_rule5_accepts_all_eight_cases(
     tmp_path: Path,
     degree: int,
     pressure_subscale: str,
     space: str,
     dynamics: str,
-    name: str,
     splitting: str,
-    label: str,
+    expected: str,
 ) -> None:
     text = (
         STATIC_ASGS.replace('"asgs"', f'"{space}"')
@@ -229,8 +219,10 @@ def test_rule5_accepts_all_eight_cases(
         f"velocity_degree = {degree}\npressure_degree = {degree}\n"
     )
     config = load_text(tmp_path, text)
-    assert method_name(config.stabilization) == f"{name}-{label}-{space.upper()}"
+    assert method_name(config.stabilization) == expected
     assert config.discretization.velocity_degree == degree
+    assert config.discretization.pressure_degree == degree
+    assert config.stabilization.pressure_subscale == (pressure_subscale == "true")
 
 
 @pytest.mark.parametrize(
