@@ -93,7 +93,18 @@ At the owner's request, reran all six tests in
 **6 passed in 25.88 s**. The observed rates reproduce the tables above.
 [Fresh errors, rates, exact fields and provenance](boussinesq_mms_recheck_20261103.json)
 are recorded separately; raw run artifacts are under
-`results/verification/boussinesq_mms_w9v57zb9/`.
+`results/bousinesq/verification/manufactured_solution/2026-11-03/raw/`.
+
+The same folder's parent contains spatial L2, spatial gradient and temporal
+convergence figures as PNG/PDF, plus the plotted CSV/JSON data and a README.
+Regenerate these from the recorded measurements without rerunning the solver:
+
+```bash
+python scripts/plot_boussinesq_verification.py
+```
+
+The local results index is `results/README.md`; a relocation manifest records
+the previous paths. Compatibility links preserve existing analysis commands.
 
 This verifies coupled manufactured-solution spatial refinement for representative
 static linear OSS at P1/P2, plus buoyancy-driven temporal refinement for dynamic

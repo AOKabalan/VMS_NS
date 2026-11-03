@@ -1968,3 +1968,30 @@ Updated the B5 report with fresh measured errors, rates and provenance in
 `docs/verification/boussinesq_mms_recheck_20261103.json`. Run artifacts are under
 `results/verification/boussinesq_mms_w9v57zb9/`. No implementation, configuration
 or test was changed. JSON consistency, links and diff checks passed.
+
+## Organized existing results and plotted Boussinesq verification (2026-11-03)
+
+Grouped existing outputs under `results/bousinesq/`, `results/navier_stokes/`,
+`results/analysis/`, `results/reports/` and `results/logs/`; retained the existing
+presentation directory and warm compiler cache. Added local README indexes and
+a relocation manifest with old/new paths and file checksums. Compatibility
+links preserve previous case/analysis paths and completed-run detection.
+All numerical data, including failed/incomplete runs, was retained. Nine local
+analysis scripts needed folder-depth adjustments; their unchanged originals
+are backed up and both checksums are recorded in the manifest.
+
+The latest MMS test artifacts now live at
+`results/bousinesq/verification/manufactured_solution/2026-11-03/raw/`.
+Its parent contains spatial L2, spatial H1 seminorm and temporal convergence
+figures as PNG/PDF, together with CSV tables and full measured JSON. Added
+`scripts/plot_boussinesq_verification.py` to reproduce these directly from the
+committed summary. Temporal step sizes are now explicit in that summary.
+The captions distinguish coupled spatial MMS from the semidiscrete temporal
+test and retain the P2-temperature/zero-subscale qualifications.
+
+Verification: checked all 15,894 original file hashes after relocation, with
+the nine path-only script edits checked against preserved originals; checked
+all compatibility links and local README links. Exported tables match raw
+convergence/order records, and annotated rates were independently recomputed.
+All three figures were visually inspected. Ruff and diff checks passed.
+No solver changes, new tests or additional simulation runs were needed.

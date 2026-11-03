@@ -80,6 +80,10 @@ pytest tests/unit
 Each run is described by one TOML file and writes its fields, diagnostics and provenance to
 `results/<case>/<run_name>/`.
 
+Existing local results are grouped by [purpose and physical model](docs/results_layout.md).
+The latest Boussinesq convergence figures can be regenerated with
+`python scripts/plot_boussinesq_verification.py`.
+
 ## Documentation
 
 - [`docs/usage.md`](docs/usage.md): configuration, diagnostics, validation and conservation runs

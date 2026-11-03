@@ -7,7 +7,7 @@
     "passed": 6,
     "seconds": 25.88
   },
-  "artifacts": "results/verification/boussinesq_mms_w9v57zb9",
+  "artifacts": "results/bousinesq/verification/manufactured_solution/2026-11-03/raw",
   "spatial_scope": {
     "case": "manufactured_boussinesq",
     "subscale_space": "oss",
@@ -144,6 +144,7 @@
       }
     }
   },
+  "temporal_steps": [0.02, 0.01, 0.005],
   "temporal": {
     "bdf3": {
       "scheme": "bdf3",
