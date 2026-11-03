@@ -1,7 +1,7 @@
 # Integrating thermal Boussinesq physics into the existing framework
 
 Status: B0–B5, boundary prerequisite G4 and B7.1–B7.2 completed, 3 November 2026.
-B7.3 Fourier diagnostics and the bounded pilot are the current checkpoint;
+B7.3 includes Fourier diagnostics and bounded later-window/refinement checks;
 the full reference and stabilization-spread studies remain pending.
 B7 now has its boundary prerequisite; B6 remains the separate compatibility
 extension. Equations refer to the companion
@@ -602,6 +602,15 @@ measures the cost of the proposed reference mesh. Thirty-six physical/mesh/time
 study configs are prepared under `configs/boussinesq/kh_growth/` and remain
 unlaunched; stabilization-spread inputs follow a usable resolved fitting window.
 See the [bounded pilot report](verification/kelvin_helmholtz_b73.md).
+
+The subsequent [bounded refinement assessment](verification/kelvin_helmholtz_b73_refinement.md)
+extends matched runs to t=30, halves dt on 48×72, and adds a 64×96 intermediate
+mesh. In the primary 20–30 interval the modal rate changes by 0.38% with mesh
+and 0.0010% with timestep, but half-window drift remains 2.45–2.73%. The
+predeclared 25–30 interval has smaller drift and supplies a useful local rate.
+Neither result is promoted to a unique asymptotic rate or a passed full B7.3
+matrix. An independent 1D diffusion reference quantifies control-profile error.
+The full reference, other Ri/Re values and stabilization spread remain pending.
 
 Run one wave for Ri = 0, 0.1, 0.3 and Re = 1000, 2000, with the reference mesh,
 1.5× refinement and a timestep refinement. Fit

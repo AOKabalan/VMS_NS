@@ -63,6 +63,8 @@ Optional vertical clustering and horizontal-mean profiles support the
 Optional Fourier profile output supports the
 [bounded growth pilot](docs/verification/kelvin_helmholtz_b73.md); full growth
 validation and cloud visualization remain pending.
+The [later-window and refinement checks](docs/verification/kelvin_helmholtz_b73_refinement.md)
+measure the remaining window dependence separately from mesh/timestep sensitivity.
 
 ## Quick start
 

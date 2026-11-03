@@ -1,0 +1,832 @@
+{
+  "primary_window": [
+    20,
+    30
+  ],
+  "scope": "bounded Ri=0.1, Re=1000 only; full B7.3 pending",
+  "window_sensitivity": {
+    "10:20": [
+      {
+        "run": "b73_late_seeded",
+        "cells": [
+          48,
+          72
+        ],
+        "dt": 0.05,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              10.0,
+              20.0
+            ],
+            "samples": 21,
+            "sigma": 0.11459811834295437,
+            "rms_log_energy_residual": 0.009421576058173455,
+            "maximum_log_energy_residual": 0.017790022378639803,
+            "ols_sigma_standard_error": 0.00035695300526990406,
+            "half_window_sigmas": [
+              0.1119049571008125,
+              0.11780665601306023
+            ],
+            "half_window_sigma_difference": 0.005901698912247733
+          },
+          "difference_mode": {
+            "window": [
+              10.0,
+              20.0
+            ],
+            "samples": 21,
+            "sigma": 0.11459811834297767,
+            "rms_log_energy_residual": 0.009421576058144957,
+            "maximum_log_energy_residual": 0.017790022378570303,
+            "ols_sigma_standard_error": 0.0003569530052688244,
+            "half_window_sigmas": [
+              0.1119049571008449,
+              0.1178066560130746
+            ],
+            "half_window_sigma_difference": 0.005901698912229705
+          },
+          "raw_vertical": {
+            "window": [
+              10.0,
+              20.0
+            ],
+            "samples": 201,
+            "sigma": 0.008108135964718464,
+            "rms_log_energy_residual": 0.017047100000028605,
+            "maximum_log_energy_residual": 0.044683949843265874,
+            "ols_sigma_standard_error": 0.00020826865436572378,
+            "half_window_sigmas": [
+              0.003029708494969151,
+              0.014199850008795869
+            ],
+            "half_window_sigma_difference": 0.011170141513826717
+          }
+        },
+        "shape_coherence": 0.9990344862222368
+      },
+      {
+        "run": "b73_late_half_dt_seeded",
+        "cells": [
+          48,
+          72
+        ],
+        "dt": 0.025,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              10.0,
+              20.0
+            ],
+            "samples": 21,
+            "sigma": 0.11459794524824841,
+            "rms_log_energy_residual": 0.009427374520741449,
+            "maximum_log_energy_residual": 0.017795710162175515,
+            "ols_sigma_standard_error": 0.00035717269023840723,
+            "half_window_sigmas": [
+              0.11190140310481013,
+              0.11780795363714505
+            ],
+            "half_window_sigma_difference": 0.005906550532334923
+          },
+          "difference_mode": {
+            "window": [
+              10.0,
+              20.0
+            ],
+            "samples": 21,
+            "sigma": 0.1145979452481861,
+            "rms_log_energy_residual": 0.00942737452105951,
+            "maximum_log_energy_residual": 0.01779571016268333,
+            "ols_sigma_standard_error": 0.0003571726902504576,
+            "half_window_sigmas": [
+              0.11190140310463202,
+              0.11780795363718614
+            ],
+            "half_window_sigma_difference": 0.005906550532554122
+          },
+          "raw_vertical": {
+            "window": [
+              10.0,
+              20.0
+            ],
+            "samples": 401,
+            "sigma": 0.00810226006394208,
+            "rms_log_energy_residual": 0.01695707806160581,
+            "maximum_log_energy_residual": 0.044828663923921916,
+            "ols_sigma_standard_error": 0.00014667029587486546,
+            "half_window_sigmas": [
+              0.003045795729173803,
+              0.014195479201089238
+            ],
+            "half_window_sigma_difference": 0.011149683471915434
+          }
+        },
+        "shape_coherence": 0.9990346659188494
+      },
+      {
+        "run": "b73_late_finer_seeded",
+        "cells": [
+          64,
+          96
+        ],
+        "dt": 0.05,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              10.0,
+              20.0
+            ],
+            "samples": 21,
+            "sigma": 0.11507154053436075,
+            "rms_log_energy_residual": 0.008802953163614458,
+            "maximum_log_energy_residual": 0.016693500247436432,
+            "ols_sigma_standard_error": 0.0003335153871921903,
+            "half_window_sigmas": [
+              0.11261775649660165,
+              0.11808436581866821
+            ],
+            "half_window_sigma_difference": 0.005466609322066565
+          },
+          "difference_mode": {
+            "window": [
+              10.0,
+              20.0
+            ],
+            "samples": 21,
+            "sigma": 0.11507154053437268,
+            "rms_log_energy_residual": 0.008802953163627385,
+            "maximum_log_energy_residual": 0.016693500247482174,
+            "ols_sigma_standard_error": 0.00033351538719268015,
+            "half_window_sigmas": [
+              0.11261775649662117,
+              0.11808436581868614
+            ],
+            "half_window_sigma_difference": 0.005466609322064969
+          },
+          "raw_vertical": {
+            "window": [
+              10.0,
+              20.0
+            ],
+            "samples": 201,
+            "sigma": 0.022162508545378604,
+            "rms_log_energy_residual": 0.034066600111751,
+            "maximum_log_energy_residual": 0.08513293809879816,
+            "ols_sigma_standard_error": 0.00041620011404154897,
+            "half_window_sigmas": [
+              0.011722295025661732,
+              0.03424345528902693
+            ],
+            "half_window_sigma_difference": 0.022521160263365203
+          }
+        },
+        "shape_coherence": 0.9990489092722252
+      }
+    ],
+    "15:25": [
+      {
+        "run": "b73_late_seeded",
+        "cells": [
+          48,
+          72
+        ],
+        "dt": 0.05,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              15.0,
+              25.0
+            ],
+            "samples": 21,
+            "sigma": 0.11798882822227884,
+            "rms_log_energy_residual": 0.0025736083620531078,
+            "maximum_log_energy_residual": 0.0048350165586255045,
+            "ols_sigma_standard_error": 9.750568626208286e-05,
+            "half_window_sigmas": [
+              0.11761469617382095,
+              0.11739014904892243
+            ],
+            "half_window_sigma_difference": 0.0002245471248985137
+          },
+          "difference_mode": {
+            "window": [
+              15.0,
+              25.0
+            ],
+            "samples": 21,
+            "sigma": 0.11798882822228113,
+            "rms_log_energy_residual": 0.002573608362041482,
+            "maximum_log_energy_residual": 0.00483501655861307,
+            "ols_sigma_standard_error": 9.750568626164238e-05,
+            "half_window_sigmas": [
+              0.11761469617383695,
+              0.11739014904891906
+            ],
+            "half_window_sigma_difference": 0.0002245471249178871
+          },
+          "raw_vertical": {
+            "window": [
+              15.0,
+              25.0
+            ],
+            "samples": 201,
+            "sigma": 0.02546181306026462,
+            "rms_log_energy_residual": 0.035957304824555586,
+            "maximum_log_energy_residual": 0.08670055651813474,
+            "ols_sigma_standard_error": 0.00043929932307640437,
+            "half_window_sigmas": [
+              0.014107675965099698,
+              0.038006824971744534
+            ],
+            "half_window_sigma_difference": 0.023899149006644835
+          }
+        },
+        "shape_coherence": 0.9998796521507279
+      },
+      {
+        "run": "b73_late_half_dt_seeded",
+        "cells": [
+          48,
+          72
+        ],
+        "dt": 0.025,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              15.0,
+              25.0
+            ],
+            "samples": 21,
+            "sigma": 0.11798853344218227,
+            "rms_log_energy_residual": 0.0025739357540285495,
+            "maximum_log_energy_residual": 0.004841668542383548,
+            "ols_sigma_standard_error": 9.751809008378037e-05,
+            "half_window_sigmas": [
+              0.11761617246826266,
+              0.1173885299018361
+            ],
+            "half_window_sigma_difference": 0.00022764256642655856
+          },
+          "difference_mode": {
+            "window": [
+              15.0,
+              25.0
+            ],
+            "samples": 21,
+            "sigma": 0.11798853344219265,
+            "rms_log_energy_residual": 0.0025739357540824426,
+            "maximum_log_energy_residual": 0.004841668542570732,
+            "ols_sigma_standard_error": 9.75180900858222e-05,
+            "half_window_sigmas": [
+              0.11761617246830362,
+              0.11738852990181062
+            ],
+            "half_window_sigma_difference": 0.0002276425664930054
+          },
+          "raw_vertical": {
+            "window": [
+              15.0,
+              25.0
+            ],
+            "samples": 401,
+            "sigma": 0.025453776785983775,
+            "rms_log_energy_residual": 0.0357795962180685,
+            "maximum_log_energy_residual": 0.08695439259333715,
+            "ols_sigma_standard_error": 0.00030947572126057457,
+            "half_window_sigmas": [
+              0.01414936048053923,
+              0.0380018817386331
+            ],
+            "half_window_sigma_difference": 0.02385252125809387
+          }
+        },
+        "shape_coherence": 0.9998796554812595
+      },
+      {
+        "run": "b73_late_finer_seeded",
+        "cells": [
+          64,
+          96
+        ],
+        "dt": 0.05,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              15.0,
+              25.0
+            ],
+            "samples": 21,
+            "sigma": 0.11825773485611993,
+            "rms_log_energy_residual": 0.0024450618851636287,
+            "maximum_log_energy_residual": 0.004555231403382987,
+            "ols_sigma_standard_error": 9.263547654778018e-05,
+            "half_window_sigmas": [
+              0.11790129726164077,
+              0.11768950070559898
+            ],
+            "half_window_sigma_difference": 0.00021179655604178227
+          },
+          "difference_mode": {
+            "window": [
+              15.0,
+              25.0
+            ],
+            "samples": 21,
+            "sigma": 0.11825773485613778,
+            "rms_log_energy_residual": 0.0024450618852135033,
+            "maximum_log_energy_residual": 0.0045552314035171015,
+            "ols_sigma_standard_error": 9.263547654966977e-05,
+            "half_window_sigmas": [
+              0.11790129726165652,
+              0.11768950070560039
+            ],
+            "half_window_sigma_difference": 0.0002117965560561319
+          },
+          "raw_vertical": {
+            "window": [
+              15.0,
+              25.0
+            ],
+            "samples": 201,
+            "sigma": 0.05079986696054139,
+            "rms_log_energy_residual": 0.04985127824919459,
+            "maximum_log_energy_residual": 0.10857591655613386,
+            "ols_sigma_standard_error": 0.0006090454469882625,
+            "half_window_sigmas": [
+              0.034083603192052656,
+              0.06746687214930412
+            ],
+            "half_window_sigma_difference": 0.033383268957251466
+          }
+        },
+        "shape_coherence": 0.999895388061324
+      }
+    ],
+    "20:25": [
+      {
+        "run": "b73_late_seeded",
+        "cells": [
+          48,
+          72
+        ],
+        "dt": 0.05,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              20.0,
+              25.0
+            ],
+            "samples": 11,
+            "sigma": 0.11739014904892228,
+            "rms_log_energy_residual": 0.0015717163418445216,
+            "maximum_log_energy_residual": 0.0026790285106066403,
+            "ols_sigma_standard_error": 0.00016567344919788326,
+            "half_window_sigmas": [
+              0.11844395416092487,
+              0.1164879461841328
+            ],
+            "half_window_sigma_difference": 0.0019560079767920735
+          },
+          "difference_mode": {
+            "window": [
+              20.0,
+              25.0
+            ],
+            "samples": 11,
+            "sigma": 0.11739014904891905,
+            "rms_log_energy_residual": 0.0015717163418199655,
+            "maximum_log_energy_residual": 0.0026790285105620093,
+            "ols_sigma_standard_error": 0.00016567344919529484,
+            "half_window_sigmas": [
+              0.11844395416090756,
+              0.11648794618414578
+            ],
+            "half_window_sigma_difference": 0.0019560079767617783
+          },
+          "raw_vertical": {
+            "window": [
+              20.0,
+              25.0
+            ],
+            "samples": 101,
+            "sigma": 0.03800682497174482,
+            "rms_log_energy_residual": 0.011340906340135445,
+            "maximum_log_energy_residual": 0.025265145738095435,
+            "ols_sigma_standard_error": 0.00039094953745803367,
+            "half_window_sigmas": [
+              0.030517899186505524,
+              0.04558000022152004
+            ],
+            "half_window_sigma_difference": 0.015062101035014517
+          }
+        },
+        "shape_coherence": 0.9999774971939462
+      },
+      {
+        "run": "b73_late_half_dt_seeded",
+        "cells": [
+          48,
+          72
+        ],
+        "dt": 0.025,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              20.0,
+              25.0
+            ],
+            "samples": 11,
+            "sigma": 0.11738852990183607,
+            "rms_log_energy_residual": 0.0015719437475562978,
+            "maximum_log_energy_residual": 0.0026790549080706327,
+            "ols_sigma_standard_error": 0.00016569741986462145,
+            "half_window_sigmas": [
+              0.11844263092587402,
+              0.11648626470936786
+            ],
+            "half_window_sigma_difference": 0.0019563662165061613
+          },
+          "difference_mode": {
+            "window": [
+              20.0,
+              25.0
+            ],
+            "samples": 11,
+            "sigma": 0.117388529901811,
+            "rms_log_energy_residual": 0.0015719437475696393,
+            "maximum_log_energy_residual": 0.002679054908091061,
+            "ols_sigma_standard_error": 0.00016569741986602776,
+            "half_window_sigmas": [
+              0.11844263092584921,
+              0.11648626470933043
+            ],
+            "half_window_sigma_difference": 0.001956366216518776
+          },
+          "raw_vertical": {
+            "window": [
+              20.0,
+              25.0
+            ],
+            "samples": 201,
+            "sigma": 0.038001881738633066,
+            "rms_log_energy_residual": 0.011231115822853853,
+            "maximum_log_energy_residual": 0.025398981527728542,
+            "ols_sigma_standard_error": 0.00027442666253467575,
+            "half_window_sigmas": [
+              0.030583893409549406,
+              0.04557621036117209
+            ],
+            "half_window_sigma_difference": 0.014992316951622685
+          }
+        },
+        "shape_coherence": 0.9999774967936187
+      },
+      {
+        "run": "b73_late_finer_seeded",
+        "cells": [
+          64,
+          96
+        ],
+        "dt": 0.05,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              20.0,
+              25.0
+            ],
+            "samples": 11,
+            "sigma": 0.11768950070559922,
+            "rms_log_energy_residual": 0.0014796247383243723,
+            "maximum_log_energy_residual": 0.002509834313998649,
+            "ols_sigma_standard_error": 0.0001559661418478549,
+            "half_window_sigmas": [
+              0.11868563961369638,
+              0.11684180979782059
+            ],
+            "half_window_sigma_difference": 0.0018438298158757888
+          },
+          "difference_mode": {
+            "window": [
+              20.0,
+              25.0
+            ],
+            "samples": 11,
+            "sigma": 0.11768950070560058,
+            "rms_log_energy_residual": 0.0014796247383669961,
+            "maximum_log_energy_residual": 0.002509834314064041,
+            "ols_sigma_standard_error": 0.00015596614185234782,
+            "half_window_sigmas": [
+              0.11868563961373373,
+              0.11684180979780291
+            ],
+            "half_window_sigma_difference": 0.0018438298159308142
+          },
+          "raw_vertical": {
+            "window": [
+              20.0,
+              25.0
+            ],
+            "samples": 101,
+            "sigma": 0.06746687214930437,
+            "rms_log_energy_residual": 0.012187933338336813,
+            "maximum_log_energy_residual": 0.027116572566359187,
+            "ols_sigma_standard_error": 0.00042014868638225763,
+            "half_window_sigmas": [
+              0.059163202091939204,
+              0.07537036723079028
+            ],
+            "half_window_sigma_difference": 0.01620716513885108
+          }
+        },
+        "shape_coherence": 0.9999805094249206
+      }
+    ],
+    "25:30": [
+      {
+        "run": "b73_late_seeded",
+        "cells": [
+          48,
+          72
+        ],
+        "dt": 0.05,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              25.0,
+              30.0
+            ],
+            "samples": 11,
+            "sigma": 0.11441018368393077,
+            "rms_log_energy_residual": 0.0009846602572617135,
+            "maximum_log_energy_residual": 0.0017342574526486576,
+            "ols_sigma_standard_error": 0.00010379230447981218,
+            "half_window_sigmas": [
+              0.11509658002895518,
+              0.113863588991867
+            ],
+            "half_window_sigma_difference": 0.0012329910370881686
+          },
+          "difference_mode": {
+            "window": [
+              25.0,
+              30.0
+            ],
+            "samples": 11,
+            "sigma": 0.1144101836839508,
+            "rms_log_energy_residual": 0.000984660257261086,
+            "maximum_log_energy_residual": 0.0017342574526426624,
+            "ols_sigma_standard_error": 0.00010379230447974605,
+            "half_window_sigmas": [
+              0.11509658002897512,
+              0.11386358899188824
+            ],
+            "half_window_sigma_difference": 0.001232991037086878
+          },
+          "raw_vertical": {
+            "window": [
+              25.0,
+              30.0
+            ],
+            "samples": 101,
+            "sigma": 0.06942812321220017,
+            "rms_log_energy_residual": 0.011450494490057824,
+            "maximum_log_energy_residual": 0.025503243624934002,
+            "ols_sigma_standard_error": 0.00039472731634431304,
+            "half_window_sigmas": [
+              0.061617886019674446,
+              0.07684697167953204
+            ],
+            "half_window_sigma_difference": 0.015229085659857595
+          }
+        },
+        "shape_coherence": 0.9999837543687413
+      },
+      {
+        "run": "b73_late_half_dt_seeded",
+        "cells": [
+          48,
+          72
+        ],
+        "dt": 0.025,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              25.0,
+              30.0
+            ],
+            "samples": 11,
+            "sigma": 0.11440955031095677,
+            "rms_log_energy_residual": 0.0009841966621103974,
+            "maximum_log_energy_residual": 0.0017333337392798631,
+            "ols_sigma_standard_error": 0.00010374343726013322,
+            "half_window_sigmas": [
+              0.1150955794714638,
+              0.11386319198706735
+            ],
+            "half_window_sigma_difference": 0.001232387484396455
+          },
+          "difference_mode": {
+            "window": [
+              25.0,
+              30.0
+            ],
+            "samples": 11,
+            "sigma": 0.11440955031095269,
+            "rms_log_energy_residual": 0.0009841966620784972,
+            "maximum_log_energy_residual": 0.0017333337392131387,
+            "ols_sigma_standard_error": 0.00010374343725677065,
+            "half_window_sigmas": [
+              0.11509557947143968,
+              0.11386319198708354
+            ],
+            "half_window_sigma_difference": 0.00123238748435614
+          },
+          "raw_vertical": {
+            "window": [
+              25.0,
+              30.0
+            ],
+            "samples": 201,
+            "sigma": 0.0694274911783806,
+            "rms_log_energy_residual": 0.011340982490282536,
+            "maximum_log_energy_residual": 0.025640512795287285,
+            "ols_sigma_standard_error": 0.00027711119925763516,
+            "half_window_sigmas": [
+              0.061695013118564325,
+              0.07684593391849037
+            ],
+            "half_window_sigma_difference": 0.015150920799926047
+          }
+        },
+        "shape_coherence": 0.9999837528818809
+      },
+      {
+        "run": "b73_late_finer_seeded",
+        "cells": [
+          64,
+          96
+        ],
+        "dt": 0.05,
+        "fits": {
+          "seeded_mode": {
+            "window": [
+              25.0,
+              30.0
+            ],
+            "samples": 11,
+            "sigma": 0.1150035041046353,
+            "rms_log_energy_residual": 0.0008233671706674424,
+            "maximum_log_energy_residual": 0.0014675200069590444,
+            "ols_sigma_standard_error": 8.679052033058995e-05,
+            "half_window_sigmas": [
+              0.11558279477697699,
+              0.11454972605550706
+            ],
+            "half_window_sigma_difference": 0.0010330687214699236
+          },
+          "difference_mode": {
+            "window": [
+              25.0,
+              30.0
+            ],
+            "samples": 11,
+            "sigma": 0.1150035041045833,
+            "rms_log_energy_residual": 0.0008233671706591612,
+            "maximum_log_energy_residual": 0.001467520006952605,
+            "ols_sigma_standard_error": 8.679052032971703e-05,
+            "half_window_sigmas": [
+              0.1155827947769225,
+              0.11454972605546221
+            ],
+            "half_window_sigma_difference": 0.0010330687214602924
+          },
+          "raw_vertical": {
+            "window": [
+              25.0,
+              30.0
+            ],
+            "samples": 101,
+            "sigma": 0.09326685049138637,
+            "rms_log_energy_residual": 0.007142628073185113,
+            "maximum_log_energy_residual": 0.01666863635936472,
+            "ols_sigma_standard_error": 0.00024622433672379096,
+            "half_window_sigmas": [
+              0.0882896549119932,
+              0.09777261685522154
+            ],
+            "half_window_sigma_difference": 0.00948296194322834
+          }
+        },
+        "shape_coherence": 0.9999883559007873
+      }
+    ]
+  },
+  "mesh_relative_rate_difference": 0.0037787985890660432,
+  "time_relative_rate_difference": 1.0309158036126748e-05,
+  "half_window_relative_rate_drift": [
+    0.027268359771329964,
+    0.027260145662599652,
+    0.02454002363146692
+  ],
+  "proposed_relative_target": 0.02,
+  "bounded_modal_sensitivity_targets_met": false,
+  "full_b73_validated": false,
+  "quadrature_sensitivity": [
+    {
+      "run": "b73_late_seeded",
+      "trapezoid_sigma": 0.1158326150049562,
+      "relative_rate_difference": 5.845887621101386e-07,
+      "maximum_relative_energy_difference": 0.0031906195538495387,
+      "note": "quadrature sensitivity indicator, not a rigorous error bound"
+    },
+    {
+      "run": "b73_late_half_dt_seeded",
+      "trapezoid_sigma": 0.11583142133583832,
+      "relative_rate_difference": 5.80658004339577e-07,
+      "maximum_relative_energy_difference": 0.0031906195538495387,
+      "note": "quadrature sensitivity indicator, not a rigorous error bound"
+    },
+    {
+      "run": "b73_late_finer_seeded",
+      "trapezoid_sigma": 0.11627191703016272,
+      "relative_rate_difference": 1.1555054801764208e-06,
+      "maximum_relative_energy_difference": 0.0018007675246539587,
+      "note": "quadrature sensitivity indicator, not a rigorous error bound"
+    }
+  ],
+  "common_prefixes_against_t20": {
+    "control": {
+      "diagnostics.csv": 400,
+      "time_steps.csv": 400,
+      "inner_iterations.csv": 3969,
+      "outer_iterations.csv": 1676,
+      "horizontal_profiles.csv": 5945
+    },
+    "seeded": {
+      "diagnostics.csv": 400,
+      "time_steps.csv": 400,
+      "inner_iterations.csv": 4403,
+      "outer_iterations.csv": 1676,
+      "horizontal_profiles.csv": 5945
+    }
+  },
+  "run_timing_probes": {
+    "b73_finer_timing": {
+      "git_commit": "2f8810fbcdbbeea63f25806e9e5a3531d7c4ad56",
+      "git_dirty": true,
+      "firedrake_version": "2026.10.0",
+      "petsc_version": "3.26.0",
+      "python_version": "3.14.4",
+      "mpi_size": 1,
+      "host": "ali-Lenovo-Legion-5P-15IMH05",
+      "start_time": "2026-11-03T12:23:26+02:00",
+      "end_time": "2026-11-03T12:23:51+02:00",
+      "wall_time_seconds": 24.846288841916248,
+      "exit_status": 0
+    },
+    "b73_finer_mpi_timing": {
+      "git_commit": "2f8810fbcdbbeea63f25806e9e5a3531d7c4ad56",
+      "git_dirty": true,
+      "firedrake_version": "2026.10.0",
+      "petsc_version": "3.26.0",
+      "python_version": "3.14.4",
+      "mpi_size": 2,
+      "host": "ali-Lenovo-Legion-5P-15IMH05",
+      "start_time": "2026-11-03T12:26:15+02:00",
+      "end_time": "2026-11-03T12:26:37+02:00",
+      "wall_time_seconds": 22.145406539086252,
+      "exit_status": 0
+    }
+  },
+  "solver_code_unchanged_from": "2f8810f",
+  "predeclared_secondary_25_30": {
+    "mesh_relative_rate_difference": 0.005159150803726365,
+    "time_relative_rate_difference": 5.53601509999008e-06,
+    "half_window_relative_rate_drift": [
+      0.010776934337356887,
+      0.010771718628441814,
+      0.00898293255934904
+    ],
+    "interpretation": "local window only; does not replace the primary-window result or establish a unique asymptotic rate"
+  },
+  "completed_steps": {
+    "b73_late_control": 600,
+    "b73_late_seeded": 600,
+    "b73_late_half_dt_control": 1200,
+    "b73_late_half_dt_seeded": 1200,
+    "b73_late_finer_control": 600,
+    "b73_late_finer_seeded": 600
+  },
+  "thermal_content_absolute_maximum": {
+    "b73_late_control": 4.2984608927820744e-12,
+    "b73_late_seeded": 9.594998406914357e-13,
+    "b73_late_half_dt_control": 4.216727661487951e-12,
+    "b73_late_half_dt_seeded": 1.2551210071265473e-12,
+    "b73_late_finer_control": 6.823899084684726e-12,
+    "b73_late_finer_seeded": 1.6508704125950402e-12
+  },
+  "config_roundtrips": 7,
+  "unit_suite_rerun": false,
+  "unit_suite_rerun_reason": "No changes to source, scripts or tests; this checkpoint changes configs, analysis data and documentation only."
+}

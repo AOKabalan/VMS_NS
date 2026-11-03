@@ -1,0 +1,281 @@
+{
+  "reference": "Exact 1D Neumann heat evolution of each control initial CG1 profile",
+  "formula": "k_n=(n+1/2)pi/H; a_n=sum_j slope_j [sin(k_n z_(j+1))-sin(k_n z_j)]/(H k_n^2); U=sum_n a_n exp(-nu k_n^2 t) sin(k_n z)",
+  "interpretation": "Uses each FE initial profile to isolate evolution error; not a KH growth reference or a static base replacement",
+  "runs": [
+    {
+      "folder": "results/kelvin_helmholtz_shear_layer/b73_late_control",
+      "cells": [
+        48,
+        72
+      ],
+      "coefficient_quadrature_difference": 5.829212980368315e-16,
+      "maximum_256_vs_512_mode_difference": 0.0,
+      "comparisons": [
+        {
+          "time": 10.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.0033919740712527457,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004405268160007525,
+            "maximum_row_error": 0.004682974434135345,
+            "maximum_row_and_midrow_error": 0.004682974434135345
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.003391974071252579,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004405268160007525,
+            "maximum_row_error": 0.004682974434129683,
+            "maximum_row_and_midrow_error": 0.004682974434129683
+          }
+        },
+        {
+          "time": 15.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.005086462351291843,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004306651268979,
+            "maximum_row_error": 0.004359164548381311,
+            "maximum_row_and_midrow_error": 0.00468432522133605
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.005086462351289511,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004306651268979,
+            "maximum_row_error": 0.0043591645483821995,
+            "maximum_row_and_midrow_error": 0.004684325221336771
+          }
+        },
+        {
+          "time": 20.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.0064352780972468104,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004189573079570352,
+            "maximum_row_error": 0.004289740432621092,
+            "maximum_row_and_midrow_error": 0.0055512690170134715
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.006435278097245978,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004189573079570352,
+            "maximum_row_error": 0.004289740432616429,
+            "maximum_row_and_midrow_error": 0.005551269017011529
+          }
+        },
+        {
+          "time": 25.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.007534289177985876,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004071496997020807,
+            "maximum_row_error": 0.0052533318408579666,
+            "maximum_row_and_midrow_error": 0.006332503081280805
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.007534289177986264,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004071496997020807,
+            "maximum_row_error": 0.005253331840858411,
+            "maximum_row_and_midrow_error": 0.0063325030812793615
+          }
+        },
+        {
+          "time": 30.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.008446756482584944,
+            "maximum_1d_galerkin_row_error_against_heat": 0.003954657933581518,
+            "maximum_row_error": 0.006297793441028904,
+            "maximum_row_and_midrow_error": 0.0070381540863183045
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.008446756482583473,
+            "maximum_1d_galerkin_row_error_against_heat": 0.003954657933581518,
+            "maximum_row_error": 0.006297793441027544,
+            "maximum_row_and_midrow_error": 0.0070381540863184155
+          }
+        }
+      ],
+      "dt": 0.05,
+      "viscosity": 0.001,
+      "diffusivity": 0.001
+    },
+    {
+      "folder": "results/kelvin_helmholtz_shear_layer/b73_late_half_dt_control",
+      "cells": [
+        48,
+        72
+      ],
+      "coefficient_quadrature_difference": 5.829212980368315e-16,
+      "maximum_256_vs_512_mode_difference": 0.0,
+      "comparisons": [
+        {
+          "time": 10.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.0033920248174809653,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004405265592867247,
+            "maximum_row_error": 0.004682969199403253,
+            "maximum_row_and_midrow_error": 0.004682969199403253
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.003392024817480077,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004405265592867247,
+            "maximum_row_error": 0.0046829691993987566,
+            "maximum_row_and_midrow_error": 0.0046829691993987566
+          }
+        },
+        {
+          "time": 15.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.0050864985959749864,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004306648636008714,
+            "maximum_row_error": 0.004359150540093226,
+            "maximum_row_and_midrow_error": 0.004684352457470453
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.005086498595974431,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004306648636008714,
+            "maximum_row_error": 0.004359150540088841,
+            "maximum_row_and_midrow_error": 0.004684352457468066
+          }
+        },
+        {
+          "time": 20.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.006435306377902794,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004189570414884547,
+            "maximum_row_error": 0.004289740654964569,
+            "maximum_row_and_midrow_error": 0.005551293749193942
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.006435306377903849,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004189570414884547,
+            "maximum_row_error": 0.004289740654962015,
+            "maximum_row_and_midrow_error": 0.005551293749195607
+          }
+        },
+        {
+          "time": 25.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.007534312013851685,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004071494327627323,
+            "maximum_row_error": 0.005253358114032658,
+            "maximum_row_and_midrow_error": 0.006332525447674375
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.007534312013852629,
+            "maximum_1d_galerkin_row_error_against_heat": 0.004071494327627323,
+            "maximum_row_error": 0.0052533581140328245,
+            "maximum_row_and_midrow_error": 0.00633252544767221
+          }
+        },
+        {
+          "time": 30.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.008446775509185128,
+            "maximum_1d_galerkin_row_error_against_heat": 0.003954655280366648,
+            "maximum_row_error": 0.006297815595100814,
+            "maximum_row_and_midrow_error": 0.007038174361658656
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.008446775509184129,
+            "maximum_1d_galerkin_row_error_against_heat": 0.003954655280366648,
+            "maximum_row_error": 0.006297815595100176,
+            "maximum_row_and_midrow_error": 0.007038174361661098
+          }
+        }
+      ],
+      "dt": 0.025,
+      "viscosity": 0.001,
+      "diffusivity": 0.001
+    },
+    {
+      "folder": "results/kelvin_helmholtz_shear_layer/b73_late_finer_control",
+      "cells": [
+        64,
+        96
+      ],
+      "coefficient_quadrature_difference": 9.78847306261702e-16,
+      "maximum_256_vs_512_mode_difference": 0.0,
+      "comparisons": [
+        {
+          "time": 10.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.001995801587958007,
+            "maximum_1d_galerkin_row_error_against_heat": 0.002530445271405335,
+            "maximum_row_error": 0.0025428683042564293,
+            "maximum_row_and_midrow_error": 0.0025428683042564293
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.001995801587957202,
+            "maximum_1d_galerkin_row_error_against_heat": 0.002530445271405335,
+            "maximum_row_error": 0.0025428683042567624,
+            "maximum_row_and_midrow_error": 0.0025428683042567624
+          }
+        },
+        {
+          "time": 15.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.002824994705497519,
+            "maximum_1d_galerkin_row_error_against_heat": 0.002431702338934527,
+            "maximum_row_error": 0.0024728187126336065,
+            "maximum_row_and_midrow_error": 0.0025697401800704456
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.0028249947054987956,
+            "maximum_1d_galerkin_row_error_against_heat": 0.002431702338934527,
+            "maximum_row_error": 0.0024728187126389356,
+            "maximum_row_and_midrow_error": 0.0025697401800700015
+          }
+        },
+        {
+          "time": 20.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.0034254024103672065,
+            "maximum_1d_galerkin_row_error_against_heat": 0.002365103043312611,
+            "maximum_row_error": 0.0023665646471748847,
+            "maximum_row_and_midrow_error": 0.00304125760175028
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.003425402410368261,
+            "maximum_1d_galerkin_row_error_against_heat": 0.002365103043312611,
+            "maximum_row_error": 0.0023665646471681123,
+            "maximum_row_and_midrow_error": 0.003041257601747338
+          }
+        },
+        {
+          "time": 25.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.0038824096344049486,
+            "maximum_1d_galerkin_row_error_against_heat": 0.0022988803490766596,
+            "maximum_row_error": 0.0028834922857065293,
+            "maximum_row_and_midrow_error": 0.003442373116517572
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.00388240963440592,
+            "maximum_1d_galerkin_row_error_against_heat": 0.0022988803490766596,
+            "maximum_row_error": 0.0028834922857075007,
+            "maximum_row_and_midrow_error": 0.003442373116517683
+          }
+        },
+        {
+          "time": 30.0,
+          "velocity_x": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.004242924723749986,
+            "maximum_1d_galerkin_row_error_against_heat": 0.002233389328948565,
+            "maximum_row_error": 0.0033039685376186345,
+            "maximum_row_and_midrow_error": 0.0037860817577650696
+          },
+          "temperature": {
+            "maximum_row_difference_from_1d_galerkin_bdf2": 0.004242924723751373,
+            "maximum_1d_galerkin_row_error_against_heat": 0.002233389328948565,
+            "maximum_row_error": 0.0033039685376189953,
+            "maximum_row_and_midrow_error": 0.0037860817577665684
+          }
+        }
+      ],
+      "dt": 0.05,
+      "viscosity": 0.001,
+      "diffusivity": 0.001
+    }
+  ],
+  "discrete_reference": {
+    "space": "1D continuous P1 on the same vertical vertices; natural Neumann conditions",
+    "local_mass": "h/6 * [[2,1],[1,2]]",
+    "local_stiffness": "nu/h * [[1,-1],[-1,1]]",
+    "time": "BDF1 startup then (1.5 M/dt + K) U_new = M (2 U_old - .5 U_older)/dt",
+    "interpretation": "comparison with plain 1D Galerkin diffusion; the coupled VMS run is not required to coincide at finite h"
+  }
+}

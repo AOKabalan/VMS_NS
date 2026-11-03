@@ -1886,3 +1886,42 @@ trips, local links and measured-report consistency passed; the plot was viewed.
 Stop at the owner-selected bounded checkpoint. B7.3 remains in progress.
 Next assess a later interval, timestep sensitivity and one more mesh before
 expanding to the full physical matrix or the dry/cloud application phases.
+
+## Phase B7.3 checkpoint: later-window and refinement assessment (2026-11-03)
+
+At the owner's continuation request, completed six bounded runs to t=30 at
+Ri=0.1, Re=1000: matched control/seeded pairs on 48×72 with dt=0.05 and
+dt=0.025, plus 64×96 with dt=0.05. All 4,800 steps converged. No solver,
+source, seed, subscale initialization or tolerance was changed; all integrations
+use the existing single entry point. The additional mesh is an intermediate
+4/3 refinement, not the full study's proposed reference resolution.
+
+The predeclared primary 20–30 modal rates are 0.115833, 0.115831 and 0.116272.
+Mesh sensitivity is 0.3779%, timestep sensitivity 0.001031%. Half-window drift
+is 2.73%, 2.73% and 2.45%, so the combined primary-window target remains unmet.
+The predeclared 25–30 interval gives 0.114410, 0.114410 and 0.115004, with
+smaller half-window drift (0.90–1.08%). This identifies a useful local growth
+window, not a unique asymptotic eigenvalue. Total-energy slopes still differ
+from modal slopes; the unfiltered-energy criterion is not declared satisfied.
+
+Added an independent Neumann heat reference for each zero-seed control's
+initial piecewise-linear profile. Exact cell-integrated sine coefficients were
+checked by independent Gaussian integration; 256/512-mode reference values
+agree at stored precision for t=10–30. Maximum sampled mean-profile error
+at t=30 decreases from 0.007038 to 0.003786 with mesh refinement; halving dt
+barely changes it. A plain 1D P1 Galerkin/BDF2 comparison is retained as a
+discrete diagnostic, without attributing the whole difference to a single term.
+
+The [refinement report](verification/kelvin_helmholtz_b73_refinement.md),
+results/checks/reference JSON and inspected PNG record all windows, controls,
+budget residuals, harmonic content, profile evolution and measured costs.
+The six runs overlapped; per-run wall times must not be summed as batch time.
+
+Validation: seven new configs parse and round-trip; all configured steps and
+startup schemes were checked. Both longer 48×72 trajectories match the full
+t<=20 pilot prefixes bitwise in diagnostics, iteration/step records and Fourier
+profiles, excluding timings. Trapezoid-versus-Simpson rate changes are below
+0.000116%. Source, scripts and tests are unchanged, so the unit suite was not
+rerun for this configuration/data checkpoint. Diff checks, JSON/report
+consistency and local links passed. Full reference/Ri/Re/stabilization studies,
+dry billows and cloud diagnostics remain pending under the bounded budget.

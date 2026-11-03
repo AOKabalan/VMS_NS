@@ -682,3 +682,12 @@ comparison at Ri=0.1, Re=1000, dt=0.05, to t=20. They are preliminary resolution
 The 36 configs under `configs/boussinesq/kh_growth/` prepare the full
 Ri=0/0.1/0.3, Re=1000/2000, reference/refined/half-dt matched-pair matrix.
 Preparing these inputs does not establish that the corresponding runs passed.
+
+For the bounded t=30 follow-up, `kh_growth_late_*` retains 48×72 and dt=0.05,
+`kh_growth_late_half_dt_*` uses dt=0.025, and `kh_growth_late_finer_*` uses
+64×96 and dt=0.05. Each has a control/seeded pair and identical physical
+sampling intervals. The
+[refinement report](verification/kelvin_helmholtz_b73_refinement.md) records
+the primary 20–30 and predeclared secondary windows, independent diffusion
+reference, costs and reproduction commands. Their local modal rates are
+window-conditioned; the full B7.3 matrix remains pending.
