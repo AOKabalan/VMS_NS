@@ -13,13 +13,10 @@ convective form, **EMAC–VMS**.
 
 ## Wave and cloud demos
 
-<p>
-  <a href="docs/media/gravity-wave-clouds.mp4"><img src="docs/media/gravity-wave-clouds.gif" width="49%" alt="Stable gravity waves lifting and lowering a moist layer"></a>
-  <a href="docs/media/kelvin-helmholtz-clouds.mp4"><img src="docs/media/kelvin-helmholtz-clouds.gif" width="49%" alt="Wind shear rolling a moist layer into Kelvin–Helmholtz billows"></a>
-</p>
-
-- **[Gravity waves — video](docs/media/gravity-wave-clouds.mp4):** buoyancy makes a moist layer rise and fall, producing repeating cloud bands.
-- **[Kelvin–Helmholtz billows — video](docs/media/kelvin-helmholtz-clouds.mp4):** wind shear curls the layer into rolling waves.
+| Stable gravity waves | Kelvin–Helmholtz billows |
+| --- | --- |
+| ![Stable gravity waves](docs/media/gravity-wave-clouds.gif) | ![Kelvin–Helmholtz billows](docs/media/kelvin-helmholtz-clouds.gif) |
+| Buoyancy makes a moist layer rise and fall, producing repeating cloud bands. | Wind shear curls the layer into rolling waves. |
 
 Blue in the top panels is a simplified cloud indicator; bottom colours show air rotation.
 These are idealized 2D pilots; the KH cloud patches are affected by numerical moisture overshoot.

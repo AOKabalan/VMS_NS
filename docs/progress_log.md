@@ -2116,3 +2116,10 @@ media assets, README/report links and diff checks passed; the previews were
 visually inspected. The latest origin/main was fetched and is an ancestor of
 the local branch. No solver changes, tests or simulation reruns were needed
 for this documentation/media update.
+
+## Direct inline GIFs in the README (2026-11-03)
+
+At the owner's request, changed the demo section to standard Markdown GIF
+images in a two-column table with short physics captions. Removed the MP4
+wrappers and video-link bullets; the full MP4s remain in `docs/media/`.
+Image paths and diff checks passed. No media or solver data changed.
