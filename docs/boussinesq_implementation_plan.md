@@ -3,6 +3,9 @@
 Status: B0–B5, boundary prerequisite G4 and B7.1–B7.2 completed, 3 November 2026.
 B7.3 includes Fourier diagnostics and bounded later-window/refinement checks;
 the full reference and stabilization-spread studies remain pending.
+An offline P1 cloud/vorticity visualization path and a bounded four-wave pilot
+were added at the owner's request; the full B7.4/B7.5 acceptance studies remain
+separate.
 B7 now has its boundary prerequisite; B6 remains the separate compatibility
 extension. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
@@ -662,8 +665,8 @@ solver/quadrature accuracy. Report any unexplained remainder and combination.
 
 #### B7.5 — Four-wave moisture visualization
 
-After B5 and the dry study, run four waves with fixed-seed noise, Ri = 0.1,
-Re = 1000, to t = 200. Use the project defaults and add conservative thermal
+For the full application study, after B5 and the dry study, run four waves with
+fixed-seed noise, Ri = 0.1, Re = 1000, to t = 200. Use the project defaults and add conservative thermal
 transport as a comparison if the budget study shows a material effect. Repeat
 the saturation-height rates 0.02, 0.03, 0.05; these are diagnostic sensitivity
 values, not guarantees that one run saturates the whole layer.
@@ -682,6 +685,32 @@ vortex pairing. Do not force four bands, pairing, or whole-layer saturation by
 adjusting data or clipping moisture. Document the passive-tracer and saturation
 proxy limitations. The 2D result is a cross-section, not a resolved spanwise cloud
 field; absence of the proposed morphology is a legitimate result.
+
+**Bounded visualization pilot authorized on 3 November 2026.** The owner asked
+to produce cloud images after the coupled manufactured-solution recheck,
+without waiting for the full dry-budget matrix. This is a scoped exploratory
+run, not completion of the studies above. The recorded config is
+`configs/boussinesq/kh_cloud_visualization_pilot.toml`: four waves, 96×64 P1
+cells, clustering 1.5, $\epsilon=0.02$, noise 0.01/seed 1729, static linear OSS,
+conservative scalar transport, BDF2/dt 0.2 to t 80, and gamma 0.03. Other physical
+and moisture parameters retain the proposed values. A short timing run bounds
+the compute cost before the trajectory is started. Field output occurs every
+five steps (one time unit); the first frame is t=1, not an invented t=0 frame.
+
+The solver entry point remains `scripts/run_simulation.py`. Post-process with
+`scripts/visualize_kh_clouds.py`, using the optional `--output` directory.
+It reads saved velocity/T/q series, gathers MPI pieces, verifies a full-domain
+mesh and writes a combined cloud/vorticity VTK series, CSV diagnostics, PNG
+frames, history plots, a GIF and an MP4 when ffmpeg is available. Raw q is not
+clipped. The pure numerical kernels are in
+`postprocessing/cloud_visualization.py`; two analytic tests check raw versus
+nodal saturation, vorticity, P1 integrals and an exact cloud-height threshold.
+Saved-frame KE and scalar integrals are also compared with assembled FE
+diagnostics for serial/MPI output. Cloud fraction is checked at two quadrature
+resolutions. The script supports P1 only and requires a completed run by
+default; `--allow-incomplete` explicitly labels previews. Isothermal defaults
+and existing solver outputs are unchanged. Run results and limitations are
+reported separately in `verification/kelvin_helmholtz_cloud_pilot.md`.
 
 #### B7.6 — Optional extensions, separately approved after B7.5
 

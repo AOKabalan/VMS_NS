@@ -83,6 +83,8 @@ Each run is described by one TOML file and writes its fields, diagnostics and pr
 Existing local results are grouped by [purpose and physical model](docs/results_layout.md).
 The latest Boussinesq convergence figures can be regenerated with
 `python scripts/plot_boussinesq_verification.py`.
+The [bounded cloud visualization pilot](docs/verification/kelvin_helmholtz_cloud_pilot.md)
+records the four-wave setup, post-processing command and limitations.
 
 ## Documentation
 

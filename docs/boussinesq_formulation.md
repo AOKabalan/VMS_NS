@@ -1,7 +1,8 @@
 # Thermal Boussinesq VMS formulation
 
 Status: B5 budgets and G4 periodic/free-slip boundary support implemented,
-with KH setup/startup and optional Fourier measurements, 3 November 2026.
+with KH setup/startup, optional Fourier measurements and a bounded cloud
+visualization pilot, 3 November 2026.
 This document specifies the thermal
 buoyancy model requested for the existing incompressible Navier–Stokes framework;
 The implemented subset includes Taylor–Hood Galerkin and equal-order static
@@ -1017,6 +1018,30 @@ positivity-preserving; report tracer undershoot/overshoot rather than clipping
 the conserved scalar to force a cloud pattern. Two-dimensional sections can
 show periodic lifted moist regions; spanwise cloud bands and pairing remain
 observations to test, not prescribed outcomes.
+
+**Implemented visualization path.** `scripts/visualize_kh_clouds.py` applies
+(B25) to saved P1 triangle fields. It gathers the complete serial/MPI VTK
+trajectory in one post-processing process and checks the triangle areas against
+the full domain area. The original FE solves, tracer and temperature are not
+changed. `postprocessing/cloud_visualization.py` supplies nodal $q_c$, cell
+vorticity $\partial_x w-\partial_z u$, and whole-mesh diagnostics. The P1
+integrals of scalar content, resolved KE and $E_p$ use the triangle mass
+formula. Cloud fraction uses the raw expression at Duffy–Gauss points with
+8 and 12 nodes in each reference direction, reporting their absolute difference.
+The threshold is $10^{-6}$. Nodal and sampled quadrature maxima of $q_c$ are
+reported separately. These are saved-frame diagnostics, separate from the
+time-discrete tested-equation budgets recorded by the solver at every step.
+The offline path explicitly rejects P2 output rather than treating a VTK display
+reconstruction as the original quadratic FE function.
+
+An owner-authorized coarse four-wave visualization pilot uses Re = 1000,
+Ri = 0.1, Pr = Sc = 1, $\epsilon=0.02$, relative noise 0.01 with seed 1729,
+96×64 cells and clustering 1.5, BDF2 with $\Delta t=0.2$ to $t=80$,
+static linear OSS and conservative scalar transport. The larger finite
+perturbation shortens the wait for roll-up; this is not the small-amplitude
+growth-rate experiment. These recorded choices bound the cost of producing
+visualizations and do not establish spatial/time convergence or finish the
+full dry-budget and moist sensitivity studies.
 
 The equations and limits above, rather than agreement with a single cavity or
 cloud picture, are the acceptance basis for the implementation plan.

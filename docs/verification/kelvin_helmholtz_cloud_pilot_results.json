@@ -1,0 +1,96 @@
+{
+  "run": "results/bousinesq/cases/kelvin_helmholtz_shear_layer/b75_cloud_visualization_pilot",
+  "run_info": {
+    "git_commit": "4eca5755a1c09c1a0ad701df647d234cf5e9d350",
+    "git_dirty": true,
+    "firedrake_version": "2026.10.0",
+    "petsc_version": "3.26.0",
+    "python_version": "3.14.4",
+    "mpi_size": 2,
+    "host": "ali-Lenovo-Legion-5P-15IMH05",
+    "start_time": "2026-11-03T14:52:41+02:00",
+    "end_time": "2026-11-03T15:20:20+02:00",
+    "wall_time_seconds": 1659.8795414830092,
+    "exit_status": 0
+  },
+  "parameters": {
+    "reynolds": 1000.0,
+    "prandtl": 1.0,
+    "schmidt": 1.0,
+    "richardson": 0.1,
+    "n_waves": 4,
+    "wave_number": 0.4446,
+    "height": 20.0,
+    "epsilon": 0.02,
+    "epsilon_noise": 0.01,
+    "random_seed": 1729,
+    "noise_modes": [
+      1,
+      2,
+      3
+    ],
+    "wall_buffer": 1.0,
+    "wall_transition_width": 2.0,
+    "moisture": true,
+    "rh_peak": 0.97,
+    "moisture_width": 1.5,
+    "saturation_height_rate": 0.03,
+    "saturation_temperature_rate": 0.0,
+    "clustering": 1.5
+  },
+  "status": "complete",
+  "frames": 80,
+  "first_time": 1.0,
+  "last_time": 80.0,
+  "first_cloud_time": 28.0,
+  "maximum_cloud": {
+    "time": 31.0,
+    "kinetic_energy": 501.19251471327095,
+    "vertical_kinetic_energy": 5.019591085697062,
+    "potential_energy": -555.5244956079965,
+    "temperature_content": 1.6342482922482304e-13,
+    "moisture_content": 145.9107280010752,
+    "moisture_nodal_min": -3.9605763166346265e-13,
+    "moisture_nodal_max": 0.9924529062372835,
+    "cloud_proxy_nodal_max": 0.01867541414411611,
+    "cloud_proxy_quadrature_max": 0.018546482737653913,
+    "cloud_fraction": 0.0004452709640735562,
+    "cloud_fraction_quadrature_change": 5.764979857414724e-06
+  },
+  "maximum_cloud_point": {
+    "position": [
+      20.60948846821914,
+      0.8857482993555288
+    ],
+    "moisture": 0.9924529062372835,
+    "saturation": 0.9737774920931674
+  },
+  "maximum_cloud_fraction": 0.00045316156986067584,
+  "maximum_fraction_quadrature_change": 5.764979857414724e-06,
+  "moisture_content_relative_drift": 7.771561172376096e-16,
+  "moisture_nodal_min": -0.0013222090701166486,
+  "moisture_nodal_max": 1.002153364696913,
+  "initial_continuum_moisture_upper_bound": 0.9704911868211735,
+  "maximum_moisture_bound_excess": 0.03166217787573944,
+  "cloud_threshold": 1e-06,
+  "solver_comparison": {
+    "saved_integrals_max_absolute_difference": {
+      "kinetic_energy": 1.7053025658242404e-12,
+      "vertical_kinetic_energy": 4.263256414560601e-14,
+      "temperature_content": 6.0893512454640586e-12,
+      "moisture_content": 7.105427357601002e-13
+    },
+    "solver_steps": 400,
+    "maximum_absolute_thermal_content_budget_q_residual": 5.509481759702339e-15,
+    "maximum_absolute_boussinesq_energy_budget_residual": 2.835758810985457e-14,
+    "all_steps_moisture_relative_drift": 6.994405055138486e-15
+  },
+  "quadrature_orders_per_direction": [
+    8,
+    12
+  ],
+  "display": "nodal positive part; global common cloud scale; central |z|<=5",
+  "fraction": "raw P1 q-exp(alpha*T-gamma*z) at triangle quadrature points; whole domain",
+  "limits": "Coarse visualization pilot; no latent heat, condensate removal or production convergence claim.",
+  "artifacts": "results/bousinesq/clouds/four_wave_pilot"
+}

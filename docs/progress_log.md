@@ -1995,3 +1995,43 @@ all compatibility links and local README links. Exported tables match raw
 convergence/order records, and annotated rates were independently recomputed.
 All three figures were visually inspected. Ruff and diff checks passed.
 No solver changes, new tests or additional simulation runs were needed.
+
+## B7.5 bounded cloud visualization pilot (2026-11-03)
+
+At the owner's request, added a P1 offline cloud/vorticity post-processor and
+ran a bounded four-wave moisture case after the MMS recheck. The full B7.3
+matrix, B7.4 dry-budget study and B7.5 production/sensitivity studies remain
+pending. The pilot uses 96×64 clustered cells, epsilon 0.02/noise 0.01 with
+seed 1729, static linear OSS, conservative scalar transport and BDF2/dt 0.2
+to t=80. Re/Ri/Pr/Sc and moisture parameters retain the proposed baseline.
+This explicit visualization configuration bounds cost and reaches roll-up
+earlier than the small-seed growth experiment.
+
+All 400 steps converged on two local MPI processes in 1659.88 s. Maximum
+advective CFL was 1.00709. Four billows develop; vertical KE peaks at 13.32430
+at t=45.8 and no completed pairing is apparent through t=80. The post-processor
+gathers the full MPI VTK trajectory, checks its domain area, computes nodal
+q_c and cell vorticity, and exports 80 combined VTK frames, PNGs, GIF/MP4,
+CSV and history plots under `results/bousinesq/clouds/four_wave_pilot/`.
+Raw q is unchanged. The simulation entry point and solver outputs are unchanged.
+
+The cloud-proxy signal is brief (saved t=28–35), with maximum nodal q_c
+0.0186754 at t=31 and maximum whole-domain cloud fraction 0.0453162% at t=32.
+Its strongest point relies on tracer overshoot: q=0.992453 and q_sat=0.973777
+there, whereas the continuum initial q upper bound is 0.970491. Saved tracer
+extrema span [-0.00132221, 1.00215336]. This is a reported numerical finding,
+not validation of physical cloud morphology. No tracer clipping or parameter
+adjustment was used to force the intended cloud pattern. Refinement and tracer
+bound checks are required before interpreting the cloud patches physically.
+
+Checks: two analytic diagnostic tests passed, including mixed triangle
+orientations, raw versus nodal saturation, P1 energy/scalar integrals and an
+exact height-threshold fraction. Serial/MPI timing outputs and all final frames
+match assembled FE diagnostics; the largest absolute integral difference is
+6.09e-12. Across all solver steps, moisture relative drift is 6.99e-15, the
+largest absolute q-content budget residual is 5.51e-15, and the coupled energy
+residual is 2.84e-14. Cloud fraction at 8/12-point Duffy rules differs by at most
+5.76e-6 absolute. All 80 GIF/MP4/VTK time sequences, finite VTK fields and
+preserved q extrema were checked; peak, final and history figures were viewed.
+Ruff, local links and diff checks passed. The report and measured summary are
+`docs/verification/kelvin_helmholtz_cloud_pilot.md` and its `_results.json`.
