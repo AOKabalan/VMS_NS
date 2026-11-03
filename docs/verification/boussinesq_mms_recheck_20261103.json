@@ -1,0 +1,231 @@
+{
+  "verified_utc": "2026-11-03T12:27:28+00:00",
+  "commit": "8349409e795bacb1e70933fb489dc8b875891dab",
+  "source_tree": "acf9bea249ef477c27a300f14ae9a3b791425165",
+  "tests": "tests/verification/test_boussinesq_convergence.py",
+  "result": {
+    "passed": 6,
+    "seconds": 25.88
+  },
+  "artifacts": "results/verification/boussinesq_mms_w9v57zb9",
+  "spatial_scope": {
+    "case": "manufactured_boussinesq",
+    "subscale_space": "oss",
+    "subscale_dynamics": "static",
+    "scale_splitting": "linear",
+    "scheme": "bdf1",
+    "dt": 0.05,
+    "t_end": 0.1,
+    "mesh_sizes": [
+      8,
+      16,
+      32
+    ]
+  },
+  "exact_solution": {
+    "psi": "x^2(1-x)^2 y^2(1-y)^2",
+    "velocity": "(1+t) (d_y psi, -d_x psi)",
+    "pressure": "(1+t)(x-1/2)",
+    "temperature": "(1+t)(1+x+y+xy)",
+    "viscosity": 0.1,
+    "diffusivity": 0.2,
+    "expansion_coefficient": 1.0,
+    "gravity": [
+      0.0,
+      -1.0
+    ],
+    "reference_temperature": 0.0
+  },
+  "spatial": {
+    "P1": {
+      "table": [
+        {
+          "level": "cells8x8",
+          "refinement": "8",
+          "velocity_error_l2": "0.0009700867294279082",
+          "velocity_error_l2_rate": "",
+          "velocity_gradient_error_l2": "0.02168967362048775",
+          "velocity_gradient_error_l2_rate": "",
+          "pressure_error_l2": "0.001294609486545489",
+          "pressure_error_l2_rate": "",
+          "temperature_error_l2": "0.0017573875241186344",
+          "temperature_error_l2_rate": "",
+          "temperature_gradient_error_l2": "0.07939063088161749",
+          "temperature_gradient_error_l2_rate": ""
+        },
+        {
+          "level": "cells16x16",
+          "refinement": "16",
+          "velocity_error_l2": "0.000249073651965584",
+          "velocity_error_l2_rate": "1.9615413200264595",
+          "velocity_gradient_error_l2": "0.010980717237441774",
+          "velocity_gradient_error_l2_rate": "0.9820360527059808",
+          "pressure_error_l2": "0.00040589849209435547",
+          "pressure_error_l2_rate": "1.6733260951290707",
+          "temperature_error_l2": "0.00043898016842609425",
+          "temperature_error_l2_rate": "2.001204686763689",
+          "temperature_gradient_error_l2": "0.03969348971443516",
+          "temperature_gradient_error_l2_rate": "1.0000663561160923"
+        },
+        {
+          "level": "cells32x32",
+          "refinement": "32",
+          "velocity_error_l2": "6.207682018558528e-05",
+          "velocity_error_l2_rate": "2.0044458513204484",
+          "velocity_gradient_error_l2": "0.00549000181432175",
+          "velocity_gradient_error_l2_rate": "1.0000937601166233",
+          "pressure_error_l2": "0.00012749948423754827",
+          "pressure_error_l2_rate": "1.6706275693707127",
+          "temperature_error_l2": "0.00010971428071309628",
+          "temperature_error_l2_rate": "2.000404442239854",
+          "temperature_gradient_error_l2": "0.019846484575016813",
+          "temperature_gradient_error_l2_rate": "1.0000189204983145"
+        }
+      ],
+      "finest_rates": {
+        "velocity_error_l2": 2.0044458513204484,
+        "velocity_gradient_error_l2": 1.0000937601166233,
+        "pressure_error_l2": 1.6706275693707127,
+        "temperature_error_l2": 2.000404442239854,
+        "temperature_gradient_error_l2": 1.0000189204983145
+      }
+    },
+    "P2": {
+      "table": [
+        {
+          "level": "cells8x8",
+          "refinement": "8",
+          "velocity_error_l2": "5.455555028628151e-05",
+          "velocity_error_l2_rate": "",
+          "velocity_gradient_error_l2": "0.0030202737227267564",
+          "velocity_gradient_error_l2_rate": "",
+          "pressure_error_l2": "0.0004477524048356523",
+          "pressure_error_l2_rate": "",
+          "temperature_error_l2": "3.0524461344155553e-06",
+          "temperature_error_l2_rate": "",
+          "temperature_gradient_error_l2": "0.0001351855256485359",
+          "temperature_gradient_error_l2_rate": ""
+        },
+        {
+          "level": "cells16x16",
+          "refinement": "16",
+          "velocity_error_l2": "6.202863643865801e-06",
+          "velocity_error_l2_rate": "3.1367196627061906",
+          "velocity_gradient_error_l2": "0.0007400837446664994",
+          "velocity_gradient_error_l2_rate": "2.028918870486751",
+          "pressure_error_l2": "7.353233875264054e-05",
+          "pressure_error_l2_rate": "2.606250404015456",
+          "temperature_error_l2": "2.047434585894468e-07",
+          "temperature_error_l2_rate": "3.8980765720227106",
+          "temperature_gradient_error_l2": "2.0853673838800403e-05",
+          "temperature_gradient_error_l2_rate": "2.6965672161178142"
+        },
+        {
+          "level": "cells32x32",
+          "refinement": "32",
+          "velocity_error_l2": "7.468039030294733e-07",
+          "velocity_error_l2_rate": "3.054133038153347",
+          "velocity_gradient_error_l2": "0.00018299456748386582",
+          "velocity_gradient_error_l2_rate": "2.015887708890818",
+          "pressure_error_l2": "1.1840903620363812e-05",
+          "pressure_error_l2_rate": "2.6345996894589634",
+          "temperature_error_l2": "1.2499199784146067e-08",
+          "temperature_error_l2_rate": "4.03390971985519",
+          "temperature_gradient_error_l2": "2.716782919153839e-06",
+          "temperature_gradient_error_l2_rate": "2.940330370211598"
+        }
+      ],
+      "finest_rates": {
+        "velocity_error_l2": 3.054133038153347,
+        "velocity_gradient_error_l2": 2.015887708890818,
+        "pressure_error_l2": 2.6345996894589634,
+        "temperature_error_l2": 4.03390971985519,
+        "temperature_gradient_error_l2": 2.940330370211598
+      }
+    }
+  },
+  "temporal": {
+    "bdf3": {
+      "scheme": "bdf3",
+      "errors": {
+        "velocity": [
+          1.6837336287504633e-05,
+          2.01949528028284e-06,
+          2.473418161981623e-07
+        ],
+        "temperature": [
+          5.013191020020559e-05,
+          6.062116380410926e-06,
+          7.454856285222479e-07
+        ]
+      },
+      "rates": {
+        "velocity": 3.02941670342512,
+        "temperature": 3.023569103620658
+      }
+    },
+    "crank_nicolson": {
+      "scheme": "crank_nicolson",
+      "errors": {
+        "velocity": [
+          0.00011748677808554802,
+          3.0650379023378045e-05,
+          7.842116670973107e-06
+        ],
+        "temperature": [
+          0.0008124247473971241,
+          0.0002081737004104607,
+          5.2739063839919785e-05
+        ]
+      },
+      "rates": {
+        "velocity": 1.9665899036298462,
+        "temperature": 1.9808439499485244
+      }
+    },
+    "bdf2": {
+      "scheme": "bdf2",
+      "errors": {
+        "velocity": [
+          0.00017834944807917073,
+          4.382796329802851e-05,
+          1.0852951775853828e-05
+        ],
+        "temperature": [
+          0.0006639092123663022,
+          0.0001646621350665192,
+          4.096406472438281e-05
+        ]
+      },
+      "rates": {
+        "velocity": 2.013764158926748,
+        "temperature": 2.0070780565471806
+      }
+    },
+    "bdf1": {
+      "scheme": "bdf1",
+      "errors": {
+        "velocity": [
+          0.0016265427876880766,
+          0.0008348914188529384,
+          0.0004230887007152816
+        ],
+        "temperature": [
+          0.009788790056881632,
+          0.004991482184719171,
+          0.0025208876614585527
+        ]
+      },
+      "rates": {
+        "velocity": 0.9806284245698698,
+        "temperature": 0.9855364484103573
+      }
+    }
+  },
+  "temporal_scope": "Source-free periodic semidiscrete shear eigenmode; dynamic linear OSS; buoyancy drives velocity; matching OSS subscales vanish in this test.",
+  "limitations": [
+    "Spatial study covers representative static linear OSS, not every stabilization variant.",
+    "The bilinear exact temperature is representable in P2; its rate above 3 is not a general fourth-order claim.",
+    "Temporal histories and buoyancy coupling are tested independently with an analytic semidiscrete solution."
+  ]
+}

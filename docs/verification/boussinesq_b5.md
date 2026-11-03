@@ -86,6 +86,21 @@ coarse error threshold. Refining 4×4→8×8 reduces that error to `5.13e-6`, or
 formulation or weakening that older test.
 The runnable conservative Galerkin example records the factorization option.
 
+### Current-revision recheck, 3 November 2026
+
+At the owner's request, reran all six tests in
+`tests/verification/test_boussinesq_convergence.py` against revision `8349409`:
+**6 passed in 25.88 s**. The observed rates reproduce the tables above.
+[Fresh errors, rates, exact fields and provenance](boussinesq_mms_recheck_20261103.json)
+are recorded separately; raw run artifacts are under
+`results/verification/boussinesq_mms_w9v57zb9/`.
+
+This verifies coupled manufactured-solution spatial refinement for representative
+static linear OSS at P1/P2, plus buoyancy-driven temporal refinement for dynamic
+linear OSS. It is not an exhaustive convergence matrix for all stabilization
+variants. The representable-temperature and zero-subscale qualifications above
+remain applicable. No solver or test code was changed for the recheck.
+
 ## Parallel agreement and compatibility
 
 `tests/verification/boussinesq_mpi_probe.py` runs the same nonlinear dynamic OSS

@@ -1952,3 +1952,19 @@ number in one upstream perturbation README is documented without editing it.
 No solver, case, config or test was changed and no new simulation was launched.
 The new reference README records paths, source, revision, extraction command,
 table conventions and archive integrity information.
+
+## Rechecked Boussinesq manufactured-solution verification (2026-11-03)
+
+Confirmed the coupled MMS/refinement verification was already completed in B5.
+At the owner's request, reran its six existing verification tests against
+`8349409`: all passed in 25.88 s. Static linear OSS on 8×8/16×16/32×32 meshes
+recovers velocity L2 orders 2.0044 / 3.0541 for P1/P2, with pressure and
+temperature meeting their targets. The source-free buoyant shear test recovers
+velocity/temperature temporal orders near 1, 2, 3 and 2 for BDF1, BDF2, BDF3
+and CN. The P2 temperature is representable and the temporal OSS subscales
+vanish; these are representative checks, not all-variant convergence claims.
+
+Updated the B5 report with fresh measured errors, rates and provenance in
+`docs/verification/boussinesq_mms_recheck_20261103.json`. Run artifacts are under
+`results/verification/boussinesq_mms_w9v57zb9/`. No implementation, configuration
+or test was changed. JSON consistency, links and diff checks passed.
