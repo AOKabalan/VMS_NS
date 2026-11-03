@@ -1,0 +1,188 @@
+{
+  "cloud": {
+    "run": "results/bousinesq/cases/internal_gravity_wave/gravity_wave_cloud_pilot",
+    "run_info": {
+      "git_commit": "28b8499d522c98eb17e419c4c5d2202d7d9e4576",
+      "git_dirty": true,
+      "firedrake_version": "2026.10.0",
+      "petsc_version": "3.26.0",
+      "python_version": "3.14.4",
+      "mpi_size": 2,
+      "host": "ali-Lenovo-Legion-5P-15IMH05",
+      "start_time": "2026-11-03T16:06:48+02:00",
+      "end_time": "2026-11-03T16:11:12+02:00",
+      "wall_time_seconds": 263.4033886238467,
+      "exit_status": 0
+    },
+    "parameters": {
+      "n_waves": 4,
+      "wave_number": 1.0,
+      "height": 6.283185307179586,
+      "temperature_gradient": 1.0,
+      "buoyancy_coefficient": 1.0,
+      "displacement_amplitude": 0.2,
+      "diffusivity": 0.01,
+      "moisture_diffusivity": 0.0002,
+      "moisture": true,
+      "rh_peak": 0.98,
+      "moisture_width": 1.2,
+      "saturation_height_rate": 0.3,
+      "saturation_temperature_rate": 0.0
+    },
+    "status": "complete",
+    "frames": 120,
+    "first_time": 0.175620368276018,
+    "last_time": 21.0744441931222,
+    "first_cloud_time": 0.526861104828054,
+    "maximum_cloud": {
+      "time": 1.75620368276018,
+      "kinetic_energy": 9.924261308253003e-06,
+      "vertical_kinetic_energy": 7.783841385822146e-06,
+      "potential_energy": -518.7541702427764,
+      "temperature_content": -7.549516567451064e-15,
+      "moisture_content": 45.49329213485413,
+      "moisture_nodal_min": -6.9963144650074705e-06,
+      "moisture_nodal_max": 1.004211432982836,
+      "moisture_quadrature_min": -2.6558281354351925e-05,
+      "moisture_quadrature_max": 1.0042110733277867,
+      "cloud_proxy_nodal_max": 0.036265677365642235,
+      "cloud_proxy_quadrature_max": 0.036207534540403485,
+      "cloud_fraction": 0.019177595696822987,
+      "cloud_fraction_quadrature_change": 2.7190047294279457e-05
+    },
+    "maximum_cloud_point": {
+      "position": [
+        12.566370614359172,
+        0.19634954084936207
+      ],
+      "moisture": 0.9790621377855808,
+      "saturation": 0.9427964604199386
+    },
+    "maximum_cloud_fraction": 0.019177595696822987,
+    "maximum_fraction_quadrature_change": 0.0003248940283616525,
+    "moisture_content_relative_drift": 1.9488865676819955e-07,
+    "moisture_nodal_min": -2.6136902377555737e-05,
+    "moisture_nodal_max": 1.0047522774059412,
+    "moisture_quadrature_min": -2.7929781613488613e-05,
+    "moisture_quadrature_max": 1.0047039561329485,
+    "initial_continuum_moisture_upper_bound": 1.003620729302712,
+    "maximum_moisture_bound_excess": 0.0011315481032292407,
+    "cloud_threshold": 1e-06,
+    "solver_comparison": {
+      "saved_integrals_max_absolute_difference": {
+        "kinetic_energy": 2.1094237467877974e-15,
+        "vertical_kinetic_energy": 1.609823385706477e-15,
+        "temperature_content": 7.593925488436071e-14,
+        "moisture_content": 1.7053025658242404e-13
+      },
+      "solver_steps": 240,
+      "all_steps_moisture_relative_drift": 1.9565908859764392e-07
+    },
+    "quadrature_orders_per_direction": [
+      8,
+      12
+    ],
+    "display": {
+      "cloud": "nodal positive part on display subtriangles; global common cloud scale",
+      "vtk_cloud": "nodal P1/P2 interpolation; P2 can be negative between nodes",
+      "vertical_limits": [
+        -2.0,
+        2.0
+      ]
+    },
+    "fraction": "raw P1/P2 q-exp(alpha*T-gamma*z) at triangle quadrature points; whole domain",
+    "limits": "Coarse visualization pilot; no latent heat, condensate removal or production convergence claim."
+  },
+  "wave": {
+    "run": "results/bousinesq/cases/internal_gravity_wave/gravity_wave_cloud_pilot",
+    "run_info": {
+      "git_commit": "28b8499d522c98eb17e419c4c5d2202d7d9e4576",
+      "git_dirty": true,
+      "firedrake_version": "2026.10.0",
+      "petsc_version": "3.26.0",
+      "python_version": "3.14.4",
+      "mpi_size": 2,
+      "host": "ali-Lenovo-Legion-5P-15IMH05",
+      "start_time": "2026-11-03T16:06:48+02:00",
+      "end_time": "2026-11-03T16:11:12+02:00",
+      "wall_time_seconds": 263.4033886238467,
+      "exit_status": 0
+    },
+    "linear_reference_period": 7.024814731040727,
+    "measured_period": 7.041545424422607,
+    "period_relative_error": 0.0023816561749239185,
+    "period_estimates": [
+      7.041559017967204,
+      7.041552851387333,
+      7.041542308650666,
+      7.041527519685223
+    ],
+    "velocity_zero_crossings": [
+      1.7602498368711532,
+      5.281030232240477,
+      8.801808854838358,
+      12.32258308362781,
+      15.843351163489023,
+      19.364110603313033
+    ],
+    "minimum_temperature_gradient": 0.9045908136013106,
+    "maximum_displacement_mode": 0.19462419233786982,
+    "reference_scope": "linear damped mode; full solver retains nonlinear advection",
+    "overturning_check": "minimum P1/P2 dT/dz at vertices of every affine parent triangle",
+    "velocity_mode_rms_error_over_initial_amplitude": 0.01533176651347069,
+    "displacement_mode_rms_error_over_initial_amplitude": 0.01528702450044145,
+    "acceptance": {
+      "period_within_two_percent": true,
+      "modal_errors_within_five_percent": true,
+      "no_overturning": true
+    },
+    "minimum_cloud_area_fraction_in_lifted_air": 1.0,
+    "cloud_fraction_quadrature_order": 10
+  },
+  "linear_check": {
+    "run": "results/bousinesq/cases/internal_gravity_wave/gravity_wave_period_check_final",
+    "run_info": {
+      "git_commit": "28b8499d522c98eb17e419c4c5d2202d7d9e4576",
+      "git_dirty": true,
+      "firedrake_version": "2026.10.0",
+      "petsc_version": "3.26.0",
+      "python_version": "3.14.4",
+      "mpi_size": 1,
+      "host": "ali-Lenovo-Legion-5P-15IMH05",
+      "start_time": "2026-11-03T16:04:43+02:00",
+      "end_time": "2026-11-03T16:05:29+02:00",
+      "wall_time_seconds": 45.31220746017061,
+      "exit_status": 0
+    },
+    "linear_reference_period": 7.024814731040727,
+    "measured_period": 7.039264213735507,
+    "period_relative_error": 0.0020569201107798474,
+    "period_estimates": [
+      7.039285187065083,
+      7.039270431309128,
+      7.039256825408945,
+      7.039244411158872
+    ],
+    "velocity_zero_crossings": [
+      1.7596935606743087,
+      5.279339982262168,
+      8.798978747739392,
+      12.318610413571296,
+      15.838235573148337,
+      19.35785482473017
+    ],
+    "minimum_temperature_gradient": 0.9950558394043096,
+    "maximum_displacement_mode": 0.009736972469101986,
+    "reference_scope": "linear damped mode; full solver retains nonlinear advection",
+    "overturning_check": "minimum P1/P2 dT/dz at vertices of every affine parent triangle",
+    "velocity_mode_rms_error_over_initial_amplitude": 0.013337621005066769,
+    "displacement_mode_rms_error_over_initial_amplitude": 0.013244729203938784,
+    "acceptance": {
+      "period_within_two_percent": true,
+      "modal_errors_within_five_percent": true,
+      "no_overturning": true
+    }
+  },
+  "artifacts": "results/bousinesq/clouds/gravity_wave_pilot",
+  "scope": "Bounded illustrative internal-gravity-wave/moisture pilot; no ice microphysics or resolution convergence study."
+}

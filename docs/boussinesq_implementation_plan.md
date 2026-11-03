@@ -6,6 +6,8 @@ the full reference and stabilization-spread studies remain pending.
 An offline P1 cloud/vorticity visualization path and a bounded four-wave pilot
 were added at the owner's request; the full B7.4/B7.5 acceptance studies remain
 separate.
+A separate B8 gravity-wave application now accompanies the KH case; its
+formulation and bounded checks are described in [the gravity-wave note](gravity_wave_formulation.md).
 B7 now has its boundary prerequisite; B6 remains the separate compatibility
 extension. Equations refer to the companion
 [thermal formulation](boussinesq_formulation.md). The objective is one shared
@@ -724,6 +726,49 @@ documented smoothing-sensitivity study. No such feedback is part of B7.5.
 
 A 3D spanwise-periodic extension needs agreed resolution, run-cost/core-count
 estimates, boundary construction and a distinct secondary-instability study.
+
+### B8 — Stable internal gravity waves with a passive moist layer
+
+At the owner's request, add an application for undulatus-like ripple patterns
+with no imposed shear. This is independent of the outstanding full KH matrices
+and does not extend the physical model to ice microphysics or latent heating.
+The [separate derivation](gravity_wave_formulation.md) specifies a stable linear
+temperature gradient, free-slip velocity walls, fixed thermal wall values and
+insulated moisture. The small standing wave is initialized by a divergence-free
+velocity kick. There is no body force maintaining its amplitude.
+
+Implementation lands in `cases/internal_gravity_wave.py`, the case registry,
+and `configs/boussinesq/gravity_wave_{period_check,cloud_pilot}.toml`; the
+simulation entry point remains `scripts/run_simulation.py`. P2 represents the
+quadratic hydrostatic pressure exactly. Case tests check the linearized PDE,
+wall/source data and a solved zero-kick rest state. The pilot uses existing
+dynamic linear OSS and skew-symmetric scalar transport. The common momentum/
+thermal diffusion is 0.01, moisture diffusion is 0.0002, and the physical
+scales/initial profile and theoretical period are saved in case metadata.
+
+Generalize saved-field cloud processing to affine P1/P2 fields, using original
+quadratic basis functions for integration and gradients. The shared command
+is `scripts/visualize_clouds.py`; `visualize_kh_clouds.py` retains the old CLI as
+a compatibility entry point. P1 tests remain and a quadratic polynomial test
+checks derivatives and integrals. Native P2 q_c is a nodal display interpolation,
+while raw cloud fraction is evaluated independently at quadrature points.
+
+`scripts/analyse_gravity_wave.py` projects the signed vertical velocity and
+inferred isentrope displacement onto the standing mode. Measure periods from
+same-direction zero crossings, rather than from squared velocity energy.
+Before the moisture pilot, require period error below 2%, normalized modal
+RMS errors below 5% and positive dT/dz over three periods in the small-kick
+run. Evaluate P2 gradient extrema at every parent triangle's vertices. Record
+the same measures in the finite-amplitude pilot and the cloud fraction in
+upward-displaced air. Record tracer extrema/bounds and content drift.
+
+The existing `thermal_content_budget` group excludes scalar Dirichlet walls;
+this application therefore requests scalar integrals without that budget group.
+Do not assert the insulated-domain potential-energy identity for this case.
+Keep the low-diffusion and startup failures in the report, including the
+incorrect diffusivity wiring caught during setup. The accepted pilot must
+match the actual saved physical coefficients, not just the reference metadata.
+The report is `verification/gravity_wave_cloud_pilot.md`.
 
 ## 5. Completion criteria
 

@@ -172,6 +172,7 @@ def test_each_case_builds_on_a_coarse_mesh(case: str) -> None:
         "lid_driven_cavity",
         "differentially_heated_cavity",
         "kelvin_helmholtz_shear_layer",
+        "internal_gravity_wave",
     ):
         assert problem.reference_values
         assert set(problem.boundary_conditions) == set(problem.boundary_tags)

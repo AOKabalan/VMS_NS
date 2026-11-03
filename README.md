@@ -85,6 +85,8 @@ The latest Boussinesq convergence figures can be regenerated with
 `python scripts/plot_boussinesq_verification.py`.
 The [bounded cloud visualization pilot](docs/verification/kelvin_helmholtz_cloud_pilot.md)
 records the four-wave setup, post-processing command and limitations.
+The [stable gravity-wave pilot](docs/verification/gravity_wave_cloud_pilot.md)
+adds oscillating moist-layer ripples with a checked wave period and no overturning.
 
 ## Documentation
 

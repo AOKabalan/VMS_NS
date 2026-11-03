@@ -1045,3 +1045,14 @@ full dry-budget and moist sensitivity studies.
 
 The equations and limits above, rather than agreement with a single cavity or
 cloud picture, are the acceptance basis for the implementation plan.
+
+## 9. Stable gravity-wave moisture application
+
+The owner also requested a companion application for regular undulatus-like
+ripples. It uses the same equations with no imposed shear, T_0=Γz and a stable
+N²=βΓ. Fixed-temperature walls maintain that conductive background; moisture
+is insulated. A small standing-wave velocity kick produces buoyancy oscillations.
+The [gravity-wave derivation](gravity_wave_formulation.md) gives the compatible
+wall data, linear damped reference, cloud proxy and actual numerical checks.
+This is a distinct idealized case from KH roll-up. Cloud genus/ice physics and
+latent feedback are outside the current model.

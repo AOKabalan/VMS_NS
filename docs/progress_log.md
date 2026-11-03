@@ -2035,3 +2035,62 @@ residual is 2.84e-14. Cloud fraction at 8/12-point Duffy rules differs by at mos
 preserved q extrema were checked; peak, final and history figures were viewed.
 Ruff, local links and diff checks passed. The report and measured summary are
 `docs/verification/kelvin_helmholtz_cloud_pilot.md` and its `_results.json`.
+
+## B8 stable gravity-wave cloud pilot (2026-11-03)
+
+At the owner's request, implemented a separate stable internal-gravity-wave
+case for undulatus-like moist-layer ripples. It has no mean shear, a linear
+stable thermal background, fixed-temperature/free-slip walls and insulated
+passive moisture. A divergence-free standing-wave kick evolves without forcing.
+The derivation and boundary/reference choices are in
+`docs/gravity_wave_formulation.md`; the case and two configs use the existing
+`scripts/run_simulation.py` entry point and unchanged equation kernels.
+
+P2 is used to represent quadratic hydrostatic pressure exactly. P1 zero-kick
+checks exposed startup motion (and a static solve failure), so those settings
+were not adopted. P2 checks preserve rest. Low-diffusion P2 runs at 0.0002
+developed later temperature oscillations and negative gradients with either
+conservative or skew thermal transport; completed solves were rejected as
+wave verification. An intermediate swapped thermal/moisture coefficient was
+caught in metadata, corrected and protected by a case test and analyzer guard.
+All such trials remain indexed separately from accepted data. The final
+momentum/thermal diffusion is 0.01; moisture diffusion is 0.0002.
+
+The accepted small-kick run covers three periods and has measured period
+7.039264 versus reference 7.024815 (0.20569% error), modal RMS errors about
+1.33%, and minimum saved-field dT/dz 0.995056. The four-wave pilot uses
+64×16 P2 cells, A=0.2, dynamic linear OSS, skew scalar convection and BDF2
+with 80 steps per period. All 240 steps converged on two local MPI processes
+in 263.40 s to t=21.074444. Its period error is 0.23817%, modal errors about
+1.53%, and minimum saved-field dT/dz is 0.904591. All sampled cloud area lies
+in upward-displaced air. Thus the accepted fields show oscillations without
+overturning, rather than KH roll-up.
+
+Shared cloud post-processing now integrates original affine P1/P2 polynomials
+and computes exact cell-mean vorticity. P2 gradient extrema are evaluated at
+parent-cell vertices. `scripts/visualize_clouds.py` is the common command;
+`visualize_kh_clouds.py` keeps the original CLI. The new analyzer measures
+signed velocity/displacement modes, not squared energy periods. Native P2 q_c
+is a nodal interpolation; display images use four subtriangles and quantitative
+cloud fraction uses the raw positive part at quadrature points.
+
+The final 120-frame GIF/MP4, VTK, CSV, mode/reference and history plots live
+under `results/bousinesq/clouds/gravity_wave_pilot/`. Supporting/rejected plots
+are grouped under `gravity_wave_checks/`; raw runs use the case subfolder.
+Peak q_c is 0.0362657 with maximum coverage 1.91776%. The peak point's
+q=0.979062 is below the physical initial bound 1.003621. Small numerical
+tracer errors remain: sampled minimum -2.79e-5, nodal max 1.004752, maximum
+bound excess 0.001132. No q clipping was used. Cloud-fraction quadrature
+sensitivity is at most 0.03249 percentage points and relative moisture-content
+drift from the first recorded step is 1.96e-7. The fixed-T walls exclude the
+existing content-budget group; no unsupported closed-domain budget is claimed.
+
+Verification: five targeted analytic/rest/cloud tests passed; with existing
+mesh/boundary regressions, 38 passed. The old KH CLI regenerated its timing
+frame successfully. Final P2 saved integrals match assembled FE diagnostics
+within 1.71e-13. All 120 GIF/MP4/VTK frame counts/times and original exported
+transport fields were checked; wave, peak-cloud and late-cycle plots were
+viewed. Ruff, local links and diff checks passed. No full spatial/time
+convergence, atmospheric calibration, ice microphysics or latent feedback is
+claimed. The report and accepted measured summaries are in
+`docs/verification/gravity_wave_cloud_pilot.md` and its `_results.json`.

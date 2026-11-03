@@ -7,7 +7,7 @@ The existing results were grouped on 3 November 2026. The directory name
 | --- | --- |
 | `results/bousinesq/cases/` | Thermal manufactured runs, heated cavities, free-slip checks and stratified KH runs |
 | `results/bousinesq/verification/manufactured_solution/2026-11-03/` | Latest MMS/time-refinement figures, CSV/JSON measurements and raw test artifacts |
-| `results/bousinesq/clouds/` | Four-wave cloud-proxy visualization and labelled timing/in-progress previews |
+| `results/bousinesq/clouds/` | KH and stable gravity-wave cloud visualization, with grouped setup checks/previews |
 | `results/bousinesq/configs/` | Previous local thermal smoke configuration |
 | `results/navier_stokes/` | Isothermal benchmark runs, including unstratified KH |
 | `results/analysis/` | Conservation studies, solver profiling and KH preparation experiments |
