@@ -36,6 +36,11 @@ The downloaded external reference dataset remains under
 separate from simulation results. Committed verification reports remain in
 `docs/verification/`.
 
+Selected demo MP4s, compact GIF previews and poster frames are published under
+`docs/media/`, with a provenance manifest. Selected diagnostic figures accompany
+their reports under `docs/verification/`. These are copies of final artifacts;
+the raw run folders and previous compatibility links remain local.
+
 ## Regenerating verification figures
 
 ```bash

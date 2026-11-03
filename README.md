@@ -11,6 +11,19 @@ convective form, **EMAC–VMS**.
   at 128², 64² and 32².</em>
 </p>
 
+## Wave and cloud demos
+
+<p>
+  <a href="docs/media/gravity-wave-clouds.mp4"><img src="docs/media/gravity-wave-clouds.gif" width="49%" alt="Stable gravity waves lifting and lowering a moist layer"></a>
+  <a href="docs/media/kelvin-helmholtz-clouds.mp4"><img src="docs/media/kelvin-helmholtz-clouds.gif" width="49%" alt="Wind shear rolling a moist layer into Kelvin–Helmholtz billows"></a>
+</p>
+
+- **[Gravity waves — video](docs/media/gravity-wave-clouds.mp4):** buoyancy makes a moist layer rise and fall, producing repeating cloud bands.
+- **[Kelvin–Helmholtz billows — video](docs/media/kelvin-helmholtz-clouds.mp4):** wind shear curls the layer into rolling waves.
+
+Blue in the top panels is a simplified cloud indicator; bottom colours show air rotation.
+These are idealized 2D pilots; the KH cloud patches are affected by numerical moisture overshoot.
+
 ## Method
 
 The velocity and pressure are split into a finite element part and an unresolved subscale,
@@ -55,16 +68,12 @@ transport, coupled thermal/kinetic–potential budgets and a heated-cavity case
 are included; measured checks are in the [B5 report](docs/verification/boussinesq_b5.md).
 Horizontally periodic free-slip channels are supported; see the
 [G4 boundary checks](docs/verification/free_slip_g4.md).
-The stratified Kelvin–Helmholtz case with passive moisture is available as a
-[coupled smoke test](docs/usage.md#kelvinhelmholtz-coupled-smoke-test-b71);
-growth-rate and cloud studies remain later checkpoints.
-Optional vertical clustering and horizontal-mean profiles support the
-[startup controls and mesh checks](docs/verification/kelvin_helmholtz_b72.md).
-Optional Fourier profile output supports the
-[bounded growth pilot](docs/verification/kelvin_helmholtz_b73.md); full growth
-validation and cloud visualization remain pending.
-The [later-window and refinement checks](docs/verification/kelvin_helmholtz_b73_refinement.md)
-measure the remaining window dependence separately from mesh/timestep sensitivity.
+The stratified [Kelvin–Helmholtz case](docs/usage.md#kelvinhelmholtz-coupled-smoke-test-b71)
+supports passive moisture, vertical clustering and mean/Fourier profiles.
+The [startup checks](docs/verification/kelvin_helmholtz_b72.md),
+[bounded growth pilot](docs/verification/kelvin_helmholtz_b73.md) and
+[refinement assessment](docs/verification/kelvin_helmholtz_b73_refinement.md)
+document its current validation limits; full parameter studies remain open.
 
 ## Quick start
 

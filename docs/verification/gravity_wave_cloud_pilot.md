@@ -137,10 +137,15 @@ the original `visualize_kh_clouds.py` command retained for compatibility.
 
 Final outputs are under `results/bousinesq/clouds/gravity_wave_pilot/`:
 
-- [GIF](../../results/bousinesq/clouds/gravity_wave_pilot/clouds.gif) and
-  [MP4](../../results/bousinesq/clouds/gravity_wave_pilot/clouds.mp4), 120 frames,
-  12-second playback with actual dimensionless time labels.
-- [Cloud snapshot](../../results/bousinesq/clouds/gravity_wave_pilot/maximum_cloud.png)
-  and [wave/reference comparison](../../results/bousinesq/clouds/gravity_wave_pilot/wave_modes.png).
+- [Compact GIF preview](../media/gravity-wave-clouds.gif) and
+  [MP4 video](../media/gravity-wave-clouds.mp4). The MP4 preserves all 120 frames
+  and 12-second playback with actual dimensionless time labels.
+- [Cloud snapshot](../media/gravity-wave-clouds.png),
+  [wave/reference comparison](gravity_wave_modes.png) and
+  [cloud histories](gravity_wave_cloud_history.png).
 - Combined `clouds.pvd`/VTU series, PNG frames, CSV diagnostics, cloud-history
   plots, wave-mode CSV and both measured summaries.
+
+Selected videos and figures are published in the repository; full raw outputs
+remain under the ignored results directory. [Media provenance](../media/README.md)
+records the source runs and preview encoding.

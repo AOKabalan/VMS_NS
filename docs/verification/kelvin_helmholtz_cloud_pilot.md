@@ -126,16 +126,17 @@ and full dry-budget studies were not launched to force a different picture.
 
 Final artifacts are under `results/bousinesq/clouds/four_wave_pilot/`:
 
-- [GIF animation](../../results/bousinesq/clouds/four_wave_pilot/clouds.gif) and
-  [MP4](../../results/bousinesq/clouds/four_wave_pilot/clouds.mp4): 80 frames,
-  eight-second playback, labelled simulation times.
-- [Peak-cloud snapshot](../../results/bousinesq/clouds/four_wave_pilot/maximum_cloud.png)
-  and [history plots](../../results/bousinesq/clouds/four_wave_pilot/cloud_history.png).
+- [Compact GIF preview](../media/kelvin-helmholtz-clouds.gif) and
+  [MP4 video](../media/kelvin-helmholtz-clouds.mp4). The MP4 preserves all 80 frames
+  and eight-second playback with labelled simulation times.
+- [Peak-cloud snapshot](../media/kelvin-helmholtz-clouds.png)
+  and [history plots](kelvin_helmholtz_cloud_history.png).
 - `clouds.pvd` with 80 combined VTU frames, `cloud_diagnostics.csv`,
   `summary.json` and all PNG frames. Raw velocity/pressure/T/q series remain
   under the case's `fields/` folder.
 
 The GIF and MP4 frame counts, output time sequences, VTK arrays, global
 integrals and scalar/energy residuals were checked. Peak, late-time and history
-figures were visually inspected. Results are gitignored; the plotting code,
-configuration, report and measured summary are versioned.
+figures were visually inspected. Raw results are gitignored; selected media,
+the plotting code, configuration, report and measured summary are versioned.
+[Media provenance](../media/README.md) records source runs and preview encoding.

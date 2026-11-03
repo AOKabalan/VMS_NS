@@ -1,0 +1,112 @@
+{
+  "published_date": "2026-11-03",
+  "previews": {
+    "width": 840,
+    "fps": 8,
+    "palette": "full-frame global palette; Bayer dithering"
+  },
+  "assets": {
+    "docs/media/gravity-wave-clouds.mp4": {
+      "source": "results/bousinesq/clouds/gravity_wave_pilot/clouds.mp4",
+      "bytes": 956060,
+      "sha256": "a781812fbf0772acb84e31f65f3d9dec23c1a040a7dc0ec326ee05c2d5a46e2e",
+      "copy": "unchanged",
+      "video": {
+        "width": 1680,
+        "height": 812,
+        "duration": "12.000000",
+        "nb_read_frames": "120"
+      }
+    },
+    "docs/media/kelvin-helmholtz-clouds.mp4": {
+      "source": "results/bousinesq/clouds/four_wave_pilot/clouds.mp4",
+      "bytes": 1023313,
+      "sha256": "261ff206fb74e5d4f7b55327176fcd54d8927805a34f9c2b6a40157afc4ec6a7",
+      "copy": "unchanged",
+      "video": {
+        "width": 1680,
+        "height": 812,
+        "duration": "8.000000",
+        "nb_read_frames": "80"
+      }
+    },
+    "docs/media/gravity-wave-clouds.png": {
+      "source": "results/bousinesq/clouds/gravity_wave_pilot/maximum_cloud.png",
+      "bytes": 141960,
+      "sha256": "98fcf56546928b63a07da531ce932ec43e739ada31639cc312f46ce21e3206e2",
+      "copy": "unchanged"
+    },
+    "docs/media/kelvin-helmholtz-clouds.png": {
+      "source": "results/bousinesq/clouds/four_wave_pilot/maximum_cloud.png",
+      "bytes": 197239,
+      "sha256": "fc618cf62f056f23cfabd88462c77b04925201edd0e5467bb9d4f3ed7bd71695",
+      "copy": "unchanged"
+    },
+    "docs/verification/gravity_wave_modes.png": {
+      "source": "results/bousinesq/clouds/gravity_wave_pilot/wave_modes.png",
+      "bytes": 185303,
+      "sha256": "3c14e065a3e7e4e54e2d7695bfe91d8c5dd0578ff9664c6ef3fd9a1f5d6b1d05",
+      "copy": "unchanged"
+    },
+    "docs/verification/gravity_wave_cloud_history.png": {
+      "source": "results/bousinesq/clouds/gravity_wave_pilot/cloud_history.png",
+      "bytes": 151873,
+      "sha256": "de9336ff72e754008466210be87de4845629a61b5220c7be3adcef0b969f948e",
+      "copy": "unchanged"
+    },
+    "docs/verification/kelvin_helmholtz_cloud_history.png": {
+      "source": "results/bousinesq/clouds/four_wave_pilot/cloud_history.png",
+      "bytes": 101107,
+      "sha256": "637173f129743300fa8c01bbbb650ec29d3cfced1cefe97c5b28497d9a2e84c6",
+      "copy": "unchanged"
+    },
+    "docs/media/gravity-wave-clouds.gif": {
+      "source": "docs/media/gravity-wave-clouds.mp4",
+      "bytes": 4267675,
+      "sha256": "36e8923ddb2333f4b8b7910271b85e158d98a31ba8f35090051f0495eea1c4c6",
+      "frames": 96,
+      "duration_ms": 12010
+    },
+    "docs/media/kelvin-helmholtz-clouds.gif": {
+      "source": "docs/media/kelvin-helmholtz-clouds.mp4",
+      "bytes": 2522003,
+      "sha256": "938bc8781a826ea16343a062ac5d43348250e1b403bbdab1ef948428eb87d5d2",
+      "frames": 64,
+      "duration_ms": 8010
+    }
+  },
+  "gravity_wave": {
+    "configuration": "configs/boussinesq/gravity_wave_cloud_pilot.toml",
+    "source_run": "results/bousinesq/cases/internal_gravity_wave/gravity_wave_cloud_pilot",
+    "run_info": {
+      "git_commit": "28b8499d522c98eb17e419c4c5d2202d7d9e4576",
+      "git_dirty": true,
+      "firedrake_version": "2026.10.0",
+      "petsc_version": "3.26.0",
+      "python_version": "3.14.4",
+      "mpi_size": 2,
+      "host": "ali-Lenovo-Legion-5P-15IMH05",
+      "start_time": "2026-11-03T16:06:48+02:00",
+      "end_time": "2026-11-03T16:11:12+02:00",
+      "wall_time_seconds": 263.4033886238467,
+      "exit_status": 0
+    }
+  },
+  "kelvin_helmholtz": {
+    "configuration": "configs/boussinesq/kh_cloud_visualization_pilot.toml",
+    "source_run": "results/bousinesq/cases/kelvin_helmholtz_shear_layer/b75_cloud_visualization_pilot",
+    "run_info": {
+      "git_commit": "4eca5755a1c09c1a0ad701df647d234cf5e9d350",
+      "git_dirty": true,
+      "firedrake_version": "2026.10.0",
+      "petsc_version": "3.26.0",
+      "python_version": "3.14.4",
+      "mpi_size": 2,
+      "host": "ali-Lenovo-Legion-5P-15IMH05",
+      "start_time": "2026-11-03T14:52:41+02:00",
+      "end_time": "2026-11-03T15:20:20+02:00",
+      "wall_time_seconds": 1659.8795414830092,
+      "exit_status": 0
+    }
+  }
+}

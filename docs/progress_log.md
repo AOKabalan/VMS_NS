@@ -2094,3 +2094,25 @@ viewed. Ruff, local links and diff checks passed. No full spatial/time
 convergence, atmospheric calibration, ice microphysics or latent feedback is
 claimed. The report and accepted measured summaries are in
 `docs/verification/gravity_wave_cloud_pilot.md` and its `_results.json`.
+
+## Organized demo media and README for GitHub (2026-11-03)
+
+At the owner's request, prepared a compact README section with side-by-side
+animated previews linking to the stable gravity-wave and KH MP4s. The physics
+captions distinguish buoyancy oscillations from shear-driven roll-up and retain
+the simplified-cloud and KH-overshoot qualifications. Removed stale README
+claims that cloud visualization was still pending.
+
+Selected MP4s and poster frames are grouped under `docs/media/`; compact GIFs
+use 840-pixel width, 8 fps and a full-frame palette. Their provenance manifest
+records source runs, physical configs, video metadata and SHA-256 checksums.
+Selected diagnostic plots accompany the verification reports. Those reports
+now link to committed media rather than ignored local result files. Raw data
+and the existing result organization are preserved.
+
+Validation: seven published video/PNG copies match their sources byte for byte;
+both MP4 frame counts and both GIF frame counts/durations were checked. All nine
+media assets, README/report links and diff checks passed; the previews were
+visually inspected. The latest origin/main was fetched and is an ancestor of
+the local branch. No solver changes, tests or simulation reruns were needed
+for this documentation/media update.
