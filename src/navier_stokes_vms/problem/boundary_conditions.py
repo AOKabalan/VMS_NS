@@ -63,6 +63,14 @@ def check_free_slip_boundaries(
             raise ValueError(f"free-slip boundary {name!r} is not normal to axis {component}")
 
 
+def free_slip_bc(
+    space: WithGeometry, name: str, normal_component: int, boundary_tags: Mapping[str, int]
+) -> fd.DirichletBC:
+    """Build one component-only wall constraint using the shared geometry validation."""
+    check_free_slip_boundaries(space.mesh(), {name: FreeSlip(normal_component)}, boundary_tags)
+    return dirichlet_bc(space.sub(normal_component), name, 0.0, boundary_tags)
+
+
 def velocity_bcs(
     space: WithGeometry,
     conditions: Mapping[str, Dirichlet | FreeSlip | Outflow],

@@ -44,7 +44,8 @@ convection-dominated flow. All eight classical variants are implemented:
 | Scale splitting | linear ($a = u_h$) or nonlinear ($a = u_h + \tilde u$) |
 
 The convective term can take six forms: nonconservative, conservative, two skew-symmetric
-forms, EMAC and **EMAC–VMS**. EMAC–VMS writes the effect of the subscales as a symmetric
+forms, EMAC and **EMAC–VMS**, with an optional full-stress EMAC–VMS variant.
+EMAC–VMS writes the effect of the subscales as a symmetric
 subgrid stress
 
 $$
@@ -96,6 +97,11 @@ adds oscillating moist-layer ripples with a checked wave period and no overturni
 
 ## Documentation
 
+- [`experiments/emac_vms_advantage/FINDINGS.md`](experiments/emac_vms_advantage/FINDINGS.md):
+  convection-form experiments, matched dissipation and the optional full-stress EMAC–VMS variant
+- [`experiments/kelvin_helmholtz_2020/README.md`](experiments/kelvin_helmholtz_2020/README.md):
+  unstratified shear-layer benchmark and solver profiling
+- [`docs/gresho_exact.md`](docs/gresho_exact.md): exact inviscid Gresho benchmark
 - [`docs/usage.md`](docs/usage.md): configuration, diagnostics, validation and conservation runs
 - [`docs/formulation_spec.md`](docs/formulation_spec.md): every equation implemented
 - [`docs/implementation_plan.md`](docs/implementation_plan.md): code structure and tests

@@ -8,7 +8,10 @@ from ufl.form import Form
 from ufl.measure import Measure
 
 from navier_stokes_vms.config import StabilizationOptions
-from navier_stokes_vms.formulation.convective_forms import convective_subscale_coupling
+from navier_stokes_vms.formulation.convective_forms import (
+    convective_subscale_coupling,
+    full_stress_matrix,
+)
 from navier_stokes_vms.formulation.galerkin import SolveLevel, time_derivative
 from navier_stokes_vms.formulation.operators import momentum_residual, viscous_operator
 
@@ -92,12 +95,16 @@ def accelerated_subscale(
     convective_form: str = "skew_symmetric_1",
     viscous_form: str = "laplacian",
 ) -> Expr:
-    """ũ solving (I + τ_t ∇u) ũ = τ_t (X with a = u, − ξ_h) pointwise (spec step 3)."""
+    """ũ solving (I + τ_t B) ũ = τ_t (X with a = u, − ξ_h) pointwise (spec step 3).
+
+    B = ∇u, from (ũ·∇)u in the residual; B = M_h for emac_vms_full (chapter §5.8.5).
+    """
     right_side = velocity_subscale(
         u, p, u, nu, level, tau_t, chi, u_sub_history, xi, convective_form, viscous_form
     )
     identity = ufl.Identity(u.ufl_shape[0])
-    return ufl.dot(ufl.inv(identity + tau_t * ufl.grad(u)), right_side)
+    matrix = full_stress_matrix(u) if convective_form == "emac_vms_full" else ufl.grad(u)
+    return ufl.dot(ufl.inv(identity + tau_t * matrix), right_side)
 
 
 def vms_terms(

@@ -274,6 +274,29 @@ The `formulation/` layer uses the spec's symbols so that it reads side by side w
 | χ_A, χ_D | `is_asgs`, `is_dynamic` | Spec switches |
 
 
+## Additional isothermal experiments
+
+The separate [exact Gresho benchmark](gresho_exact.md) uses zero viscosity,
+normal-only free-slip walls, and Crank–Nicolson from step one with
+`time.startup = "none"`. The `gresho_degree_2` case uses the same exact problem
+with separate presets and output paths. These cases retain the original
+viscous `gresho` benchmark. `total_kinetic_energy` measures the endpoint norm
+of resolved plus subscale velocity, including the cross term, and requires
+dynamic VMS.
+
+The [unstratified KH experiment](../experiments/kelvin_helmholtz_2020/README.md)
+uses the `kelvin_helmholtz` case, periodic horizontal boundaries and
+`FreeSlip(normal_component)` walls. Its experiment drivers include optional
+profiling and linear-solver configurations. It is distinct from the coupled
+`kelvin_helmholtz_shear_layer` case below.
+
+The optional `emac_vms_full` convection form implements the full-stress
+closure described in the [experiment findings](../experiments/emac_vms_advantage/FINDINGS.md)
+and formulation specification. Like `emac_vms`, it requires VMS, stress
+viscosity and Newton without Picard warm-up. Its reported pressure adds only
+the resolved kinetic correction; the additional subscale pressure correction
+is omitted. Neither EMAC–VMS variant is supported for thermal runs.
+
 ## Thermal Boussinesq baseline (B1)
 
 Run the coupled manufactured problem with the existing entry point:

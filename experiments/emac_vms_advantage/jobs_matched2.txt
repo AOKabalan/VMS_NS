@@ -1,0 +1,8 @@
+PYTHONPATH=/tmp/claude-0/wt-full/src timeout 7000 python driver.py E3 skew_symmetric_1 oss_s0.5 3 96
+PYTHONPATH=/tmp/claude-0/wt-full/src timeout 7000 python driver.py E3 skew_symmetric_1 oss_s0.25 3 96
+PYTHONPATH=/tmp/claude-0/wt-full/src timeout 7000 python driver_e2.py skew_symmetric_1 64 oss_s0.5
+PYTHONPATH=/tmp/claude-0/wt-full/src timeout 7000 python driver_e2.py skew_symmetric_1 64 oss_s0.25
+PYTHONPATH=/tmp/claude-0/wt-full/src timeout 7000 python driver.py E5 skew_symmetric_1 oss_s0.5 3
+PYTHONPATH=/tmp/claude-0/wt-full/src timeout 7000 python driver.py E4 skew_symmetric_1 oss_s0.5 4
+PYTHONPATH=/tmp/claude-0/wt-full/src timeout 7000 python driver.py E5 skew_symmetric_1 oss_s0.25 3
+PYTHONPATH=/tmp/claude-0/wt-full/src timeout 7000 python driver.py E4 skew_symmetric_1 oss_s0.25 4

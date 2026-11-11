@@ -1,0 +1,101 @@
+# 24x24 P2/P2 rerun; full Jacobian, block preconditioning only.
+case = "gresho_degree_2"
+run_name = "emac_vms_oss_n24_block_gauge_oss"
+
+[case_parameters]
+viscosity = 0.0
+
+[mesh]
+cells = [
+    24,
+    24,
+]
+
+[discretization]
+velocity_degree = 2
+pressure_degree = 2
+
+[time]
+scheme = "crank_nicolson"
+dt = 0.01
+t_end = 10.0
+startup = "none"
+
+[stabilization]
+method = "vms"
+subscale_space = "oss"
+subscale_dynamics = "dynamic"
+scale_splitting = "nonlinear"
+c1 = 4.0
+c2 = 2.0
+pressure_subscale = false
+
+[convection]
+form = "emac_vms"
+
+[viscosity]
+form = "stress"
+
+[solver]
+linearization = "newton"
+newton_tau = "frozen"
+picard_iterations_before_newton = 0
+inner_rtol = 1e-12
+inner_atol = 1e-12
+inner_max_iterations = 200
+outer_rtol = 1e-11
+outer_max_iterations = 100
+subscale_update = "accelerated"
+subscale_rtol = 1e-13
+subscale_max_iterations = 50
+
+[solver.petsc]
+mat_type = "aij"
+ksp_type = "fgmres"
+ksp_pc_side = "right"
+ksp_norm_type = "unpreconditioned"
+ksp_rtol = 1e-10
+ksp_atol = 1e-14
+ksp_max_it = 300
+ksp_gmres_restart = 50
+snes_lag_jacobian = 1
+snes_lag_preconditioner = 1
+snes_lag_preconditioner_persists = true
+pc_type = "fieldsplit"
+pc_fieldsplit_type = "schur"
+pc_fieldsplit_schur_fact_type = "full"
+pc_fieldsplit_schur_precondition = "a11"
+pc_fieldsplit_0_fields = "2"
+pc_fieldsplit_1_fields = "0,1"
+fieldsplit_0_ksp_type = "cg"
+fieldsplit_0_ksp_rtol = 0.01
+fieldsplit_0_ksp_atol = 1e-14
+fieldsplit_0_ksp_max_it = 50
+fieldsplit_0_pc_type = "jacobi"
+fieldsplit_1_ksp_type = "preonly"
+fieldsplit_1_pc_type = "lu"
+fieldsplit_1_pc_factor_mat_solver_type = "mumps"
+
+fieldsplit_1_mat_mumps_icntl_24 = 1
+
+[output]
+vtk_every = 100
+diagnostics = [
+    "kinetic_energy",
+    "linear_momentum",
+    "angular_momentum",
+    "velocity_error_l2",
+    "pressure_error_l2",
+    "divergence_l2",
+    "force",
+    "region_velocity_l2",
+    "total_kinetic_energy",
+    "subscale_kinetic_energy",
+    "region_subscale_l2",
+    "energy_budget",
+    "momentum_budget",
+    "linear_momentum_defect",
+    "angular_momentum_defect",
+    "convective_energy_defect",
+]
+console_level = "INFO"

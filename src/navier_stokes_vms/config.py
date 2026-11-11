@@ -13,13 +13,19 @@ import tomli_w
 
 MeshSource = Literal["builtin", "gmsh"]
 TimeScheme = Literal["bdf1", "bdf2", "bdf3", "crank_nicolson"]
-Startup = Literal["lower_order", "exact_history"]
+Startup = Literal["lower_order", "exact_history", "none"]
 Method = Literal["none", "vms"]
 SubscaleSpace = Literal["asgs", "oss"]
 SubscaleDynamics = Literal["static", "dynamic"]
 ScaleSplitting = Literal["linear", "nonlinear"]
 ConvectiveForm = Literal[
-    "nonconservative", "conservative", "skew_symmetric_1", "skew_symmetric_2", "emac", "emac_vms"
+    "nonconservative",
+    "conservative",
+    "skew_symmetric_1",
+    "skew_symmetric_2",
+    "emac",
+    "emac_vms",
+    "emac_vms_full",
 ]
 ViscousForm = Literal["laplacian", "stress"]
 Linearization = Literal["newton", "picard"]
@@ -224,6 +230,8 @@ def validate_config(config: Config) -> None:
         if config.thermal.convection not in ("skew_symmetric", "nonconservative", "conservative"):
             raise ValueError("unsupported thermal.convection")
     _check_bounds(config)
+    if config.time.startup == "none" and config.time.scheme != "crank_nicolson":
+        raise ValueError("time.startup = 'none' requires time.scheme = 'crank_nicolson'")
     steps = config.time.t_end / config.time.dt
     if abs(steps - round(steps)) > 1e-9 * steps:
         raise ValueError(
@@ -233,9 +241,17 @@ def validate_config(config: Config) -> None:
     _check_mesh(config.mesh)
     _check_stabilization(config)
     _check_forms(config)
-    for name in ("subscale_kinetic_energy", "region_subscale_l2"):
+    for name in ("subscale_kinetic_energy", "total_kinetic_energy", "region_subscale_l2"):
         if name in config.output.diagnostics and config.stabilization.method == "none":
             raise ValueError(f"output.diagnostics: {name} requires stabilization.method = 'vms'")
+    if (
+        "total_kinetic_energy" in config.output.diagnostics
+        and config.stabilization.subscale_dynamics != "dynamic"
+    ):
+        raise ValueError(
+            "output.diagnostics: total_kinetic_energy requires dynamic subscales "
+            "so both velocities are at the endpoint"
+        )
     for name in ("energy_budget", "momentum_budget"):
         if name in config.output.diagnostics and (
             config.time.scheme != "crank_nicolson"
@@ -470,17 +486,17 @@ def _check_stabilization(config: Config) -> None:
 
 def _check_forms(config: Config) -> None:
     form, solver = config.convection.form, config.solver
-    if form == "emac_vms":
+    if form in ("emac_vms", "emac_vms_full"):
         for name, value, required in (
             ("stabilization.method", config.stabilization.method, "vms"),
             ("viscosity.form", config.viscosity.form, "stress"),
         ):
             if value != required:
                 raise ValueError(
-                    f"convection.form = 'emac_vms', {name} = {value!r}: "
+                    f"convection.form = {form!r}, {name} = {value!r}: "
                     f"EMAC–VMS needs {name} = {required!r}"
                 )
-    if form in ("emac", "emac_vms"):
+    if form in ("emac", "emac_vms", "emac_vms_full"):
         # Owner decision: no Picard linearization of the kinetic pressure or substituted stress.
         if solver.linearization != "newton":
             raise ValueError(

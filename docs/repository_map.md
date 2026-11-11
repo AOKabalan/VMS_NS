@@ -1,6 +1,8 @@
 # Repository map and implementation inventory
 
-Inspected 11 November 2026, at tracked revision `52c074f`. This is a map of
+Inspected 11 November 2026; updated for the merge of
+`experiment/emac-vms-advantage` into `main`. The initial review used revision
+`52c074f`. This is a map of
 the current source and local workspace, including ignored research artifacts.
 Historical reports are evidence of their recorded runs, not claims that every
 experiment has been repeated at this revision.
@@ -23,12 +25,12 @@ Current inventory:
 
 | Item | Count or size |
 | --- | --- |
-| Package Python source | 46 files, 6,845 lines |
-| Python entry points and analysis scripts in `scripts/` | 11 files, 2,533 lines, plus a shell queue |
-| Python tests and helpers | 46 files, 9,269 lines |
-| Collected parameterized tests | 1,092: 1,023 unit, 69 verification |
-| Registered physical/verification cases | 14 |
-| Committed TOML presets | 152 |
+| Package Python source | 48 files, 7,002 lines |
+| Python entry points and analysis scripts in `scripts/` | 11 files, 2,533 lines, plus four shell launchers |
+| Python tests and helpers | 48 files, 9,605 lines |
+| Collected parameterized tests after merge | 1,145: 1,076 unit, 69 verification |
+| Registered physical/verification cases | 17 |
+| Committed TOML presets under `configs/` | 169 |
 | Local `results/` | About 8.8 GB, including 6.6 GB of compiler cache |
 | Local reference data | About 125 MB |
 | Documentation and media | About 31 MB |
@@ -44,7 +46,7 @@ VMS_NS/
 ├── pyproject.toml               Package metadata, dependencies, pytest/Ruff settings
 ├── src/navier_stokes_vms/       Reusable implementation
 │   ├── config.py               Typed TOML options and validation
-│   ├── cases/                  14 builders and registry
+│   ├── cases/                  Registered case builders and registry
 │   ├── problem/                Physical data, meshes, boundary descriptions
 │   ├── discretization/         Spaces, quadrature, time coefficients
 │   ├── formulation/            UFL residual and projection kernels
@@ -64,8 +66,8 @@ VMS_NS/
 ├── data/references/            Literature/benchmark comparison inputs
 ├── docs/                       Formulations, plans, reviews, measured reports, media
 ├── results/                    Ignored local outputs, studies, drivers and slides
-├── experiments/                Currently only residual Python bytecode
-└── beamerthemeinterviewmaths.sty  Local, untracked Beamer theme
+├── experiments/                Versioned EMAC–VMS and unstratified KH experiments
+└── beamerthemeinterviewmaths.sty  Versioned Beamer theme
 ```
 
 `.pytest_cache`, `.ruff_cache`, `__pycache__` and `src/*.egg-info` are generated
@@ -105,8 +107,11 @@ Here `k` is velocity polynomial degree. The default integration degree is
 quadrature-space subscale storage. These details matter to the weighted
 orthogonality and dissipation arguments.
 
-Six convection forms are implemented: `nonconservative`, `conservative`,
-`skew_symmetric_1`, `skew_symmetric_2`, `emac`, and `emac_vms`.
+Seven convection forms are implemented: `nonconservative`, `conservative`,
+`skew_symmetric_1`, `skew_symmetric_2`, `emac`, `emac_vms`, and
+`emac_vms_full`. The optional full variant adds an isotropic stress term and
+uses a matching residual/local update; its reported pressure omits the extra
+subscale pressure correction.
 EMAC–VMS uses the symmetric subgrid stress
 `s⊗u + u⊗s + chi_N*s⊗s`, paired with the symmetric test gradient. Its
 conservation identities do not imply constant total energy in viscous,
@@ -147,7 +152,7 @@ Current enforced restrictions:
 ### Time and nonlinear solution
 
 BDF1, BDF2, BDF3 and Crank–Nicolson use uniform steps; final time must be a whole
-number of steps. Startup uses lower-order schemes or exact resolved histories
+number of steps. Startup uses lower-order schemes, explicit CN-only `startup = "none"`, or exact resolved histories
 when every required exact field is available. Subscale histories start at zero;
 arbitrary subscale startup is not a claim of full high-order accuracy.
 
@@ -201,7 +206,7 @@ The main source responsibilities are:
 | `discretization/time_schemes.py`, `quadrature.py` | Coefficients/startup and common integration rules |
 | `formulation/galerkin.py`, `operators.py` | Base weak residual, derivatives and strong residual operators |
 | `formulation/vms.py`, `oss_projections.py` | Eliminated subscales, feedback and weighted projection equations |
-| `formulation/convective_forms.py` | Six convection forms, EMAC stress, pressure conversion and predicted defects |
+| `formulation/convective_forms.py` | Seven convection forms, EMAC stress, pressure conversion and predicted defects |
 | `formulation/thermal.py`, `boussinesq.py` | Scalar kernels and buoyancy |
 | `solver/nonlinear_solver.py` | Inner/outer convergence, iteration records and failure reasons |
 | `solver/field_history.py`, `subscale_storage.py` | Resolved/subscale history rotation and CN endpoint recovery |
@@ -226,6 +231,9 @@ to `Config`.
 | `taylor_green_2d` | Periodic decaying exact vortex and conservation studies | 24 |
 | `ethier_steinman_3d` | Three-dimensional exact flow and MPI verification | 0 |
 | `gresho` | Compact vortex, moments, energy and dissipation studies | 31 |
+| `gresho_exact` | Exact inviscid Gresho with free-slip walls and direct CN startup | 9 |
+| `gresho_degree_2` | Same Euler problem, separate P2 presets/output tree | 8 |
+| `kelvin_helmholtz` | Unstratified paper benchmark, separate from the thermal case | 0 |
 | `lid_driven_cavity` | Ghia centerline profiles and steady-flow comparison | 7 |
 | `cylinder_dfg_2d` | DFG Re=100 flow, force/pressure comparisons and outlet checks | 7 |
 | `lattice_vortex` | Vortex decay validation | 2 |
@@ -377,19 +385,18 @@ Specific repository gaps found during inspection:
 
 1. **Some local research code is outside version control.** A fresh clone does
    not include `results/` drivers, the presentation pipeline or raw results.
-2. **The local seven-form comparison exceeds the current core interface.**
-   `kovasznay_all_forms/study.py` lists `emac_vms_full` and its driver passes
-   that label onward. The current TOML type and convection/pressure kernels
-   implement only six forms. Programmatic `validate_config` does not reject
-   that label, but the downstream kernel dictionaries do not support it.
-   Existing full-variant artifacts need their matching implementation/revision
-   before that branch can be reproduced. This is not a seventh current feature.
-3. **Experiment source is missing from `experiments/`.** Its KH subfolder now
-   contains only two `.pyc` files; some archived narratives/drivers reference
-   experiment paths that are not present in this checkout. Archived results
-   remain useful evidence but are not all executable recipes.
+2. **The merge restores formerly missing code.** `emac_vms_full` is now a
+   supported isothermal convection form. Versioned drivers, findings, archives,
+   figures and configurations are restored under `experiments/emac_vms_advantage/`
+   and `experiments/kelvin_helmholtz_2020/` (14 Python files and 97 additional
+   experiment TOMLs). The KH profiler has been adapted to the current solver's
+   named-field convergence checks. The former missing-implementation and
+   missing-experiment-source findings are resolved by this merge.
+3. **Archived recipes still need their stated inputs.** Restoring experiment
+   source does not rerun historical studies or supply every ignored local
+   artifact. Check each study's protocol and revision when reproducing it.
 4. **Historical counts/status are not a current index.** The test-suite review
-   records 1,083 cases before later additions; current collection is 1,092.
+   records 1,083 cases before later additions; the pre-merge review collected 1,092.
    Old planning statements can predate completed pilots. Use dated measured
    reports and current code together.
 5. **Environment reproduction is partly external.** Python >=3.11 is declared;
@@ -422,7 +429,7 @@ places where changes can affect multiple methods at once.
 - To locate local numerical studies: `results/README.md`, the study-specific
   protocols under `results/analysis/`, and `results/presentation/README*.md`.
 
-## Checks performed for this map
+## Checks performed for the initial map
 
 - Inspected all package modules structurally, traced the simulation/solve/output
   path, and read the central implementation, current reports and local study
@@ -434,7 +441,7 @@ places where changes can affect multiple methods at once.
 - Reran all six Boussinesq convergence tests: **6 passed in 187.49 seconds**,
   covering representative P1/P2 spatial refinement and four time schemes.
 - Full unit-suite, all-method convergence and MPI execution were not rerun for
-  this repository review. Historical suite passes remain historical evidence.
+  the initial repository review. Historical suite passes remain historical evidence.
 
 The installed environment is `/home/ali/venv-firedrake`: Python 3.14.4,
 Firedrake 2026.10.0, petsc4py 3.26.0, NumPy 2.4.6 and pytest 9.1.0.
@@ -443,3 +450,19 @@ Fresh check logs are in `/tmp/vms_repo_map_collection.log` and
 `/tmp/vms_repo_map_convergence.log`. The sandbox emitted MPI interface-discovery
 warnings; collection and the focused tests still completed successfully.
 This review adds this guide; it does not change solver equations or presets.
+
+
+## Merge validation, 11 November 2026
+
+The merged tree loads 169 main presets and 97 experiment TOMLs. Collection
+under `tests/` contains 1,145 cases. The full unit suite, six Boussinesq
+convergence cases and four experiment-profiler cases were exercised together:
+1,082 passed, one known xfail, and three queue checks failed because `python`
+was missing from PATH. All eight queue tests passed when rerun with the
+Firedrake virtualenv on PATH. This accounts for 1,085 passing unique cases and
+one expected failure, with no remaining unexpected failure. The other 63 slow
+verification cases were not rerun. A separate full-stress inviscid Gresho
+smoke run converged for two CN steps on an 8x8 mesh. Lint, formatting, shell
+syntax, archive integrity and configuration loading checks passed. Detailed
+counts, environment correction and log paths are in the merge entry of
+[progress_log.md](progress_log.md).

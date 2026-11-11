@@ -100,7 +100,16 @@ Verify every variant on periodic and homogeneous all-Dirichlet problems first; p
 | --- | --- | --- | --- |
 | Periodic | Periodic FE space | Periodic; mean fixed to zero | None |
 | Dirichlet Γ\_D | u\_h = g strongly at the solve level (endpoint average for Crank–Nicolson) | Mean fixed to zero if Γ\_D is the whole boundary | None; ũ is not constrained (bubble assumption) |
+| Axis-aligned impermeable free-slip Γ\_S | u\_h·n = 0 strongly; tangential velocity free | Mean fixed to zero when no outflow exists | Natural zero tangential traction; ũ retains the bubble assumption |
 | Outflow Γ\_N | Natural | Natural | ½⟨(u\_h·n) u\_h, v\_h⟩ in c; no traction load |
+
+For the Kelvin–Helmholtz experiment, `FreeSlip(normal_axis)` restricts the velocity test
+space to zero normal trace on a flat coordinate-aligned wall, leaving tangential traction
+zero naturally. This means (ν ∂\_n u)\_t = 0 for gradient viscosity and
+(2ν ∇ˢu n)\_t = 0 for stress viscosity. On a flat wall with u\_n = 0 these
+tangential conditions agree; the discrete volume viscous forms still differ. The wall
+alignment is checked, the normal constraint is also applied to the initial velocity,
+and no outflow convective correction is added on this impermeable wall.
 
 The natural condition implied on Γ\_N by the gradient-form weak equation is the do-nothing condition:
 

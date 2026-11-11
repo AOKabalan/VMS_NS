@@ -1,0 +1,78 @@
+case = "kelvin_helmholtz"
+run_name = "kh2020_emac_vms_p1_n196_reuse_lu"
+
+[case_parameters]
+reynolds = 1000.0
+delta_0 = 0.03571428571428571
+u_infinity = 1.0
+noise = 0.001
+
+[mesh]
+cells = [
+    196,
+    196,
+]
+
+[discretization]
+velocity_degree = 1
+pressure_degree = 1
+
+[time]
+scheme = "bdf2"
+dt = 0.001
+t_end = 14.0
+startup = "lower_order"
+
+[stabilization]
+method = "vms"
+subscale_space = "oss"
+subscale_dynamics = "dynamic"
+scale_splitting = "nonlinear"
+c1 = 4.0
+c2 = 2.0
+pressure_subscale = true
+
+[convection]
+form = "emac_vms"
+
+[viscosity]
+form = "stress"
+
+[solver]
+linearization = "newton"
+newton_tau = "frozen"
+picard_iterations_before_newton = 0
+inner_rtol = 1e-10
+inner_atol = 1e-12
+inner_max_iterations = 200
+outer_rtol = 1e-09
+outer_max_iterations = 100
+subscale_update = "accelerated"
+subscale_rtol = 1e-11
+subscale_max_iterations = 500
+
+[solver.petsc]
+ksp_type = "gmres"
+pc_type = "lu"
+pc_factor_mat_solver_type = "mumps"
+ksp_pc_side = "right"
+ksp_norm_type = "unpreconditioned"
+ksp_rtol = 1e-10
+ksp_atol = 1e-14
+ksp_max_it = 100
+ksp_gmres_restart = 50
+snes_lag_jacobian = 1
+snes_lag_preconditioner = 5
+snes_lag_preconditioner_persists = true
+
+[output]
+vtk_every = 0
+diagnostics = [
+    "kinetic_energy",
+    "subscale_kinetic_energy",
+    "linear_momentum",
+    "angular_momentum",
+    "divergence_l2",
+    "convective_energy_defect",
+]
+console_level = "WARNING"
