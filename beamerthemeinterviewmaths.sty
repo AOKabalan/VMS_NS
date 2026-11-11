@@ -1,0 +1,139 @@
+% Interview Maths — presentation theme inspired by the Oxford Mathematics
+% Beamer design (original authors Tim Hosgood, Karl Welzel, Keith Gillow).
+% Independently implemented without Oxford logos or institutional assets.
+% Intended for editable, non-branded scientific interview presentations.
+\ProvidesPackage{beamerthemeinterviewmaths}[2026/10/24 Interview maths Beamer theme]
+\RequirePackage{tikz}
+\RequirePackage[most]{tcolorbox}
+\usetikzlibrary{calc}
+\definecolor{ink}{RGB}{0,43,54}
+\definecolor{deepnavy}{RGB}{0,32,64}
+\definecolor{inktwo}{RGB}{7,54,66}
+\definecolor{muted}{RGB}{88,110,117}
+\definecolor{paper}{RGB}{253,246,227}
+\definecolor{warm}{RGB}{238,232,213}
+\definecolor{teal}{RGB}{42,161,152}
+\definecolor{brightblue}{RGB}{38,139,210}
+\definecolor{orangeaccent}{RGB}{203,75,22}
+% REFINED SCIENTIFIC REFERENCES ------------------------------------------
+% A quiet, pale background and single accent rule: no heavy box or icon.
+% Deliberately distinct from theorem and warning boxes.
+\definecolor{refaccent}{RGB}{50,107,108}
+\definecolor{refwash}{RGB}{250,246,232}
+\definecolor{refmuted}{RGB}{92,108,108}
+\newtcolorbox{scholarrefbox}[1][]{%
+  enhanced, colback=refwash, colframe=refwash,
+  boxrule=0pt, arc=1.25pt, outer arc=1.25pt,
+  left=10pt, right=8pt, top=5pt, bottom=5pt,
+  boxsep=0pt, width=\linewidth,
+  borderline west={1.2pt}{0pt}{refaccent!85},
+  before skip=3pt, after skip=5pt,
+  #1%
+}
+% For accurately structured references:
+% \citepaper{Authors}{Title}{Journal, year}
+\newcommand{\citepaper}[3]{%
+  \begin{scholarrefbox}%
+    {\fontsize{6.9}{8}\selectfont\bfseries\color{refaccent}REFERENCE}\hspace{6pt}%
+    {\fontsize{8.15}{10.2}\selectfont\color{inktwo}%
+     \textbf{#1}\enspace\emph{#2}\enspace{\color{refmuted}#3}}%
+  \end{scholarrefbox}%
+}
+% Backwards-compatible single-argument version for existing references.
+\newcommand{\slidecitation}[1]{%
+  \begin{scholarrefbox}%
+  {\fontsize{6.9}{8}\selectfont\bfseries\color{refaccent}REFERENCE}\hspace{6pt}%
+  {\fontsize{8.15}{10.2}\selectfont\color{inktwo}#1}%
+  \end{scholarrefbox}%
+}
+% Even quieter figure attribution for graph-heavy slides.
+% Use \plotsource{...} close to a plot, without a surrounding box.
+\newcommand{\plotsource}[1]{%
+  \par\vspace{2pt}\noindent
+  {\color{refaccent!85}\rule[.07em]{1.15pt}{.95em}}\hspace{5pt}%
+  {\fontsize{7.5}{9}\selectfont\color{refmuted}\textbf{Source}\enspace #1}%
+  \par\vspace{1pt}%
+}
+% -------------------------------------------------------------------------
+\mode<presentation>
+\useinnertheme{rectangles}
+\useoutertheme{default}
+\setbeamercolor{normal text}{fg=inktwo,bg=paper}
+\setbeamercolor{background canvas}{bg=paper}
+\setbeamercolor{structure}{fg=ink}
+\setbeamercolor{frametitle}{fg=ink,bg=paper}
+\setbeamercolor{framesubtitle}{fg=muted,bg=paper}
+\setbeamercolor{footline}{fg=muted,bg=paper}
+\setbeamercolor{block title}{fg=paper,bg=ink}
+\setbeamercolor{block body}{fg=inktwo,bg=warm}
+\setbeamercolor{alerted text}{fg=orangeaccent}
+\setbeamertemplate{navigation symbols}{}
+\setbeamersize{text margin left=10.5mm,text margin right=10.5mm}
+\setbeamerfont{frametitle}{size=\small,series=\bfseries}
+\setbeamerfont{framesubtitle}{size=\scriptsize,shape=\itshape}
+\setbeamerfont{footline}{size=\tiny}
+\setbeamerfont{title}{size=\LARGE,series=\bfseries}
+\setbeamerfont{subtitle}{size=\normalsize}
+\setbeamerfont{author}{size=\normalsize}
+\setbeamertemplate{itemize item}{\color{teal}\raisebox{.2ex}{\scriptsize$\blacktriangleright$}}
+\setbeamertemplate{itemize subitem}{\color{teal}\scriptsize$\bullet$}
+\newcommand{\HeadMark}{NUMERICAL METHODS}
+\newcommand{\FootMark}{MSc THESIS \; / \; INTERVIEW}
+% Reproducible fine-line motif: clean geometry, not derived from logo art.
+\newcommand{\GeoLines}{%
+\begin{scope}[draw=white,opacity=.37,line width=.25pt]
+  \foreach \x/\y in {8.6/-.7,9.55/-.05,10.5/-.68,11.45/-.01,12.4/-.7,9.55/1.25,10.5/1.87,11.45/1.2,12.4/1.9,13.35/1.23}{%
+    \draw (\x,\y) -- ++(.58,.33) -- ++(-.58,.33) -- ++(-.58,-.33) -- cycle;
+    \draw (\x,\y) -- ++(0,.65);
+  }
+  \draw (7.2,.55) -- ++(.55,.31) -- ++(-.55,.31) -- ++(-.55,-.31) -- cycle;
+  \draw (6.25,.12) -- ++(.55,.31) -- ++(-.55,.31) -- ++(-.55,-.31) -- cycle;
+  \draw (1,.55) -- ++(.55,.31) -- ++(-.55,.31) -- ++(-.55,-.31) -- cycle;
+\end{scope}}
+\setbeamertemplate{title page}{%
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[deepnavy] (current page.south west) rectangle (current page.north east);
+  \begin{scope}[shift={(current page.south west)}]
+    \GeoLines
+    \node[anchor=west, text=white, font=\fontsize{10}{12}\selectfont\bfseries] at (1.05,6.72) {\HeadMark};
+    \draw[teal,line width=1.6pt] (1.05,6.46) -- (3.25,6.46);
+    \node[anchor=west,text width=11.0cm,align=left,text=white,font=\usebeamerfont{title}] at (1.05,5.18) {\inserttitle};
+    \node[anchor=west,text width=11cm,align=left,text=white!75,font=\usebeamerfont{subtitle}] at (1.05,3.83) {\insertsubtitle};
+    \node[anchor=west,text=white,font=\usebeamerfont{author}] at (1.05,2.55) {\insertauthor};
+    \node[anchor=west,text=white!72,font=\small] at (1.05,2.12) {\insertinstitute};
+    \node[anchor=west,text=white!65,font=\scriptsize] at (1.05,.68) {\insertdate};
+  \end{scope}
+\end{tikzpicture}%
+}
+\setbeamertemplate{frametitle}{%
+  \vspace*{3.0mm}%
+  \hbox to \textwidth{%
+    {\small\bfseries\MakeUppercase{\insertframetitle}}\hfill
+    {\color{muted}\tiny\HeadMark}%
+  }\par
+  {\color{ink}\rule{\textwidth}{0.65pt}}\par
+  \vspace*{-3.6mm}%
+}
+\setbeamertemplate{footline}{%
+ \ifnum\value{framenumber}>0
+  \hspace*{10.5mm}{\color{ink}\rule{\dimexpr\paperwidth-21mm\relax}{.35pt}}\par
+  \vspace{1.3mm}
+  \hspace*{10.5mm}{\color{muted}\tiny\FootMark}\hfill
+  {\color{muted}\tiny\insertshorttitle}\hfill
+  {\color{muted}\tiny\insertframenumber}\hspace*{10.5mm}
+  \vspace{2mm}
+ \fi
+}
+\setbeamertemplate{section page}{%
+  \begin{tikzpicture}[remember picture,overlay]
+  \fill[ink] (current page.south west) rectangle (current page.north east);
+  \begin{scope}[shift={(current page.south west)}]
+  \GeoLines
+  \node[anchor=west,text=white!60,font=\bfseries\small] at (1.1,5.25) {SECTION \insertsectionnumber};
+  \node[anchor=west,text=white,text width=11cm,font=\LARGE\bfseries] at (1.1,4.32) {\MakeUppercase{\insertsection}};
+  \draw[white!70,line width=1pt] (1.1,3.87) -- (5.8,3.87);
+  \end{scope}
+  \end{tikzpicture}%
+}
+\AtBeginSection[]{\begin{frame}[plain,noframenumbering]\sectionpage\end{frame}}
+\mode<all>

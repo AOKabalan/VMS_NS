@@ -16,3 +16,6 @@ htmlcov/
 
 # Simulation output
 results/
+
+#papers pdf
+papers/
